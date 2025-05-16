@@ -1,11 +1,11 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { CloudTemplate, CloudProvider, TemplateType } from "@/types/cloud";
 import { mockTemplates } from "@/data/mock-data";
 import { useNavigate } from "react-router-dom";
@@ -88,11 +88,6 @@ const Catalog = () => {
           <p className="text-muted-foreground">
             Browse and deploy cloud infrastructure templates
           </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate("/catalog/new")}>
-            Upload Template
-          </Button>
         </div>
       </div>
       

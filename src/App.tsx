@@ -15,6 +15,7 @@ import DeploymentDetails from "@/pages/DeploymentDetails";
 import Settings from "@/pages/Settings";
 import Tenants from "@/pages/Tenants";
 import TemplateFoundry from "@/pages/TemplateFoundry";
+import Environments from "@/pages/Environments";
 import Login from "@/pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -39,6 +40,7 @@ const App = () => (
               <Route path="/settings" element={<Settings />} />
               <Route path="/tenants" element={<Tenants />} />
               <Route path="/template-foundry" element={<TemplateFoundry />} />
+              <Route path="/environments" element={<Environments />} />
             </Route>
             
             <Route path="*" element={<NotFound />} />

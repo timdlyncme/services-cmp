@@ -1,414 +1,370 @@
 
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { 
-  AlertDialog, 
-  AlertDialogAction, 
-  AlertDialogCancel, 
-  AlertDialogContent, 
-  AlertDialogDescription, 
-  AlertDialogFooter, 
-  AlertDialogHeader, 
-  AlertDialogTitle, 
-  AlertDialogTrigger 
-} from "@/components/ui/alert-dialog";
-import { ChevronLeft, RefreshCw, Play, Square, Trash2, FileCode, Terminal } from "lucide-react";
-import { CloudDeployment } from "@/types/cloud";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { mockDeployments, mockTemplates } from "@/data/mock-data";
+import { ArrowLeft, Play, RefreshCw, Trash2, Terminal, AlertCircle, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const DeploymentDetails = () => {
   const { deploymentId } = useParams();
   const { currentTenant } = useAuth();
-  const navigate = useNavigate();
-  const [deployment, setDeployment] = useState<CloudDeployment | null>(null);
-  const [templateCode, setTemplateCode] = useState("");
-  const [logs, setLogs] = useState<string[]>([
-    "[2023-06-10 14:10:05] Initializing deployment...",
-    "[2023-06-10 14:10:10] Validating template...",
-    "[2023-06-10 14:10:15] Preparing resources...",
-    "[2023-06-10 14:10:30] Creating resource group...",
-    "[2023-06-10 14:11:00] Deploying virtual machine scale set...",
-    "[2023-06-10 14:14:30] Deployment completed with 0 errors."
-  ]);
+  const [deployment, setDeployment] = useState<any>(null);
+  const [template, setTemplate] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<string[]>([]);
   
   useEffect(() => {
-    if (deploymentId && currentTenant) {
-      const found = mockDeployments.find(
-        d => d.id === deploymentId && d.tenantId === currentTenant.id
-      );
-      
-      if (found) {
-        setDeployment(found);
+    const fetchDeployment = async () => {
+      try {
+        // In a real app, this would be an API call
+        const foundDeployment = mockDeployments.find(d => d.id === deploymentId);
         
-        // Find template code
-        const template = mockTemplates.find(t => t.id === found.templateId);
-        if (template) {
-          setTemplateCode(template.code);
+        if (foundDeployment) {
+          setDeployment(foundDeployment);
+          
+          // Find associated template
+          const associatedTemplate = mockTemplates.find(t => t.id === foundDeployment.templateId);
+          if (associatedTemplate) {
+            setTemplate(associatedTemplate);
+          }
+          
+          // Generate some mock logs
+          const mockLogs = [
+            "2023-04-01T10:00:00Z [INFO] Starting deployment...",
+            "2023-04-01T10:00:05Z [INFO] Validating template...",
+            "2023-04-01T10:00:10Z [INFO] Provisioning resources...",
+            "2023-04-01T10:01:00Z [INFO] Creating virtual network...",
+            "2023-04-01T10:02:00Z [INFO] Creating storage accounts...",
+            "2023-04-01T10:03:00Z [INFO] Configuring security...",
+            "2023-04-01T10:04:00Z [INFO] Deployment completed successfully."
+          ];
+          setLogs(mockLogs);
         }
+      } catch (error) {
+        console.error("Error fetching deployment:", error);
+      } finally {
+        setLoading(false);
       }
+    };
+    
+    if (deploymentId && currentTenant) {
+      fetchDeployment();
     }
   }, [deploymentId, currentTenant]);
   
-  const handleRestart = () => {
-    toast.success("Deployment is restarting...");
-    // In a real app, this would trigger a restart
-  };
-  
-  const handleStop = () => {
-    toast.success("Deployment is stopping...");
-    // In a real app, this would trigger a stop
-  };
-  
-  const handleDelete = () => {
-    toast.success("Deployment has been deleted");
-    navigate("/deployments");
-    // In a real app, this would delete the deployment
-  };
-
-  const providerColor = (provider: string) => {
-    switch (provider) {
-      case "azure": return "bg-cloud-azure text-white";
-      case "aws": return "bg-cloud-aws text-black";
-      case "gcp": return "bg-cloud-gcp text-white";
-      default: return "bg-muted text-muted-foreground";
+  const handleAction = (action: string) => {
+    toast.success(`${action} action initiated`);
+    
+    if (action === "restart") {
+      setDeployment({
+        ...deployment,
+        status: "running"
+      });
+    } else if (action === "stop") {
+      setDeployment({
+        ...deployment,
+        status: "stopped"
+      });
     }
   };
-
-  const statusVariant = (status: string) => {
+  
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case "running": return "success";
-      case "pending":
-      case "deploying": return "warning";
-      case "failed": return "destructive";
-      default: return "secondary";
+      case "running":
+        return <Badge variant="secondary">{status}</Badge>;
+      case "stopped":
+        return <Badge variant="outline">{status}</Badge>;
+      case "failed":
+        return <Badge variant="destructive">{status}</Badge>;
+      default:
+        return <Badge>{status}</Badge>;
     }
   };
-
+  
+  if (loading) {
+    return <div className="flex items-center justify-center h-64">Loading deployment details...</div>;
+  }
+  
   if (!deployment) {
     return (
-      <div className="flex items-center justify-center h-[50vh]">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold">Deployment not found</h2>
-          <p className="text-muted-foreground">The requested deployment does not exist</p>
-          <Button 
-            variant="outline" 
-            className="mt-4"
-            onClick={() => navigate("/deployments")}
-          >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Back to Deployments
-          </Button>
-        </div>
+      <div className="flex flex-col items-center justify-center h-64">
+        <AlertCircle className="h-10 w-10 text-muted-foreground mb-4" />
+        <h2 className="text-xl font-medium">Deployment not found</h2>
+        <p className="text-muted-foreground mt-2">
+          The requested deployment could not be found.
+        </p>
+        <Button variant="outline" className="mt-4" asChild>
+          <Link to="/deployments">Return to deployments</Link>
+        </Button>
       </div>
     );
   }
-
+  
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={() => navigate("/deployments")}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="text-3xl font-bold tracking-tight">{deployment.name}</h1>
-              <Badge variant={statusVariant(deployment.status)} className="ml-2">
-                {deployment.status}
-              </Badge>
-            </div>
-            <div className="flex space-x-2 mt-1">
-              <Badge className={providerColor(deployment.provider)}>
-                {deployment.provider.toUpperCase()}
-              </Badge>
-              <Badge variant="outline">{deployment.environment}</Badge>
-            </div>
+      <div className="flex items-center gap-4">
+        <Button variant="outline" size="icon" asChild>
+          <Link to="/deployments">
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+        </Button>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{deployment.name}</h1>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>ID: {deployment.id}</span>
+            <span>•</span>
+            <span>Created {new Date(deployment.createdAt).toLocaleDateString()}</span>
+            <span>•</span>
+            {getStatusBadge(deployment.status)}
           </div>
         </div>
-        
-        <div className="flex space-x-2">
-          <Button 
-            variant="outline" 
-            onClick={handleRestart}
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Restart
-          </Button>
-          
-          {deployment.status === "running" ? (
-            <Button 
-              variant="secondary"
-              onClick={handleStop}
-            >
-              <Square className="mr-2 h-4 w-4" />
+        <div className="ml-auto flex gap-2">
+          {deployment.status === "running" && (
+            <Button variant="outline" onClick={() => handleAction("stop")}>
+              <Trash2 className="h-4 w-4 mr-2" />
               Stop
             </Button>
-          ) : (
-            <Button 
-              variant="secondary"
-              onClick={() => toast.success("Deployment is starting...")}
-            >
-              <Play className="mr-2 h-4 w-4" />
-              Start
+          )}
+          {deployment.status === "stopped" && (
+            <Button variant="outline" onClick={() => handleAction("restart")}>
+              <Play className="h-4 w-4 mr-2" />
+              Restart
             </Button>
           )}
-          
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete the deployment "{deployment.name}" and all associated resources. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete}>
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <Button onClick={() => handleAction("refresh")}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
         </div>
       </div>
       
       <Tabs defaultValue="overview">
-        <TabsList>
+        <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="template">Template</TabsTrigger>
+          <TabsTrigger value="parameters">Parameters</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
-          <TabsTrigger value="resources">Resources</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <TabsContent value="overview" className="space-y-6 pt-4">
+          <div className="grid gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle>Deployment Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Created</p>
-                    <p className="font-medium">{new Date(deployment.createdAt).toLocaleDateString()}</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="font-medium">Status</div>
+                  <div>{getStatusBadge(deployment.status)}</div>
+                  
+                  <div className="font-medium">Environment</div>
+                  <div>{deployment.environment}</div>
+                  
+                  <div className="font-medium">Region</div>
+                  <div>{deployment.region}</div>
+                  
+                  <div className="font-medium">Cloud Provider</div>
+                  <div>
+                    <Badge className={
+                      deployment.provider === "azure" ? "bg-cloud-azure text-white" :
+                      deployment.provider === "aws" ? "bg-cloud-aws text-black" :
+                      "bg-cloud-gcp text-white"
+                    }>
+                      {deployment.provider.toUpperCase()}
+                    </Badge>
                   </div>
                   
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Last Updated</p>
-                    <p className="font-medium">{new Date(deployment.updatedAt).toLocaleDateString()}</p>
-                  </div>
+                  <div className="font-medium">Created By</div>
+                  <div>{deployment.createdBy}</div>
                   
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Template</p>
-                    <p className="font-medium">{deployment.templateName}</p>
-                  </div>
+                  <div className="font-medium">Creation Date</div>
+                  <div>{new Date(deployment.createdAt).toLocaleString()}</div>
                   
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Environment</p>
-                    <p className="font-medium">{deployment.environment}</p>
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Provider</p>
-                    <p className="font-medium">{deployment.provider.toUpperCase()}</p>
-                  </div>
+                  <div className="font-medium">Last Updated</div>
+                  <div>{new Date(deployment.updatedAt).toLocaleString()}</div>
                 </div>
               </CardContent>
-              <CardFooter>
-                <Button 
-                  variant="outline" 
-                  className="w-full"
-                  onClick={() => navigate(`/catalog/${deployment.templateId}`)}
-                >
-                  View Template
-                </Button>
-              </CardFooter>
             </Card>
             
             <Card>
               <CardHeader>
-                <CardTitle>Parameters</CardTitle>
-                <CardDescription>
-                  Configuration values used in this deployment
-                </CardDescription>
+                <CardTitle>Template Information</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {Object.entries(deployment.parameters).map(([key, value]) => (
-                    <div key={key} className="grid grid-cols-2 gap-2">
-                      <div className="font-medium text-sm">{key}</div>
-                      <div className="text-sm truncate">{value}</div>
+              <CardContent className="space-y-4">
+                {template ? (
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="font-medium">Template Name</div>
+                    <div>{template.name}</div>
+                    
+                    <div className="font-medium">Template Type</div>
+                    <div>{template.type}</div>
+                    
+                    <div className="font-medium">Version</div>
+                    <div>{template.version}</div>
+                    
+                    <div className="font-medium">Categories</div>
+                    <div className="flex flex-wrap gap-1">
+                      {template.categories.map(category => (
+                        <Badge key={category} variant="secondary" className="text-xs">
+                          {category}
+                        </Badge>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground">Template not found</div>
+                )}
               </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Status</CardTitle>
-                <CardDescription>
-                  Current state of the deployment
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-2">
-                    <div className={`status-dot status-${
-                      deployment.status === "running" ? "healthy" : 
-                      deployment.status === "pending" || deployment.status === "deploying" ? "warning" : 
-                      "error"
-                    }`} />
-                    <span className="capitalize">{deployment.status}</span>
-                  </div>
-                  
-                  <div className="text-sm">
-                    {deployment.status === "running" ? (
-                      <p>All resources are healthy and operating normally.</p>
-                    ) : deployment.status === "pending" ? (
-                      <p>Deployment is waiting to be processed.</p>
-                    ) : deployment.status === "deploying" ? (
-                      <p>Resources are currently being deployed.</p>
-                    ) : deployment.status === "failed" ? (
-                      <p>Deployment failed. Check logs for details.</p>
-                    ) : (
-                      <p>Deployment is stopped. Resources are not active.</p>
-                    )}
-                  </div>
-                  
-                  <div className="text-xs text-muted-foreground">
-                    Last updated: {new Date(deployment.updatedAt).toLocaleString()}
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  variant="outline" 
-                  className="w-full"
-                  onClick={handleRestart}
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Refresh Status
-                </Button>
-              </CardFooter>
             </Card>
           </div>
-        </TabsContent>
-        
-        <TabsContent value="template">
+          
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center">
-                    <FileCode className="mr-2 h-5 w-5" />
-                    Template Code
-                  </CardTitle>
-                  <CardDescription>
-                    Template used to create this deployment
-                  </CardDescription>
-                </div>
-                <Button 
-                  variant="outline"
-                  onClick={() => navigate(`/catalog/${deployment.templateId}`)}
-                >
-                  Edit Template
-                </Button>
-              </div>
+              <CardTitle>Resources</CardTitle>
+              <CardDescription>Resources provisioned by this deployment</CardDescription>
             </CardHeader>
             <CardContent>
-              <Textarea
-                className="font-mono h-[500px] overflow-auto"
-                value={templateCode}
-                readOnly
-              />
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deployment.resources && deployment.resources.length > 0 ? (
+                    deployment.resources.map((resource: any, index: number) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">{resource.name}</TableCell>
+                        <TableCell>{resource.type}</TableCell>
+                        <TableCell>
+                          {resource.status === "deployed" ? (
+                            <div className="flex items-center">
+                              <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+                              <span>Deployed</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center">
+                              <AlertCircle className="h-4 w-4 text-amber-500 mr-1" />
+                              <span>{resource.status}</span>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-muted-foreground">
+                        No resources found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
         
-        <TabsContent value="logs">
+        <TabsContent value="template" className="space-y-6 pt-4">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center">
-                    <Terminal className="mr-2 h-5 w-5" />
-                    Deployment Logs
-                  </CardTitle>
-                  <CardDescription>
-                    Activity logs for this deployment
-                  </CardDescription>
-                </div>
-                <Button 
-                  variant="outline"
-                  onClick={() => toast.success("Logs refreshed")}
-                >
-                  Refresh Logs
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="font-mono text-sm bg-black text-white p-4 rounded-md h-[500px] overflow-auto">
-                {logs.map((log, index) => (
-                  <div key={index} className="pb-1">
-                    {log}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="resources">
-          <Card>
-            <CardHeader>
-              <CardTitle>Deployed Resources</CardTitle>
+              <CardTitle>Template Code</CardTitle>
               <CardDescription>
-                Cloud resources created by this deployment
+                The infrastructure as code template used for this deployment
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {deployment.resources.map((resource, index) => (
-                  <div 
-                    key={index}
-                    className="p-4 border rounded-lg flex justify-between items-center"
-                  >
-                    <div>
-                      <p className="font-medium">{resource}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {deployment.provider.toUpperCase()} · {deployment.environment}
-                      </p>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      View Details
-                    </Button>
-                  </div>
-                ))}
-                
-                {deployment.resources.length === 0 && (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">No resources found</p>
-                  </div>
-                )}
+              {template ? (
+                <ScrollArea className="h-[400px] rounded-md border bg-muted">
+                  <pre className="p-4 text-sm">
+                    <code>{template.codeSnippet || "No code available"}</code>
+                  </pre>
+                </ScrollArea>
+              ) : (
+                <div className="text-muted-foreground">Template not found</div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="parameters" className="space-y-6 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Deployment Parameters</CardTitle>
+              <CardDescription>
+                Parameters used when deploying this template
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Parameter</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead>Type</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deployment.parameters && Object.keys(deployment.parameters).length > 0 ? (
+                    Object.entries(deployment.parameters).map(([key, value]: [string, any], index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">{key}</TableCell>
+                        <TableCell>{typeof value === 'object' ? JSON.stringify(value) : value.toString()}</TableCell>
+                        <TableCell>{typeof value}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-muted-foreground">
+                        No parameters found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="logs" className="space-y-6 pt-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Deployment Logs</CardTitle>
+                <CardDescription>
+                  Log output from the deployment process
+                </CardDescription>
               </div>
+              <Button variant="outline" size="sm">
+                <Terminal className="h-4 w-4 mr-2" />
+                Full Console
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[400px] rounded-md border bg-black text-white font-mono">
+                <div className="p-4">
+                  {logs.map((log, index) => (
+                    <div key={index} className="py-0.5">
+                      <span className="opacity-70">{log.split(' [')[0]}</span>
+                      <span className={
+                        log.includes('[INFO]') ? " text-blue-400" :
+                        log.includes('[ERROR]') ? " text-red-400" :
+                        log.includes('[WARNING]') ? " text-yellow-400" :
+                        " text-green-400"
+                      }>
+                        {` [${log.split('[')[1]}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
             </CardContent>
           </Card>
         </TabsContent>

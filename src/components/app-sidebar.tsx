@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
@@ -23,6 +24,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { TenantSwitcher } from "@/components/tenant-switcher";
 
@@ -31,6 +33,12 @@ interface NavItemProps {
   icon: React.ElementType;
   label: string;
   collapsed: boolean;
+}
+
+interface SidebarSectionProps {
+  title: string;
+  collapsed: boolean;
+  children: React.ReactNode;
 }
 
 const NavItem = ({ to, icon: Icon, label, collapsed }: NavItemProps) => (
@@ -52,11 +60,29 @@ const NavItem = ({ to, icon: Icon, label, collapsed }: NavItemProps) => (
   </SidebarMenuItem>
 );
 
+const SidebarSection = ({ title, collapsed, children }: SidebarSectionProps) => (
+  <div className="py-2">
+    {!collapsed && (
+      <div className="px-3 py-2">
+        <h4 className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+          {title}
+        </h4>
+      </div>
+    )}
+    <SidebarMenu>
+      {children}
+    </SidebarMenu>
+  </div>
+);
+
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuth();
 
   const toggleCollapse = () => setCollapsed(!collapsed);
+
+  const isAdmin = user?.role === "admin" || user?.role === "msp";
+  const isMSP = user?.role === "msp";
 
   return (
     <Sidebar
@@ -76,22 +102,34 @@ export function AppSidebar() {
       </SidebarHeader>
       <div className="flex flex-col h-full">
         <SidebarContent>
-          <div className="py-2">
-            <SidebarMenu>
-              <NavItem to="/" icon={Activity} label="Dashboard" collapsed={collapsed} />
-              <NavItem to="/catalog" icon={FileCode} label="Template Catalog" collapsed={collapsed} />
-              <NavItem to="/deployments" icon={Database} label="Deployments" collapsed={collapsed} />
-              {(user?.role === "admin" || user?.role === "msp") && (
+          {/* Core Services Section */}
+          <SidebarSection title="Core Services" collapsed={collapsed}>
+            <NavItem to="/" icon={Activity} label="Dashboard" collapsed={collapsed} />
+            <NavItem to="/catalog" icon={FileCode} label="Template Catalog" collapsed={collapsed} />
+            <NavItem to="/deployments" icon={Database} label="Deployments" collapsed={collapsed} />
+          </SidebarSection>
+
+          {/* Admin Settings Section - visible to admin and msp roles */}
+          {isAdmin && (
+            <>
+              <SidebarSeparator />
+              <SidebarSection title="Admin Settings" collapsed={collapsed}>
+                <NavItem to="/environments" icon={Server} label="Environments" collapsed={collapsed} />
+                <NavItem to="/template-foundry" icon={Upload} label="Template Foundry" collapsed={collapsed} />
                 <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} />
-              )}
-              {user?.role === "msp" && (
-                <>
-                  <NavItem to="/tenants" icon={Users} label="Tenants" collapsed={collapsed} />
-                  <NavItem to="/template-foundry" icon={Upload} label="Template Foundry" collapsed={collapsed} />
-                </>
-              )}
-            </SidebarMenu>
-          </div>
+              </SidebarSection>
+            </>
+          )}
+
+          {/* MSP Management Section - visible only to msp role */}
+          {isMSP && (
+            <>
+              <SidebarSeparator />
+              <SidebarSection title="MSP Management" collapsed={collapsed}>
+                <NavItem to="/tenants" icon={Users} label="Tenants" collapsed={collapsed} />
+              </SidebarSection>
+            </>
+          )}
         </SidebarContent>
         
         <div className="mt-auto">
