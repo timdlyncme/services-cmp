@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
@@ -9,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { CloudCog, Fingerprint, Server } from "lucide-react";
+import { Fingerprint, Server } from "lucide-react";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -41,7 +40,11 @@ const Login = () => {
       </div>
       
       <div className="flex items-center mb-8">
-        <CloudCog className="h-8 w-8 text-primary mr-2" />
+        <img 
+          src="/new-logo-transparent.png" 
+          alt="Company Logo" 
+          className="h-10 w-auto mr-3" 
+        />
         <h1 className="text-3xl font-bold">Cloud Management</h1>
       </div>
       
