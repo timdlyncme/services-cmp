@@ -1,3 +1,51 @@
+import { useState, useEffect } from "react";
+import { useAuth } from "@/context/auth-context";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { CloudTemplate, CloudProvider } from "@/types/cloud";
+import { Tenant } from "@/types/auth";
+import { toast } from "sonner";
 import {
   FileCode,
   Plus,
@@ -220,13 +268,9 @@ variable "bucket_name" {
 
 output "bucket_url" {
   description = "The URL of the bucket"
-  value       = "gs://${google_storage_bucket.static_website.name}"
+  value       = "gs://\\${google_storage_bucket.static_website.name}"
 }`,
     deploymentCount: 5,
-    uploadedAt: "2023-11-05T08:20:00Z",
-    updatedAt: "2024-02-12T13:45:00Z",
-    categories: ["Storage", "GCP", "IaaS"],
-    tenantId: "tenant-1",
   },
 ];
 
