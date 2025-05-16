@@ -268,7 +268,7 @@ variable "bucket_name" {
 
 output "bucket_url" {
   description = "The URL of the bucket"
-  value       = "gs://\\${google_storage_bucket.static_website.name}"
+  value       = "gs"
 }`,
     deploymentCount: 5,
   },
