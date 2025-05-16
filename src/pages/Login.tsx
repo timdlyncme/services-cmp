@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Server } from "lucide-react";
+import { CloudCog, Fingerprint, Server } from "lucide-react";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -41,8 +41,8 @@ const Login = () => {
       </div>
       
       <div className="flex items-center mb-8">
-        <Server className="h-8 w-8 text-primary mr-2" />
-        <h1 className="text-3xl font-bold">CloudFlow</h1>
+        <CloudCog className="h-8 w-8 text-primary mr-2" />
+        <h1 className="text-3xl font-bold">Cloud Management</h1>
       </div>
       
       <Card className="w-full max-w-md">
