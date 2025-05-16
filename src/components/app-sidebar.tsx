@@ -13,14 +13,14 @@ import {
   ChevronRight,
   Users,
   Upload,
-  CloudCog
+  CloudCog,
+  Shield
 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarTrigger,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -116,6 +116,7 @@ export function AppSidebar() {
               <SidebarSection title="Admin Settings" collapsed={collapsed}>
                 <NavItem to="/environments" icon={Server} label="Environments" collapsed={collapsed} />
                 <NavItem to="/template-foundry" icon={Upload} label="Template Foundry" collapsed={collapsed} />
+                <NavItem to="/users-and-groups" icon={Shield} label="Users & Groups" collapsed={collapsed} />
                 <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} />
               </SidebarSection>
             </>
@@ -127,6 +128,8 @@ export function AppSidebar() {
               <SidebarSeparator />
               <SidebarSection title="MSP Management" collapsed={collapsed}>
                 <NavItem to="/tenants" icon={Users} label="Tenants" collapsed={collapsed} />
+                <NavItem to="/msp-template-foundry" icon={FileCode} label="MSP Template Foundry" collapsed={collapsed} />
+                <NavItem to="/nexus-ai" icon={CloudCog} label="NexusAI" collapsed={collapsed} />
               </SidebarSection>
             </>
           )}

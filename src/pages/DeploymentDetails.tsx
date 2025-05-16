@@ -1,15 +1,31 @@
-
-import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import React, { useState } from "react";
+import { useParams } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { mockDeployments, mockTemplates } from "@/data/mock-data";
-import { ArrowLeft, Play, RefreshCw, Trash2, Terminal, AlertCircle, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Activity,
+  AlertCircle,
+  CheckCircle,
+  ChevronRight,
+  Clock,
+  CloudCog,
+  Database,
+  Download,
+  FileText,
+  GitBranch,
+  History,
+  Server,
+  Settings,
+  XCircle,
+} from "lucide-react";
 
 const DeploymentDetails = () => {
   const { deploymentId } = useParams();

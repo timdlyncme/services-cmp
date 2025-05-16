@@ -1,16 +1,29 @@
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Plus, Trash, Edit, Check, X, Server } from "lucide-react";
+import {
+  Plus,
+  Server,
+  Database,
+  Cloud,
+  Search,
+  CloudCog,
+  Trash,
+  Edit,
+  FileCode
+} from "lucide-react";
+import { CloudAccount } from "@/types/auth";
 
 interface Environment {
   id: string;
@@ -20,80 +33,137 @@ interface Environment {
   resourceTypes: string[];
   tags: Record<string, string>;
   createdAt: string;
+  deploymentCount: number;
 }
 
-interface CloudAccount {
-  id: string;
-  name: string;
-  provider: "azure" | "aws" | "gcp";
-  region: string;
-}
-
-// Mock data
+// Mock data for cloud accounts
 const mockCloudAccounts: CloudAccount[] = [
-  { id: "ca1", name: "Production Azure", provider: "azure", region: "eastus" },
-  { id: "ca2", name: "Dev AWS", provider: "aws", region: "us-west-2" },
-  { id: "ca3", name: "Staging GCP", provider: "gcp", region: "us-central1" },
-  { id: "ca4", name: "Test Azure", provider: "azure", region: "westeurope" },
+  {
+    id: "account-1",
+    name: "Production Azure",
+    provider: "azure",
+    status: "connected",
+    tenantId: "tenant-1"
+  },
+  {
+    id: "account-2",
+    name: "Development AWS",
+    provider: "aws",
+    status: "connected",
+    tenantId: "tenant-1"
+  },
+  {
+    id: "account-3",
+    name: "Testing GCP",
+    provider: "gcp",
+    status: "connected",
+    tenantId: "tenant-1"
+  },
+  {
+    id: "account-4",
+    name: "Staging Azure",
+    provider: "azure",
+    status: "warning",
+    tenantId: "tenant-1"
+  }
 ];
 
-const mockResourceTypes = [
+// Mock data for environments
+const mockEnvironments: Environment[] = [
+  {
+    id: "env-1",
+    name: "Production",
+    description: "Main production environment with strict security policies",
+    cloudAccounts: [mockCloudAccounts[0]],
+    resourceTypes: ["Virtual Machines", "Storage Accounts", "Networking"],
+    tags: {
+      environment: "production",
+      criticality: "high"
+    },
+    createdAt: "2023-05-10T08:30:00Z",
+    deploymentCount: 12
+  },
+  {
+    id: "env-2",
+    name: "Development",
+    description: "Development environment for testing new features",
+    cloudAccounts: [mockCloudAccounts[1], mockCloudAccounts[2]],
+    resourceTypes: ["Virtual Machines", "Storage Accounts", "Databases", "Containers"],
+    tags: {
+      environment: "development",
+      team: "engineering"
+    },
+    createdAt: "2023-05-15T10:45:00Z",
+    deploymentCount: 8
+  },
+  {
+    id: "env-3",
+    name: "Testing",
+    description: "QA testing environment",
+    cloudAccounts: [mockCloudAccounts[2]],
+    resourceTypes: ["Virtual Machines", "Databases"],
+    tags: {
+      environment: "testing",
+      team: "qa"
+    },
+    createdAt: "2023-05-20T14:15:00Z",
+    deploymentCount: 5
+  }
+];
+
+// Available resource types
+const resourceTypes = [
   "Virtual Machines",
   "Storage Accounts",
   "Networking",
-  "Containers",
   "Databases",
-  "Serverless",
-  "Security",
-];
-
-const initialEnvironments: Environment[] = [
-  {
-    id: "env1",
-    name: "Production",
-    description: "Production environment with strict access controls",
-    cloudAccounts: [mockCloudAccounts[0]],
-    resourceTypes: ["Virtual Machines", "Storage Accounts", "Networking"],
-    tags: { environment: "production", owner: "ops-team" },
-    createdAt: "2024-03-15T10:00:00Z",
-  },
-  {
-    id: "env2",
-    name: "Development",
-    description: "Development environment for testing",
-    cloudAccounts: [mockCloudAccounts[1], mockCloudAccounts[2]],
-    resourceTypes: ["Virtual Machines", "Containers", "Databases"],
-    tags: { environment: "development", owner: "dev-team" },
-    createdAt: "2024-03-20T14:30:00Z",
-  },
+  "Containers",
+  "Serverless Functions",
+  "Kubernetes Clusters",
+  "Message Queues",
+  "CDN",
+  "API Management"
 ];
 
 const Environments = () => {
-  const { user, currentTenant } = useAuth();
-  const [environments, setEnvironments] = useState<Environment[]>([]);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const { user } = useAuth();
+  const isMSP = user?.role === "msp";
+  
+  const [environments, setEnvironments] = useState<Environment[]>(mockEnvironments);
+  const [isCreating, setIsCreating] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  
   const [newEnvironment, setNewEnvironment] = useState<Partial<Environment>>({
     name: "",
     description: "",
     cloudAccounts: [],
     resourceTypes: [],
-    tags: {},
+    tags: {}
   });
-  const [editingEnvironment, setEditingEnvironment] = useState<Environment | null>(null);
   
-  useEffect(() => {
-    // In a real app, this would fetch from an API
-    setEnvironments(initialEnvironments);
-  }, []);
-
+  const [tagKey, setTagKey] = useState("");
+  const [tagValue, setTagValue] = useState("");
+  
+  // Filter environments based on search term
+  const filteredEnvironments = environments.filter(env =>
+    env.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    env.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  
   const handleCreateEnvironment = () => {
+    // Validate form
     if (!newEnvironment.name) {
       toast.error("Environment name is required");
       return;
     }
-
-    const environment: Environment = {
+    
+    if ((newEnvironment.cloudAccounts || []).length === 0) {
+      toast.error("Please select at least one cloud account");
+      return;
+    }
+    
+    // Create new environment
+    const createdEnvironment: Environment = {
       id: `env-${Date.now()}`,
       name: newEnvironment.name || "",
       description: newEnvironment.description || "",
@@ -101,218 +171,230 @@ const Environments = () => {
       resourceTypes: newEnvironment.resourceTypes || [],
       tags: newEnvironment.tags || {},
       createdAt: new Date().toISOString(),
+      deploymentCount: 0
     };
-
-    setEnvironments([...environments, environment]);
+    
+    setEnvironments([...environments, createdEnvironment]);
+    setIsCreating(false);
+    resetEnvironmentForm();
+    toast.success("Environment created successfully");
+  };
+  
+  const resetEnvironmentForm = () => {
     setNewEnvironment({
       name: "",
       description: "",
       cloudAccounts: [],
       resourceTypes: [],
-      tags: {},
+      tags: {}
     });
-    setIsCreateDialogOpen(false);
-    toast.success("Environment created successfully");
+    setTagKey("");
+    setTagValue("");
   };
-
-  const handleEditEnvironment = () => {
-    if (!editingEnvironment) return;
-
-    const updatedEnvironments = environments.map(env => 
-      env.id === editingEnvironment.id ? editingEnvironment : env
-    );
+  
+  const handleDeleteEnvironment = (environmentId: string) => {
+    setEnvironments(environments.filter(env => env.id !== environmentId));
+    toast.success("Environment deleted successfully");
+  };
+  
+  const toggleCloudAccount = (account: CloudAccount) => {
+    const cloudAccounts = newEnvironment.cloudAccounts || [];
+    const accountExists = cloudAccounts.find(acc => acc.id === account.id);
     
-    setEnvironments(updatedEnvironments);
-    setEditingEnvironment(null);
-    setIsEditDialogOpen(false);
-    toast.success("Environment updated successfully");
-  };
-
-  const handleDeleteEnvironment = (id: string) => {
-    setEnvironments(environments.filter(env => env.id !== id));
-    toast.success("Environment deleted");
-  };
-
-  const handleCloudAccountToggle = (accountId: string, isCreating: boolean = true) => {
-    if (isCreating) {
-      const cloudAccounts = newEnvironment.cloudAccounts || [];
-      const isSelected = cloudAccounts.some(account => account.id === accountId);
-      
-      if (isSelected) {
-        setNewEnvironment({
-          ...newEnvironment,
-          cloudAccounts: cloudAccounts.filter(account => account.id !== accountId),
-        });
-      } else {
-        const accountToAdd = mockCloudAccounts.find(account => account.id === accountId);
-        if (accountToAdd) {
-          setNewEnvironment({
-            ...newEnvironment,
-            cloudAccounts: [...cloudAccounts, accountToAdd],
-          });
-        }
-      }
-    } else if (editingEnvironment) {
-      const cloudAccounts = editingEnvironment.cloudAccounts || [];
-      const isSelected = cloudAccounts.some(account => account.id === accountId);
-      
-      if (isSelected) {
-        setEditingEnvironment({
-          ...editingEnvironment,
-          cloudAccounts: cloudAccounts.filter(account => account.id !== accountId),
-        });
-      } else {
-        const accountToAdd = mockCloudAccounts.find(account => account.id === accountId);
-        if (accountToAdd) {
-          setEditingEnvironment({
-            ...editingEnvironment,
-            cloudAccounts: [...cloudAccounts, accountToAdd],
-          });
-        }
-      }
+    if (accountExists) {
+      setNewEnvironment({
+        ...newEnvironment,
+        cloudAccounts: cloudAccounts.filter(acc => acc.id !== account.id)
+      });
+    } else {
+      setNewEnvironment({
+        ...newEnvironment,
+        cloudAccounts: [...cloudAccounts, account]
+      });
     }
   };
-
-  const handleResourceTypeToggle = (resourceType: string, isCreating: boolean = true) => {
-    if (isCreating) {
-      const resourceTypes = newEnvironment.resourceTypes || [];
-      const isSelected = resourceTypes.includes(resourceType);
-      
-      if (isSelected) {
-        setNewEnvironment({
-          ...newEnvironment,
-          resourceTypes: resourceTypes.filter(type => type !== resourceType),
-        });
-      } else {
-        setNewEnvironment({
-          ...newEnvironment,
-          resourceTypes: [...resourceTypes, resourceType],
-        });
-      }
-    } else if (editingEnvironment) {
-      const resourceTypes = editingEnvironment.resourceTypes || [];
-      const isSelected = resourceTypes.includes(resourceType);
-      
-      if (isSelected) {
-        setEditingEnvironment({
-          ...editingEnvironment,
-          resourceTypes: resourceTypes.filter(type => type !== resourceType),
-        });
-      } else {
-        setEditingEnvironment({
-          ...editingEnvironment,
-          resourceTypes: [...resourceTypes, resourceType],
-        });
-      }
+  
+  const toggleResourceType = (type: string) => {
+    const resourceTypes = newEnvironment.resourceTypes || [];
+    
+    if (resourceTypes.includes(type)) {
+      setNewEnvironment({
+        ...newEnvironment,
+        resourceTypes: resourceTypes.filter(t => t !== type)
+      });
+    } else {
+      setNewEnvironment({
+        ...newEnvironment,
+        resourceTypes: [...resourceTypes, type]
+      });
     }
   };
-
-  const providerColor = (provider: string) => {
-    switch (provider) {
-      case "azure": return "bg-cloud-azure text-white";
-      case "aws": return "bg-cloud-aws text-black";
-      case "gcp": return "bg-cloud-gcp text-white";
-      default: return "bg-muted text-muted-foreground";
+  
+  const addTag = () => {
+    if (!tagKey.trim()) {
+      toast.error("Tag key is required");
+      return;
     }
+    
+    setNewEnvironment({
+      ...newEnvironment,
+      tags: {
+        ...(newEnvironment.tags || {}),
+        [tagKey]: tagValue
+      }
+    });
+    
+    setTagKey("");
+    setTagValue("");
   };
-
+  
+  const removeTag = (key: string) => {
+    const updatedTags = { ...(newEnvironment.tags || {}) };
+    delete updatedTags[key];
+    
+    setNewEnvironment({
+      ...newEnvironment,
+      tags: updatedTags
+    });
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Environments</h1>
           <p className="text-muted-foreground">
-            Create and manage deployment environments
+            Create and manage deployment environments for your templates
           </p>
         </div>
-        <div>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <div className="flex gap-2">
+          <Dialog open={isCreating} onOpenChange={setIsCreating}>
             <DialogTrigger asChild>
               <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Environment
+                <Plus className="h-4 w-4 mr-2" />
+                New Environment
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Create New Environment</DialogTitle>
+                <DialogTitle>Create Deployment Environment</DialogTitle>
                 <DialogDescription>
-                  Configure a new environment for deploying templates
+                  Define an environment for deploying your cloud templates
                 </DialogDescription>
               </DialogHeader>
               
               <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    placeholder="Production, Development, etc."
-                    value={newEnvironment.name || ""}
-                    onChange={(e) => setNewEnvironment({ ...newEnvironment, name: e.target.value })}
-                  />
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="name" className="text-sm font-medium">Environment Name</label>
+                    <Input
+                      id="name"
+                      value={newEnvironment.name}
+                      onChange={(e) => setNewEnvironment({ ...newEnvironment, name: e.target.value })}
+                      placeholder="e.g., Production, Development, Testing"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="description" className="text-sm font-medium">Description</label>
+                    <Input
+                      id="description"
+                      value={newEnvironment.description}
+                      onChange={(e) => setNewEnvironment({ ...newEnvironment, description: e.target.value })}
+                      placeholder="Describe the environment's purpose"
+                    />
+                  </div>
                 </div>
                 
-                <div className="grid gap-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Input
-                    id="description"
-                    placeholder="Describe this environment"
-                    value={newEnvironment.description || ""}
-                    onChange={(e) => setNewEnvironment({ ...newEnvironment, description: e.target.value })}
-                  />
-                </div>
-                
-                <div className="grid gap-2">
-                  <Label>Cloud Accounts</Label>
-                  <div className="border rounded-md p-3 space-y-2">
-                    {mockCloudAccounts.map((account) => (
-                      <div key={account.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          checked={(newEnvironment.cloudAccounts || []).some(a => a.id === account.id)}
-                          onCheckedChange={() => handleCloudAccountToggle(account.id)}
-                          id={`account-${account.id}`}
-                        />
-                        <Label htmlFor={`account-${account.id}`} className="flex items-center gap-2 cursor-pointer">
-                          <Badge className={providerColor(account.provider)}>
-                            {account.provider.toUpperCase()}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Cloud Accounts</label>
+                  <div className="border rounded-md p-3">
+                    <div className="grid gap-2">
+                      {mockCloudAccounts.map((account) => (
+                        <div key={account.id} className="flex items-center justify-between p-2 border rounded-md">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`account-${account.id}`}
+                              checked={(newEnvironment.cloudAccounts || []).some(acc => acc.id === account.id)}
+                              onCheckedChange={() => toggleCloudAccount(account)}
+                            />
+                            <label htmlFor={`account-${account.id}`} className="flex items-center gap-2">
+                              {account.provider === "azure" && <Cloud className="h-4 w-4 text-blue-500" />}
+                              {account.provider === "aws" && <Cloud className="h-4 w-4 text-amber-500" />}
+                              {account.provider === "gcp" && <Cloud className="h-4 w-4 text-red-500" />}
+                              <span>{account.name}</span>
+                            </label>
+                          </div>
+                          <Badge variant={account.status === "connected" ? "secondary" : "outline"}>
+                            {account.status}
                           </Badge>
-                          {account.name} ({account.region})
-                        </Label>
-                      </div>
-                    ))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 
-                <div className="grid gap-2">
-                  <Label>Resource Types</Label>
-                  <div className="border rounded-md p-3 space-y-2">
-                    {mockResourceTypes.map((resourceType) => (
-                      <div key={resourceType} className="flex items-center space-x-2">
-                        <Checkbox
-                          checked={(newEnvironment.resourceTypes || []).includes(resourceType)}
-                          onCheckedChange={() => handleResourceTypeToggle(resourceType)}
-                          id={`resource-${resourceType}`}
-                        />
-                        <Label htmlFor={`resource-${resourceType}`} className="cursor-pointer">
-                          {resourceType}
-                        </Label>
-                      </div>
-                    ))}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Resource Types</label>
+                  <div className="border rounded-md p-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      {resourceTypes.map((type) => (
+                        <div key={type} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`resource-${type}`}
+                            checked={(newEnvironment.resourceTypes || []).includes(type)}
+                            onCheckedChange={() => toggleResourceType(type)}
+                          />
+                          <label
+                            htmlFor={`resource-${type}`}
+                            className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            {type}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 
-                <div className="grid gap-2">
-                  <Label htmlFor="tags">Tags (optional)</Label>
-                  <div className="text-sm text-muted-foreground">
-                    Tags will be automatically applied to all resources deployed in this environment
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Environment Tags</label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Tag key"
+                      value={tagKey}
+                      onChange={(e) => setTagKey(e.target.value)}
+                      className="w-1/3"
+                    />
+                    <Input
+                      placeholder="Tag value"
+                      value={tagValue}
+                      onChange={(e) => setTagValue(e.target.value)}
+                      className="w-1/3"
+                    />
+                    <Button onClick={addTag} type="button" variant="secondary">Add Tag</Button>
                   </div>
+                  
+                  {Object.keys(newEnvironment.tags || {}).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {Object.entries(newEnvironment.tags || {}).map(([key, value]) => (
+                        <Badge key={key} variant="secondary" className="flex gap-1 items-center">
+                          {key}: {value}
+                          <button 
+                            onClick={() => removeTag(key)}
+                            className="ml-1 hover:bg-primary-foreground rounded-full"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancel
-                </Button>
+                <Button variant="outline" onClick={() => setIsCreating(false)}>Cancel</Button>
                 <Button onClick={handleCreateEnvironment}>Create Environment</Button>
               </DialogFooter>
             </DialogContent>
@@ -320,166 +402,152 @@ const Environments = () => {
         </div>
       </div>
       
-      <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {environments.map((environment) => (
+      <div className="relative">
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search environments..."
+          className="pl-8 mb-4"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+      
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {filteredEnvironments.map((environment) => (
           <Card key={environment.id}>
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <CardTitle>{environment.name}</CardTitle>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      setEditingEnvironment(environment);
-                      setIsEditDialogOpen(true);
-                    }}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteEnvironment(environment.id)}
-                  >
-                    <Trash className="h-4 w-4" />
-                  </Button>
+            <CardHeader className="pb-3 flex flex-row justify-between items-start">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Server className="h-5 w-5" />
+                  {environment.name}
+                </CardTitle>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="icon">
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={() => handleDeleteEnvironment(environment.id)}
+                >
+                  <Trash className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  {environment.description}
+                </p>
+              </div>
+              
+              <div>
+                <h3 className="text-sm font-medium mb-1">Cloud Accounts</h3>
+                <div className="flex flex-wrap gap-2">
+                  {environment.cloudAccounts.map((account) => (
+                    <Badge key={account.id} variant="outline" className="flex items-center gap-1">
+                      {account.provider === "azure" && <Cloud className="h-3 w-3 text-blue-500" />}
+                      {account.provider === "aws" && <Cloud className="h-3 w-3 text-amber-500" />}
+                      {account.provider === "gcp" && <Cloud className="h-3 w-3 text-red-500" />}
+                      {account.name}
+                    </Badge>
+                  ))}
                 </div>
               </div>
-              <CardDescription>{environment.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Cloud Accounts</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {environment.cloudAccounts.map((account) => (
-                      <Badge key={account.id} className={providerColor(account.provider)}>
-                        {account.name}
-                      </Badge>
-                    ))}
-                  </div>
+              
+              <div>
+                <h3 className="text-sm font-medium mb-1">Resource Types</h3>
+                <div className="flex flex-wrap gap-1">
+                  {environment.resourceTypes.map((type) => (
+                    <Badge key={type} variant="secondary" className="text-xs">
+                      {type}
+                    </Badge>
+                  ))}
                 </div>
-                
+              </div>
+              
+              {Object.keys(environment.tags).length > 0 && (
                 <div>
-                  <h4 className="text-sm font-medium mb-2">Resource Types</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {environment.resourceTypes.map((type) => (
-                      <Badge key={type} variant="secondary">
-                        {type}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Tags</h4>
-                  <div className="flex flex-wrap gap-2">
+                  <h3 className="text-sm font-medium mb-1">Tags</h3>
+                  <div className="flex flex-wrap gap-1">
                     {Object.entries(environment.tags).map(([key, value]) => (
-                      <Badge key={key} variant="outline">
+                      <Badge key={key} variant="outline" className="text-xs">
                         {key}: {value}
                       </Badge>
                     ))}
                   </div>
                 </div>
+              )}
+              
+              <div className="flex justify-between items-center text-sm text-muted-foreground pt-2">
+                <span>Created: {new Date(environment.createdAt).toLocaleDateString()}</span>
+                <span className="flex items-center gap-1">
+                  <FileCode className="h-3 w-3" />
+                  {environment.deploymentCount} deployments
+                </span>
               </div>
             </CardContent>
           </Card>
         ))}
-      </div>
-
-      {environments.length === 0 && (
-        <div className="text-center py-10">
-          <Server className="mx-auto h-10 w-10 text-muted-foreground" />
-          <h3 className="mt-4 text-lg font-medium">No environments created yet</h3>
-          <p className="mt-2 text-muted-foreground">
-            Create an environment to organize your deployments.
-          </p>
-        </div>
-      )}
-      
-      {/* Edit Environment Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Environment</DialogTitle>
-          </DialogHeader>
-          
-          {editingEnvironment && (
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-name">Name</Label>
-                <Input
-                  id="edit-name"
-                  value={editingEnvironment.name}
-                  onChange={(e) => setEditingEnvironment({
-                    ...editingEnvironment,
-                    name: e.target.value
-                  })}
-                />
-              </div>
-              
-              <div className="grid gap-2">
-                <Label htmlFor="edit-description">Description</Label>
-                <Input
-                  id="edit-description"
-                  value={editingEnvironment.description}
-                  onChange={(e) => setEditingEnvironment({
-                    ...editingEnvironment,
-                    description: e.target.value
-                  })}
-                />
-              </div>
-              
-              <div className="grid gap-2">
-                <Label>Cloud Accounts</Label>
-                <div className="border rounded-md p-3 space-y-2">
-                  {mockCloudAccounts.map((account) => (
-                    <div key={account.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        checked={editingEnvironment.cloudAccounts.some(a => a.id === account.id)}
-                        onCheckedChange={() => handleCloudAccountToggle(account.id, false)}
-                        id={`edit-account-${account.id}`}
-                      />
-                      <Label htmlFor={`edit-account-${account.id}`} className="flex items-center gap-2 cursor-pointer">
-                        <Badge className={providerColor(account.provider)}>
-                          {account.provider.toUpperCase()}
-                        </Badge>
-                        {account.name} ({account.region})
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="grid gap-2">
-                <Label>Resource Types</Label>
-                <div className="border rounded-md p-3 space-y-2">
-                  {mockResourceTypes.map((resourceType) => (
-                    <div key={resourceType} className="flex items-center space-x-2">
-                      <Checkbox
-                        checked={editingEnvironment.resourceTypes.includes(resourceType)}
-                        onCheckedChange={() => handleResourceTypeToggle(resourceType, false)}
-                        id={`edit-resource-${resourceType}`}
-                      />
-                      <Label htmlFor={`edit-resource-${resourceType}`} className="cursor-pointer">
-                        {resourceType}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
+        
+        {filteredEnvironments.length === 0 && (
+          <div className="col-span-full flex flex-col items-center justify-center py-12">
+            <Server className="h-12 w-12 text-muted-foreground" />
+            <h2 className="mt-4 text-xl font-semibold">No Environments Found</h2>
+            <p className="text-center text-muted-foreground mt-2">
+              {searchTerm 
+                ? "No environments match your search criteria" 
+                : "Create your first deployment environment to get started"}
+            </p>
+            <Button
+              className="mt-4"
+              onClick={() => setIsCreating(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create Environment
             </Button>
-            <Button onClick={handleEditEnvironment}>Save Changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        )}
+      </div>
+      
+      {filteredEnvironments.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Environment Comparison</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Cloud Providers</TableHead>
+                  <TableHead>Resource Types</TableHead>
+                  <TableHead>Deployments</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredEnvironments.map((environment) => (
+                  <TableRow key={environment.id}>
+                    <TableCell className="font-medium">{environment.name}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        {Array.from(new Set(environment.cloudAccounts.map(acc => acc.provider))).map((provider) => (
+                          <Badge key={provider} variant="outline" className="capitalize">
+                            {provider}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>{environment.resourceTypes.length}</TableCell>
+                    <TableCell>{environment.deploymentCount}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

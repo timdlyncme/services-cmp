@@ -14,8 +14,11 @@ import Deployments from "@/pages/Deployments";
 import DeploymentDetails from "@/pages/DeploymentDetails";
 import Settings from "@/pages/Settings";
 import Tenants from "@/pages/Tenants";
-import TemplateFoundry from "@/pages/TemplateFoundry";
+import TenantTemplateFoundry from "@/pages/TenantTemplateFoundry";
+import MSPTemplateFoundry from "@/pages/MSPTemplateFoundry";
 import Environments from "@/pages/Environments";
+import UsersAndGroups from "@/pages/UsersAndGroups";
+import NexusAI from "@/pages/NexusAI";
 import Login from "@/pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -39,8 +42,11 @@ const App = () => (
               <Route path="/deployments/:deploymentId" element={<DeploymentDetails />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/tenants" element={<Tenants />} />
-              <Route path="/template-foundry" element={<TemplateFoundry />} />
+              <Route path="/template-foundry" element={<TenantTemplateFoundry />} />
+              <Route path="/msp-template-foundry" element={<MSPTemplateFoundry />} />
               <Route path="/environments" element={<Environments />} />
+              <Route path="/users-and-groups" element={<UsersAndGroups />} />
+              <Route path="/nexus-ai" element={<NexusAI />} />
             </Route>
             
             <Route path="*" element={<NotFound />} />
