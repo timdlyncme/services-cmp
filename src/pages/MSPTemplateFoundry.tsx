@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -187,7 +186,7 @@ const MSPTemplateFoundry = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">MSP Template Foundry</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Template Foundry</h1>
           <p className="text-muted-foreground">
             Create and manage cloud infrastructure templates across all tenants
           </p>
