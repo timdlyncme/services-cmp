@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -152,81 +151,74 @@ const TenantTemplateFoundry = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Template Foundry</h1>
-          <p className="text-muted-foreground">
-            Create, manage and publish cloud infrastructure templates for your tenant
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Dialog open={isCreating} onOpenChange={setIsCreating}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Template
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Create New Template</DialogTitle>
-                <DialogDescription>
-                  Create a new infrastructure template to deploy cloud resources
-                </DialogDescription>
-              </DialogHeader>
-              
-              <TemplateForm 
-                onSubmit={handleCreateTemplate} 
-                onCancel={() => setIsCreating(false)}
-                isMSP={false}
-                availableTenants={availableTenants}
-              />
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-      
-      <div className="grid md:grid-cols-3 gap-6">
-        <div className="md:col-span-1">
-          <TemplateList
-            templates={templates}
-            activeTemplate={activeTemplate}
-            setActiveTemplate={setActiveTemplate}
-            filter={filter}
-            setFilter={setFilter}
-          />
-        </div>
-        
-        <div className="md:col-span-2">
-          {activeTemplate ? (
-            <TemplateDetails
-              template={activeTemplate}
-              onUpdate={handleUpdateTemplate}
-              onDelete={handleDeleteTemplate}
-              onPublish={handlePublishTemplate}
-              onUnpublish={handleUnpublishTemplate}
+    <div className="flex items-center justify-between">
+      <h1 className="text-3xl font-bold tracking-tight">Template Management</h1>
+      <div className="flex gap-2">
+        <Dialog open={isCreating} onOpenChange={setIsCreating}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New Template
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Create New Template</DialogTitle>
+              <DialogDescription>
+                Create a new infrastructure template to deploy cloud resources
+              </DialogDescription>
+            </DialogHeader>
+            
+            <TemplateForm 
+              onSubmit={handleCreateTemplate} 
+              onCancel={() => setIsCreating(false)}
               isMSP={false}
               availableTenants={availableTenants}
             />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full py-16">
-              <FileCode className="h-12 w-12 text-muted-foreground" />
-              <h2 className="mt-4 text-xl font-semibold">No Template Selected</h2>
-              <p className="text-center text-muted-foreground mt-2 max-w-md">
-                Select a template from the library to view and edit, or create a new template to get started.
-              </p>
-              <Button 
-                className="mt-4" 
-                variant="outline"
-                onClick={() => setIsCreating(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Template
-              </Button>
-            </div>
-          )}
-        </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+    
+    <div className="grid md:grid-cols-3 gap-6">
+      <div className="md:col-span-1">
+        <TemplateList
+          templates={templates}
+          activeTemplate={activeTemplate}
+          setActiveTemplate={setActiveTemplate}
+          filter={filter}
+          setFilter={setFilter}
+        />
+      </div>
+      
+      <div className="md:col-span-2">
+        {activeTemplate ? (
+          <TemplateDetails
+            template={activeTemplate}
+            onUpdate={handleUpdateTemplate}
+            onDelete={handleDeleteTemplate}
+            onPublish={handlePublishTemplate}
+            onUnpublish={handleUnpublishTemplate}
+            isMSP={false}
+            availableTenants={availableTenants}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full py-16">
+            <FileCode className="h-12 w-12 text-muted-foreground" />
+            <h2 className="mt-4 text-xl font-semibold">No Template Selected</h2>
+            <p className="text-center text-muted-foreground mt-2 max-w-md">
+              Select a template from the library to view and edit, or create a new template to get started.
+            </p>
+            <Button 
+              className="mt-4" 
+              variant="outline"
+              onClick={() => setIsCreating(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create New Template
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
