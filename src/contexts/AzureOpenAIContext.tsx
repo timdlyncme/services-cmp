@@ -8,6 +8,15 @@ interface AzureOpenAIConfig {
   apiVersion: string;
 }
 
+export type LogLevel = "info" | "error" | "warning" | "success" | "request" | "response";
+
+export interface LogEntry {
+  timestamp: string;
+  message: string;
+  level: LogLevel;
+  details?: any;
+}
+
 interface AzureOpenAIContextType {
   config: AzureOpenAIConfig;
   updateConfig: (newConfig: Partial<AzureOpenAIConfig>) => void;
@@ -15,7 +24,8 @@ interface AzureOpenAIContextType {
   isConnected: boolean;
   connectionStatus: "disconnected" | "connecting" | "connected" | "error";
   testConnection: () => Promise<boolean>;
-  logs: string[];
+  logs: LogEntry[];
+  addLog: (message: string, level: LogLevel, details?: any) => void;
   clearLogs: () => void;
 }
 
@@ -36,7 +46,7 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
   });
   
   const [connectionStatus, setConnectionStatus] = useState<"disconnected" | "connecting" | "connected" | "error">("disconnected");
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const isConfigured = Boolean(config.apiKey && config.endpoint && config.deploymentName);
   const isConnected = connectionStatus === "connected";
@@ -50,12 +60,12 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
     setConfig(prev => ({ ...prev, ...newConfig }));
     // Reset connection status when config changes
     setConnectionStatus("disconnected");
-    addLog("Configuration updated");
+    addLog("Configuration updated", "info");
   };
 
-  const addLog = (message: string) => {
+  const addLog = (message: string, level: LogLevel = "info", details?: any) => {
     const timestamp = new Date().toISOString();
-    setLogs(prev => [...prev, `[${timestamp}] ${message}`]);
+    setLogs(prev => [...prev, { timestamp, message, level, details }]);
   };
 
   const clearLogs = () => {
@@ -65,40 +75,49 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
   const testConnection = async (): Promise<boolean> => {
     if (!isConfigured) {
       toast.error("Please configure Azure OpenAI settings first");
-      addLog("Connection test failed: Missing configuration");
+      addLog("Connection test failed: Missing configuration", "error");
       return false;
     }
 
     setConnectionStatus("connecting");
-    addLog("Testing connection to Azure OpenAI...");
+    addLog("Testing connection to Azure OpenAI...", "info");
+    addLog(`Endpoint: ${config.endpoint}/openai/deployments/${config.deploymentName}`, "info");
 
     try {
       // Simple test request to Azure OpenAI
+      const requestBody = {
+        messages: [{ role: "system", content: "You are a helpful assistant." }],
+        max_tokens: 5,
+      };
+      
+      addLog("Sending test request to Azure OpenAI", "request", requestBody);
+      
       const response = await fetch(`${config.endpoint}/openai/deployments/${config.deploymentName}/chat/completions?api-version=${config.apiVersion}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "api-key": config.apiKey,
         },
-        body: JSON.stringify({
-          messages: [{ role: "system", content: "You are a helpful assistant." }],
-          max_tokens: 5,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
+        addLog(`Response status: ${response.status} ${response.statusText}`, "error", errorData);
         throw new Error(errorData?.error?.message || `HTTP error ${response.status}`);
       }
 
+      const responseData = await response.json();
+      addLog("Received successful response from Azure OpenAI", "response", responseData);
+      
       setConnectionStatus("connected");
-      addLog("Connection successful");
+      addLog("Connection successful", "success");
       toast.success("Successfully connected to Azure OpenAI");
       return true;
     } catch (error) {
       setConnectionStatus("error");
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      addLog(`Connection error: ${errorMessage}`);
+      addLog(`Connection error: ${errorMessage}`, "error", error);
       toast.error(`Failed to connect: ${errorMessage}`);
       return false;
     }
@@ -114,6 +133,7 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
         connectionStatus,
         testConnection,
         logs,
+        addLog,
         clearLogs,
       }}
     >
@@ -129,4 +149,3 @@ export const useAzureOpenAI = (): AzureOpenAIContextType => {
   }
   return context;
 };
-

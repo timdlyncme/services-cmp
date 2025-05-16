@@ -4,7 +4,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart, FileText, CloudCog, Server, Users, Database, Settings, Send } from "lucide-react";
+import { 
+  BarChart, 
+  FileText, 
+  CloudCog, 
+  Server, 
+  Users, 
+  Database, 
+  Settings, 
+  Send,
+  RefreshCw,
+  Edit,
+  Loader2
+} from "lucide-react";
 import { toast } from "sonner";
 import { useAzureOpenAI } from "@/contexts/AzureOpenAIContext";
 import { AzureOpenAIService } from "@/services/azureOpenAIService";
@@ -70,10 +82,12 @@ const initialMessages: Message[] = [
 const NexusAI = () => {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [messageInput, setMessageInput] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [insights] = useState<AIInsight[]>(sampleInsights);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { config, isConfigured, isConnected, connectionStatus, testConnection } = useAzureOpenAI();
+  const { config, isConfigured, isConnected, connectionStatus, testConnection, addLog } = useAzureOpenAI();
 
   useEffect(() => {
     scrollToBottom();
@@ -90,30 +104,53 @@ const NexusAI = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleSendMessage = async () => {
-    if (!messageInput.trim()) return;
+  const handleSendMessage = async (content?: string) => {
+    const messageToSend = content || messageInput;
+    if (!messageToSend.trim()) return;
     
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
       sender: "user",
-      content: messageInput.trim(),
+      content: messageToSend.trim(),
       timestamp: new Date().toISOString()
     };
     
-    setMessages([...messages, userMessage]);
+    setMessages(prev => {
+      // If we're editing a message, replace it and all subsequent messages
+      if (editingMessageId) {
+        const editIndex = prev.findIndex(msg => msg.id === editingMessageId);
+        if (editIndex >= 0) {
+          return [...prev.slice(0, editIndex), userMessage];
+        }
+      }
+      return [...prev, userMessage];
+    });
+    
     setMessageInput("");
+    setEditingMessageId(null);
     setIsLoading(true);
     
     try {
       if (isConfigured && isConnected) {
         // Use Azure OpenAI service
-        const azureOpenAIService = new AzureOpenAIService(config, (log) => {
+        const azureOpenAIService = new AzureOpenAIService(config, (message, level, details) => {
           // This callback will be called with log messages from the service
-          console.log(log);
+          addLog(message, level, details);
+          console.log(message, details);
         });
         
+        // Get the messages to include in the API request
+        let messagesToSend;
+        if (editingMessageId) {
+          // If editing, get all messages up to and including the edited message
+          const editIndex = messages.findIndex(msg => msg.id === editingMessageId);
+          messagesToSend = editIndex >= 0 ? messages.slice(0, editIndex) : messages;
+        } else {
+          messagesToSend = messages;
+        }
+        
         // Convert our messages to the format expected by the API
-        const apiMessages = messages.concat(userMessage).map(msg => ({
+        const apiMessages = messagesToSend.concat(userMessage).map(msg => ({
           role: msg.sender === "user" ? "user" : "assistant",
           content: msg.content
         }));
@@ -173,6 +210,7 @@ const NexusAI = () => {
       setMessages(prevMessages => [...prevMessages, aiMessage]);
     } finally {
       setIsLoading(false);
+      setIsRetrying(false);
     }
   };
 
@@ -180,6 +218,38 @@ const NexusAI = () => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  const handleEditMessage = (messageId: string) => {
+    const messageToEdit = messages.find(msg => msg.id === messageId);
+    if (messageToEdit) {
+      setEditingMessageId(messageId);
+      setMessageInput(messageToEdit.content);
+      
+      // Focus the input field
+      const inputElement = document.querySelector('input[type="text"]') as HTMLInputElement;
+      if (inputElement) {
+        setTimeout(() => {
+          inputElement.focus();
+        }, 0);
+      }
+    }
+  };
+
+  const handleRetry = () => {
+    // Find the last user message
+    const lastUserMessageIndex = [...messages].reverse().findIndex(msg => msg.sender === "user");
+    if (lastUserMessageIndex >= 0) {
+      const lastUserMessage = [...messages].reverse()[lastUserMessageIndex];
+      
+      // Remove all messages after the last user message
+      const messagesToKeep = messages.slice(0, messages.length - lastUserMessageIndex);
+      setMessages(messagesToKeep);
+      
+      // Retry with the last user message
+      setIsRetrying(true);
+      handleSendMessage(lastUserMessage.content);
     }
   };
 
@@ -205,6 +275,20 @@ const NexusAI = () => {
   const handleAskAboutInsight = (insight: AIInsight) => {
     const question = `Tell me more about the insight: "${insight.title}"`;
     setMessageInput(question);
+  };
+
+  // Determine if we should show message actions (edit/retry)
+  const canShowMessageActions = (message: Message, index: number) => {
+    return (
+      // Only show for user messages
+      message.sender === "user" &&
+      // Only show for the last user message
+      index === messages.filter(m => m.sender === "user").length - 1 &&
+      // Don't show while loading or retrying
+      !isLoading && !isRetrying &&
+      // Don't show if already editing
+      !editingMessageId
+    );
   };
 
   return (
@@ -236,7 +320,7 @@ const NexusAI = () => {
             <CardContent className="flex-1 flex flex-col overflow-hidden p-0">
               <ScrollArea className="flex-1 px-6">
                 <div className="space-y-4 pb-4">
-                  {messages.map((message) => (
+                  {messages.map((message, index) => (
                     <div
                       key={message.id}
                       className={`flex ${
@@ -251,9 +335,25 @@ const NexusAI = () => {
                         }`}
                       >
                         <p className="break-words">{message.content}</p>
-                        <p className="text-xs mt-1 opacity-70">
-                          {new Date(message.timestamp).toLocaleTimeString()}
-                        </p>
+                        <div className="flex justify-between items-center mt-1">
+                          <p className="text-xs opacity-70">
+                            {new Date(message.timestamp).toLocaleTimeString()}
+                          </p>
+                          
+                          {canShowMessageActions(message, index) && (
+                            <div className="flex gap-1 ml-2">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-5 w-5 rounded-full opacity-70 hover:opacity-100"
+                                onClick={() => handleEditMessage(message.id)}
+                                title="Edit message"
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -271,18 +371,62 @@ const NexusAI = () => {
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollArea>
-              <div className="mt-auto flex gap-2 px-6 py-4 border-t">
-                <Input
-                  value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  onKeyDown={handleKeyPress}
-                  placeholder="Ask NexusAI about your platform..."
-                  className="flex-1"
-                  disabled={isLoading}
-                />
-                <Button onClick={handleSendMessage} disabled={!messageInput.trim() || isLoading}>
-                  <Send className="h-4 w-4" />
-                </Button>
+              <div className="mt-auto flex flex-col gap-2 px-6 py-4 border-t">
+                {!isLoading && !isRetrying && messages.length > 1 && messages[messages.length - 1].sender === "ai" && (
+                  <div className="flex justify-end mb-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={handleRetry}
+                      disabled={isLoading || isRetrying}
+                    >
+                      {isRetrying ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Regenerating...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          Regenerate response
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Input
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyDown={handleKeyPress}
+                    placeholder={editingMessageId ? "Edit your message..." : "Ask NexusAI about your platform..."}
+                    className="flex-1"
+                    disabled={isLoading || isRetrying}
+                  />
+                  <Button 
+                    onClick={() => handleSendMessage()} 
+                    disabled={!messageInput.trim() || isLoading || isRetrying}
+                  >
+                    {editingMessageId ? "Update" : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {editingMessageId && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Editing a previous message. This will regenerate the AI response.
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 ml-2 text-xs"
+                      onClick={() => {
+                        setEditingMessageId(null);
+                        setMessageInput("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -295,12 +439,12 @@ const NexusAI = () => {
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden p-0">
               <Tabs defaultValue="all" className="h-full flex flex-col">
-                <TabsList className="grid grid-cols-5 w-full mx-6">
-                  <TabsTrigger value="all">All</TabsTrigger>
-                  <TabsTrigger value="tenant">Tenants</TabsTrigger>
-                  <TabsTrigger value="template">Templates</TabsTrigger>
-                  <TabsTrigger value="deployment">Deploy</TabsTrigger>
-                  <TabsTrigger value="security">Security</TabsTrigger>
+                <TabsList className="grid w-full mx-6">
+                  <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
+                  <TabsTrigger value="tenant" className="text-xs">Tenants</TabsTrigger>
+                  <TabsTrigger value="template" className="text-xs">Templates</TabsTrigger>
+                  <TabsTrigger value="deployment" className="text-xs">Deploy</TabsTrigger>
+                  <TabsTrigger value="security" className="text-xs">Security</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="all" className="mt-4 flex-1 overflow-hidden px-6">
@@ -487,4 +631,3 @@ const NexusAI = () => {
 };
 
 export default NexusAI;
-
