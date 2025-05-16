@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
@@ -12,7 +11,8 @@ import {
   ChevronLeft, 
   ChevronRight,
   Users,
-  Upload
+  Upload,
+  CloudCog
 } from "lucide-react";
 import {
   Sidebar,
@@ -67,10 +67,10 @@ export function AppSidebar() {
       <SidebarHeader className="flex h-14 items-center border-b px-4">
         <div className="flex items-center">
           <div className="text-primary mr-2">
-            <Server className="h-6 w-6" />
+            <CloudCog className="h-6 w-6" />
           </div>
           {!collapsed && (
-            <span className="font-medium">CloudFlow</span>
+            <span className="font-medium">Cloud Management</span>
           )}
         </div>
       </SidebarHeader>
