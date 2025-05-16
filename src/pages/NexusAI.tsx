@@ -226,16 +226,16 @@ const NexusAI = () => {
       
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Card className="h-full flex flex-col">
-            <CardHeader className="pb-3">
+          <Card className="h-[calc(100vh-300px)] min-h-[600px] flex flex-col">
+            <CardHeader className="pb-3 flex-shrink-0">
               <CardTitle className="flex items-center">
                 <CloudCog className="h-5 w-5 mr-2 text-primary" />
                 NexusAI Chat
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col">
-              <ScrollArea className="flex-1 pr-4 min-h-[500px]">
-                <div className="space-y-4">
+            <CardContent className="flex-1 flex flex-col overflow-hidden p-0">
+              <ScrollArea className="flex-1 px-6">
+                <div className="space-y-4 pb-4">
                   {messages.map((message) => (
                     <div
                       key={message.id}
@@ -271,7 +271,7 @@ const NexusAI = () => {
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollArea>
-              <div className="mt-4 flex gap-2">
+              <div className="mt-auto flex gap-2 px-6 py-4 border-t">
                 <Input
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
@@ -289,13 +289,13 @@ const NexusAI = () => {
         </div>
         
         <div>
-          <Card className="h-full">
-            <CardHeader className="pb-3">
+          <Card className="h-[calc(100vh-300px)] min-h-[600px] flex flex-col">
+            <CardHeader className="pb-3 flex-shrink-0">
               <CardTitle>AI Insights</CardTitle>
             </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="all">
-                <TabsList className="grid grid-cols-5 w-full">
+            <CardContent className="flex-1 overflow-hidden p-0">
+              <Tabs defaultValue="all" className="h-full flex flex-col">
+                <TabsList className="grid grid-cols-5 w-full mx-6">
                   <TabsTrigger value="all">All</TabsTrigger>
                   <TabsTrigger value="tenant">Tenants</TabsTrigger>
                   <TabsTrigger value="template">Templates</TabsTrigger>
@@ -303,122 +303,142 @@ const NexusAI = () => {
                   <TabsTrigger value="security">Security</TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="all" className="mt-4 space-y-4">
-                  {insights.map((insight) => (
-                    <Card key={insight.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
-                      <CardContent className="p-4 space-y-2" onClick={() => handleAskAboutInsight(insight)}>
-                        <div className="flex justify-between items-start">
-                          <div className="flex items-center gap-2">
-                            {getCategoryIcon(insight.category)}
-                            <span className="font-medium">{insight.title}</span>
-                          </div>
-                          <div className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(insight.severity)}`}>
-                            {insight.severity}
-                          </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{insight.description}</p>
-                        <div className="text-xs text-muted-foreground">
-                          {new Date(insight.timestamp).toLocaleDateString()}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                <TabsContent value="all" className="mt-4 flex-1 overflow-hidden px-6">
+                  <ScrollArea className="h-full pr-4">
+                    <div className="space-y-4 pb-4">
+                      {insights.map((insight) => (
+                        <Card key={insight.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
+                          <CardContent className="p-4 space-y-2" onClick={() => handleAskAboutInsight(insight)}>
+                            <div className="flex justify-between items-start">
+                              <div className="flex items-center gap-2">
+                                {getCategoryIcon(insight.category)}
+                                <span className="font-medium">{insight.title}</span>
+                              </div>
+                              <div className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(insight.severity)}`}>
+                                {insight.severity}
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{insight.description}</p>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(insight.timestamp).toLocaleDateString()}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </TabsContent>
                 
-                <TabsContent value="tenant" className="mt-4 space-y-4">
-                  {insights
-                    .filter((insight) => insight.category === "tenant")
-                    .map((insight) => (
-                      <Card key={insight.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
-                        <CardContent className="p-4 space-y-2" onClick={() => handleAskAboutInsight(insight)}>
-                          <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-2">
-                              <Users className="h-4 w-4" />
-                              <span className="font-medium">{insight.title}</span>
-                            </div>
-                            <div className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(insight.severity)}`}>
-                              {insight.severity}
-                            </div>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{insight.description}</p>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(insight.timestamp).toLocaleDateString()}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                <TabsContent value="tenant" className="mt-4 flex-1 overflow-hidden px-6">
+                  <ScrollArea className="h-full pr-4">
+                    <div className="space-y-4 pb-4">
+                      {insights
+                        .filter((insight) => insight.category === "tenant")
+                        .map((insight) => (
+                          <Card key={insight.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
+                            <CardContent className="p-4 space-y-2" onClick={() => handleAskAboutInsight(insight)}>
+                              <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-2">
+                                  <Users className="h-4 w-4" />
+                                  <span className="font-medium">{insight.title}</span>
+                                </div>
+                                <div className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(insight.severity)}`}>
+                                  {insight.severity}
+                                </div>
+                              </div>
+                              <p className="text-sm text-muted-foreground">{insight.description}</p>
+                              <div className="text-xs text-muted-foreground">
+                                {new Date(insight.timestamp).toLocaleDateString()}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                    </div>
+                  </ScrollArea>
                 </TabsContent>
                 
-                <TabsContent value="template" className="mt-4 space-y-4">
-                  {insights
-                    .filter((insight) => insight.category === "template")
-                    .map((insight) => (
-                      <Card key={insight.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
-                        <CardContent className="p-4 space-y-2" onClick={() => handleAskAboutInsight(insight)}>
-                          <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-2">
-                              <FileText className="h-4 w-4" />
-                              <span className="font-medium">{insight.title}</span>
-                            </div>
-                            <div className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(insight.severity)}`}>
-                              {insight.severity}
-                            </div>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{insight.description}</p>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(insight.timestamp).toLocaleDateString()}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                <TabsContent value="template" className="mt-4 flex-1 overflow-hidden px-6">
+                  <ScrollArea className="h-full pr-4">
+                    <div className="space-y-4 pb-4">
+                      {insights
+                        .filter((insight) => insight.category === "template")
+                        .map((insight) => (
+                          <Card key={insight.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
+                            <CardContent className="p-4 space-y-2" onClick={() => handleAskAboutInsight(insight)}>
+                              <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="h-4 w-4" />
+                                  <span className="font-medium">{insight.title}</span>
+                                </div>
+                                <div className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(insight.severity)}`}>
+                                  {insight.severity}
+                                </div>
+                              </div>
+                              <p className="text-sm text-muted-foreground">{insight.description}</p>
+                              <div className="text-xs text-muted-foreground">
+                                {new Date(insight.timestamp).toLocaleDateString()}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                    </div>
+                  </ScrollArea>
                 </TabsContent>
                 
-                <TabsContent value="deployment" className="mt-4 space-y-4">
-                  {insights
-                    .filter((insight) => insight.category === "deployment")
-                    .map((insight) => (
-                      <Card key={insight.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
-                        <CardContent className="p-4 space-y-2" onClick={() => handleAskAboutInsight(insight)}>
-                          <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-2">
-                              <Server className="h-4 w-4" />
-                              <span className="font-medium">{insight.title}</span>
-                            </div>
-                            <div className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(insight.severity)}`}>
-                              {insight.severity}
-                            </div>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{insight.description}</p>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(insight.timestamp).toLocaleDateString()}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                <TabsContent value="deployment" className="mt-4 flex-1 overflow-hidden px-6">
+                  <ScrollArea className="h-full pr-4">
+                    <div className="space-y-4 pb-4">
+                      {insights
+                        .filter((insight) => insight.category === "deployment")
+                        .map((insight) => (
+                          <Card key={insight.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
+                            <CardContent className="p-4 space-y-2" onClick={() => handleAskAboutInsight(insight)}>
+                              <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-2">
+                                  <Server className="h-4 w-4" />
+                                  <span className="font-medium">{insight.title}</span>
+                                </div>
+                                <div className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(insight.severity)}`}>
+                                  {insight.severity}
+                                </div>
+                              </div>
+                              <p className="text-sm text-muted-foreground">{insight.description}</p>
+                              <div className="text-xs text-muted-foreground">
+                                {new Date(insight.timestamp).toLocaleDateString()}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                    </div>
+                  </ScrollArea>
                 </TabsContent>
                 
-                <TabsContent value="security" className="mt-4 space-y-4">
-                  {insights
-                    .filter((insight) => insight.category === "security")
-                    .map((insight) => (
-                      <Card key={insight.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
-                        <CardContent className="p-4 space-y-2" onClick={() => handleAskAboutInsight(insight)}>
-                          <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-2">
-                              <Settings className="h-4 w-4" />
-                              <span className="font-medium">{insight.title}</span>
-                            </div>
-                            <div className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(insight.severity)}`}>
-                              {insight.severity}
-                            </div>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{insight.description}</p>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(insight.timestamp).toLocaleDateString()}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                <TabsContent value="security" className="mt-4 flex-1 overflow-hidden px-6">
+                  <ScrollArea className="h-full pr-4">
+                    <div className="space-y-4 pb-4">
+                      {insights
+                        .filter((insight) => insight.category === "security")
+                        .map((insight) => (
+                          <Card key={insight.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
+                            <CardContent className="p-4 space-y-2" onClick={() => handleAskAboutInsight(insight)}>
+                              <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-2">
+                                  <Settings className="h-4 w-4" />
+                                  <span className="font-medium">{insight.title}</span>
+                                </div>
+                                <div className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(insight.severity)}`}>
+                                  {insight.severity}
+                                </div>
+                              </div>
+                              <p className="text-sm text-muted-foreground">{insight.description}</p>
+                              <div className="text-xs text-muted-foreground">
+                                {new Date(insight.timestamp).toLocaleDateString()}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                    </div>
+                  </ScrollArea>
                 </TabsContent>
               </Tabs>
             </CardContent>
@@ -467,3 +487,4 @@ const NexusAI = () => {
 };
 
 export default NexusAI;
+
