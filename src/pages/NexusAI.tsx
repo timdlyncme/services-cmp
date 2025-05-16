@@ -439,12 +439,12 @@ const NexusAI = () => {
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden p-0">
               <Tabs defaultValue="all" className="h-full flex flex-col">
-                <TabsList className="grid w-full mx-6">
-                  <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
-                  <TabsTrigger value="tenant" className="text-xs">Tenants</TabsTrigger>
-                  <TabsTrigger value="template" className="text-xs">Templates</TabsTrigger>
-                  <TabsTrigger value="deployment" className="text-xs">Deploy</TabsTrigger>
-                  <TabsTrigger value="security" className="text-xs">Security</TabsTrigger>
+                <TabsList className="flex w-full mx-6 justify-between">
+                  <TabsTrigger value="all" className="flex-1 text-xs">All</TabsTrigger>
+                  <TabsTrigger value="tenant" className="flex-1 text-xs">Tenants</TabsTrigger>
+                  <TabsTrigger value="template" className="flex-1 text-xs">Templates</TabsTrigger>
+                  <TabsTrigger value="deployment" className="flex-1 text-xs">Deploy</TabsTrigger>
+                  <TabsTrigger value="security" className="flex-1 text-xs">Security</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="all" className="mt-4 flex-1 overflow-hidden px-6">
