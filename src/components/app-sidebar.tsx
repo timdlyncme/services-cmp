@@ -12,6 +12,8 @@ import {
   ChevronRight,
   Users,
   Upload,
+  Brain,
+  NotebookText,
   Pickaxe,
   CloudCog,
   Shield
@@ -116,7 +118,7 @@ export function AppSidebar() {
               <SidebarSection title="Tenant Settings" collapsed={collapsed}>
                 <NavItem to="/cloud-accounts" icon={CloudCog} label="Cloud Accounts" collapsed={collapsed} />
                 <NavItem to="/environments" icon={Server} label="Environments" collapsed={collapsed} />
-                <NavItem to="/template-foundry" icon={Pickaxe} label="Template Management" collapsed={collapsed} />
+                <NavItem to="/template-foundry" icon={NotebookText} label="Template Management" collapsed={collapsed} />
                 <NavItem to="/users-and-groups" icon={Shield} label="Users & Groups" collapsed={collapsed} />
                 <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} />
               </SidebarSection>
@@ -129,8 +131,8 @@ export function AppSidebar() {
               <SidebarSeparator />
               <SidebarSection title="MSP Management" collapsed={collapsed}>
                 <NavItem to="/tenants" icon={Users} label="Tenants" collapsed={collapsed} />
-                <NavItem to="/msp-template-foundry" icon={FileCode} label="Template Foundry" collapsed={collapsed} />
-                <NavItem to="/nexus-ai" icon={CloudCog} label="NexusAI" collapsed={collapsed} />
+                <NavItem to="/msp-template-foundry" icon={Pickaxe} label="Template Foundry" collapsed={collapsed} />
+                <NavItem to="/nexus-ai" icon={Brain} label="NexusAI" collapsed={collapsed} />
               </SidebarSection>
             </>
           )}
