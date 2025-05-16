@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Users,
   Upload,
+  Pickaxe,
   CloudCog,
   Shield
 } from "lucide-react";
@@ -113,9 +114,10 @@ export function AppSidebar() {
           {isAdmin && (
             <>
               <SidebarSeparator />
-              <SidebarSection title="Admin Settings" collapsed={collapsed}>
+              <SidebarSection title="Tenant Settings" collapsed={collapsed}>
+                <NavItem to="/cloud-accounts" icon={CloudCog} label="Cloud Accounts" collapsed={collapsed} />
                 <NavItem to="/environments" icon={Server} label="Environments" collapsed={collapsed} />
-                <NavItem to="/template-foundry" icon={Upload} label="Template Foundry" collapsed={collapsed} />
+                <NavItem to="/template-foundry" icon={Pickaxe} label="Template Foundry" collapsed={collapsed} />
                 <NavItem to="/users-and-groups" icon={Shield} label="Users & Groups" collapsed={collapsed} />
                 <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} />
               </SidebarSection>
