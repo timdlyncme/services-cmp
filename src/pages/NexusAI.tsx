@@ -93,6 +93,7 @@ const NexusAI = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [userScrolled, setUserScrolled] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const { config, isConfigured, isConnected, connectionStatus, testConnection, addLog } = useAzureOpenAI();
 
   // Only scroll to bottom if user hasn't scrolled up manually
@@ -110,7 +111,21 @@ const NexusAI = () => {
   }, [isConfigured, connectionStatus, testConnection]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current && chatContainerRef.current) {
+      // Get the scroll container (the viewport of the ScrollArea)
+      const scrollContainer = chatContainerRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      
+      if (scrollContainer) {
+        // Calculate the position to scroll to (bottom of the messages)
+        const scrollPosition = messagesEndRef.current.offsetTop;
+        
+        // Scroll the chat container instead of the entire page
+        scrollContainer.scrollTo({
+          top: scrollPosition,
+          behavior: 'smooth'
+        });
+      }
+    }
   };
 
   // Handle scroll events to detect when user scrolls up
@@ -421,7 +436,7 @@ const NexusAI = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col overflow-hidden p-0">
-              <ScrollArea className="flex-1 px-6" onScroll={handleScroll}>
+              <ScrollArea className="flex-1 px-6" onScroll={handleScroll} ref={chatContainerRef}>
                 <div className="space-y-4 pb-4">
                   {messages.map((message, index) => (
                     <div
