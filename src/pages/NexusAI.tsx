@@ -24,6 +24,10 @@ import ConfigDialog from "@/components/azure-openai/ConfigDialog";
 import ConnectionStatus from "@/components/azure-openai/ConnectionStatus";
 import DebugLogs from "@/components/azure-openai/DebugLogs";
 import { Message, AIInsight } from "@/types/azure-openai";
+import { parseMarkdown } from "@/utils/markdown";
+
+// Add CSS for markdown content
+import "./NexusAI.css";
 
 // Sample insights for the demo
 const sampleInsights: AIInsight[] = [
@@ -87,11 +91,16 @@ const NexusAI = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [userScrolled, setUserScrolled] = useState(false);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { config, isConfigured, isConnected, connectionStatus, testConnection, addLog } = useAzureOpenAI();
 
+  // Only scroll to bottom if user hasn't scrolled up manually
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (!userScrolled && messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages, userScrolled]);
 
   // If configured, test the connection on component mount
   useEffect(() => {
@@ -102,6 +111,13 @@ const NexusAI = () => {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Handle scroll events to detect when user scrolls up
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 10;
+    setUserScrolled(!isAtBottom);
   };
 
   const handleSendMessage = async (content?: string) => {
@@ -129,6 +145,7 @@ const NexusAI = () => {
     setMessageInput("");
     setEditingMessageId(null);
     setIsLoading(true);
+    setUserScrolled(false); // Reset user scrolled state when sending a new message
     
     try {
       if (isConfigured && isConnected) {
@@ -161,40 +178,126 @@ const NexusAI = () => {
           content: "You are NexusAI, a helpful assistant for the cloud management platform. You help users with information about their tenants, deployments, templates, and platform health."
         });
         
-        // Send the request to Azure OpenAI
-        const response = await azureOpenAIService.sendChatCompletion(apiMessages);
-        
+        // Create a placeholder message for streaming
+        const aiMessageId = `msg-${Date.now()}`;
         const aiMessage: Message = {
-          id: `msg-${Date.now()}`,
+          id: aiMessageId,
           sender: "ai",
-          content: response,
-          timestamp: new Date().toISOString()
+          content: "",
+          timestamp: new Date().toISOString(),
+          isStreaming: true
         };
         
         setMessages(prevMessages => [...prevMessages, aiMessage]);
+        
+        // Send the request to Azure OpenAI with streaming enabled
+        await azureOpenAIService.sendChatCompletion(
+          apiMessages,
+          {
+            stream: true,
+            onChunk: (chunk) => {
+              setMessages(prevMessages => {
+                const lastMessage = prevMessages[prevMessages.length - 1];
+                if (lastMessage.id === aiMessageId) {
+                  const updatedContent = lastMessage.content + chunk;
+                  return [
+                    ...prevMessages.slice(0, -1),
+                    {
+                      ...lastMessage,
+                      content: updatedContent,
+                      formattedContent: updatedContent // We'll format this when streaming is complete
+                    }
+                  ];
+                }
+                return prevMessages;
+              });
+            }
+          }
+        ).then(fullResponse => {
+          // Update the message with the complete response and format it
+          setMessages(prevMessages => {
+            const lastMessage = prevMessages[prevMessages.length - 1];
+            if (lastMessage.id === aiMessageId) {
+              return [
+                ...prevMessages.slice(0, -1),
+                {
+                  ...lastMessage,
+                  content: fullResponse,
+                  formattedContent: fullResponse,
+                  isStreaming: false
+                }
+              ];
+            }
+            return prevMessages;
+          });
+        });
       } else {
         // Fallback to sample responses if not configured or connected
         setTimeout(() => {
           const aiResponses = [
-            "Based on my analysis of your platform, I see that you currently have 3 active tenants with a total of 42 deployments. The 'Acme Corp' tenant has the most resources provisioned.",
-            "I've analyzed your templates and found that the 'Network Security Group' template could be optimized for better security. Would you like me to suggest specific improvements?",
-            "Looking at your recent deployments, I noticed an increase in failure rate for database deployments. The most common error is related to networking configuration.",
-            "I can see that tenant 'Dev Team' has been particularly active today with 5 new deployments. All deployments are healthy and running without issues.",
-            "Based on current usage patterns, I predict that you'll need to increase resource quotas for 'Cloud Ops' tenant within the next 30 days to accommodate their growth."
+            "Based on my analysis of your platform, I see that you currently have 3 active tenants with a total of 42 deployments. The 'Acme Corp' tenant has the most resources provisioned.\n\n**Key Statistics:**\n- 3 Active Tenants\n- 42 Total Deployments\n- 17 Templates\n- 98.2% Platform Health\n\nWould you like more detailed information about any specific tenant or deployment?",
+            "I've analyzed your templates and found that the 'Network Security Group' template could be optimized for better security. Would you like me to suggest specific improvements?\n\n**Potential Improvements:**\n1. Restrict inbound traffic to specific IP ranges\n2. Implement just-in-time access for management ports\n3. Enable advanced threat protection\n\n```json\n{\n  \"securityRules\": [\n    {\n      \"name\": \"RestrictedAccess\",\n      \"properties\": {\n        \"priority\": 100,\n        \"sourceAddressPrefix\": \"YOUR-IP-RANGE\",\n        \"destinationPortRange\": \"3389\"\n      }\n    }\n  ]\n}\n```",
+            "Looking at your recent deployments, I noticed an increase in failure rate for database deployments. The most common error is related to networking configuration.\n\n**Error Analysis:**\n- 7 failures in the last 24 hours\n- 5 related to networking configuration\n- 2 related to resource quotas\n\nI recommend checking the subnet configuration in your VNet settings.",
+            "I can see that tenant 'Dev Team' has been particularly active today with 5 new deployments. All deployments are healthy and running without issues.\n\n**Today's Activity:**\n- 5 new deployments\n- 3 template modifications\n- 2 resource scaling operations\n\nAll systems are operating at optimal performance levels.",
+            "Based on current usage patterns, I predict that you'll need to increase resource quotas for 'Cloud Ops' tenant within the next 30 days to accommodate their growth.\n\n**Growth Forecast:**\n- Current VM usage: 85% of quota\n- Storage account usage: 78% of quota\n- Network bandwidth: 62% of quota\n\nI recommend requesting a quota increase for VMs and storage accounts."
           ];
           
           const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
           
+          // Create a placeholder message for simulated streaming
+          const aiMessageId = `msg-${Date.now()}`;
           const aiMessage: Message = {
-            id: `msg-${Date.now()}`,
+            id: aiMessageId,
             sender: "ai",
-            content: randomResponse,
-            timestamp: new Date().toISOString()
+            content: "",
+            timestamp: new Date().toISOString(),
+            isStreaming: true
           };
           
           setMessages(prevMessages => [...prevMessages, aiMessage]);
-          setIsLoading(false);
-        }, 1500);
+          
+          // Simulate streaming by adding characters one by one
+          let currentIndex = 0;
+          const streamInterval = setInterval(() => {
+            if (currentIndex < randomResponse.length) {
+              const chunk = randomResponse.charAt(currentIndex);
+              setMessages(prevMessages => {
+                const lastMessage = prevMessages[prevMessages.length - 1];
+                if (lastMessage.id === aiMessageId) {
+                  const updatedContent = lastMessage.content + chunk;
+                  return [
+                    ...prevMessages.slice(0, -1),
+                    {
+                      ...lastMessage,
+                      content: updatedContent,
+                      formattedContent: updatedContent
+                    }
+                  ];
+                }
+                return prevMessages;
+              });
+              currentIndex++;
+            } else {
+              clearInterval(streamInterval);
+              setMessages(prevMessages => {
+                const lastMessage = prevMessages[prevMessages.length - 1];
+                if (lastMessage.id === aiMessageId) {
+                  return [
+                    ...prevMessages.slice(0, -1),
+                    {
+                      ...lastMessage,
+                      content: randomResponse,
+                      formattedContent: randomResponse,
+                      isStreaming: false
+                    }
+                  ];
+                }
+                return prevMessages;
+              });
+              setIsLoading(false);
+            }
+          }, 15); // Adjust speed as needed
+        }, 500);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -318,7 +421,7 @@ const NexusAI = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col overflow-hidden p-0">
-              <ScrollArea className="flex-1 px-6">
+              <ScrollArea className="flex-1 px-6" onScroll={handleScroll}>
                 <div className="space-y-4 pb-4">
                   {messages.map((message, index) => (
                     <div
@@ -334,7 +437,16 @@ const NexusAI = () => {
                             : "bg-muted"
                         }`}
                       >
-                        <p className="break-words">{message.content}</p>
+                        {message.sender === "ai" && message.formattedContent ? (
+                          <div className="markdown-content break-words">
+                            {parseMarkdown(message.formattedContent)}
+                            {message.isStreaming && (
+                              <span className="inline-block w-2 h-4 ml-1 bg-current opacity-75 animate-pulse" />
+                            )}
+                          </div>
+                        ) : (
+                          <p className="break-words">{message.content}</p>
+                        )}
                         <div className="flex justify-between items-center mt-1">
                           <p className="text-xs opacity-70">
                             {new Date(message.timestamp).toLocaleTimeString()}

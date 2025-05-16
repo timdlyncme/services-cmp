@@ -10,6 +10,8 @@ export interface Message {
   sender: "user" | "ai";
   content: string;
   timestamp: string;
+  isStreaming?: boolean;
+  formattedContent?: string;
 }
 
 export interface AIInsight {
@@ -20,4 +22,3 @@ export interface AIInsight {
   severity: "low" | "medium" | "high";
   timestamp: string;
 }
-
