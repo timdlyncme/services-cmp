@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -21,7 +20,10 @@ import {
   CloudCog,
   Trash,
   Edit,
-  FileCode
+  FileCode,
+  X,
+  CheckCircle,
+  AlertCircle
 } from "lucide-react";
 import { CloudAccount } from "@/types/auth";
 
@@ -131,7 +133,9 @@ const Environments = () => {
   
   const [environments, setEnvironments] = useState<Environment[]>(mockEnvironments);
   const [isCreating, setIsCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [editingEnvironmentId, setEditingEnvironmentId] = useState<string | null>(null);
   
   const [newEnvironment, setNewEnvironment] = useState<Partial<Environment>>({
     name: "",
@@ -162,22 +166,54 @@ const Environments = () => {
       return;
     }
     
-    // Create new environment
-    const createdEnvironment: Environment = {
-      id: `env-${Date.now()}`,
-      name: newEnvironment.name || "",
-      description: newEnvironment.description || "",
-      cloudAccounts: newEnvironment.cloudAccounts || [],
-      resourceTypes: newEnvironment.resourceTypes || [],
-      tags: newEnvironment.tags || {},
-      createdAt: new Date().toISOString(),
-      deploymentCount: 0
-    };
-    
-    setEnvironments([...environments, createdEnvironment]);
-    setIsCreating(false);
-    resetEnvironmentForm();
-    toast.success("Environment created successfully");
+    if (editingEnvironmentId) {
+      // Update existing environment
+      setEnvironments(environments.map(env => 
+        env.id === editingEnvironmentId 
+          ? { 
+              ...env, 
+              name: newEnvironment.name || "",
+              description: newEnvironment.description || "",
+              cloudAccounts: newEnvironment.cloudAccounts || [],
+              resourceTypes: newEnvironment.resourceTypes || [],
+              tags: newEnvironment.tags || {}
+            }
+          : env
+      ));
+      setIsEditing(false);
+      setEditingEnvironmentId(null);
+      resetEnvironmentForm();
+      toast.success("Environment updated successfully");
+    } else {
+      // Create new environment
+      const createdEnvironment: Environment = {
+        id: `env-${Date.now()}`,
+        name: newEnvironment.name || "",
+        description: newEnvironment.description || "",
+        cloudAccounts: newEnvironment.cloudAccounts || [],
+        resourceTypes: newEnvironment.resourceTypes || [],
+        tags: newEnvironment.tags || {},
+        createdAt: new Date().toISOString(),
+        deploymentCount: 0
+      };
+      
+      setEnvironments([...environments, createdEnvironment]);
+      setIsCreating(false);
+      resetEnvironmentForm();
+      toast.success("Environment created successfully");
+    }
+  };
+  
+  const handleEditEnvironment = (environment: Environment) => {
+    setNewEnvironment({
+      name: environment.name,
+      description: environment.description,
+      cloudAccounts: [...environment.cloudAccounts],
+      resourceTypes: [...environment.resourceTypes],
+      tags: {...environment.tags}
+    });
+    setEditingEnvironmentId(environment.id);
+    setIsEditing(true);
   };
   
   const resetEnvironmentForm = () => {
@@ -190,6 +226,7 @@ const Environments = () => {
     });
     setTagKey("");
     setTagValue("");
+    setEditingEnvironmentId(null);
   };
   
   const handleDeleteEnvironment = (environmentId: string) => {
@@ -256,6 +293,11 @@ const Environments = () => {
       ...newEnvironment,
       tags: updatedTags
     });
+  };
+  
+  const calculateCloudAccountStatus = (cloudAccount: CloudAccount) => {
+    // This would typically be a real health check in a production app
+    return cloudAccount.status === "connected" ? "healthy" : "warning";
   };
   
   return (
@@ -325,9 +367,16 @@ const Environments = () => {
                               <span>{account.name}</span>
                             </label>
                           </div>
-                          <Badge variant={account.status === "connected" ? "secondary" : "outline"}>
-                            {account.status}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={account.status === "connected" ? "secondary" : "outline"}>
+                              {account.status}
+                            </Badge>
+                            {calculateCloudAccountStatus(account) === "healthy" ? (
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <AlertCircle className="h-4 w-4 text-amber-500" />
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -394,8 +443,147 @@ const Environments = () => {
               </div>
               
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreating(false)}>Cancel</Button>
-                <Button onClick={handleCreateEnvironment}>Create Environment</Button>
+                <Button variant="outline" onClick={() => {
+                  setIsCreating(false);
+                  resetEnvironmentForm();
+                }}>Cancel</Button>
+                <Button onClick={handleCreateEnvironment}>{editingEnvironmentId ? "Update" : "Create"} Environment</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          
+          {/* Dialog for editing environment */}
+          <Dialog open={isEditing} onOpenChange={setIsEditing}>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Edit Environment</DialogTitle>
+                <DialogDescription>
+                  Update your deployment environment settings
+                </DialogDescription>
+              </DialogHeader>
+              
+              {/* Same form as creation, but with environment data pre-filled */}
+              <div className="grid gap-4 py-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="edit-name" className="text-sm font-medium">Environment Name</label>
+                    <Input
+                      id="edit-name"
+                      value={newEnvironment.name}
+                      onChange={(e) => setNewEnvironment({ ...newEnvironment, name: e.target.value })}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="edit-description" className="text-sm font-medium">Description</label>
+                    <Input
+                      id="edit-description"
+                      value={newEnvironment.description}
+                      onChange={(e) => setNewEnvironment({ ...newEnvironment, description: e.target.value })}
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Cloud Accounts</label>
+                  <div className="border rounded-md p-3">
+                    <div className="grid gap-2">
+                      {mockCloudAccounts.map((account) => (
+                        <div key={account.id} className="flex items-center justify-between p-2 border rounded-md">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`edit-account-${account.id}`}
+                              checked={(newEnvironment.cloudAccounts || []).some(acc => acc.id === account.id)}
+                              onCheckedChange={() => toggleCloudAccount(account)}
+                            />
+                            <label htmlFor={`edit-account-${account.id}`} className="flex items-center gap-2">
+                              {account.provider === "azure" && <Cloud className="h-4 w-4 text-blue-500" />}
+                              {account.provider === "aws" && <Cloud className="h-4 w-4 text-amber-500" />}
+                              {account.provider === "gcp" && <Cloud className="h-4 w-4 text-red-500" />}
+                              <span>{account.name}</span>
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={account.status === "connected" ? "secondary" : "outline"}>
+                              {account.status}
+                            </Badge>
+                            {calculateCloudAccountStatus(account) === "healthy" ? (
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <AlertCircle className="h-4 w-4 text-amber-500" />
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Resource Types</label>
+                  <div className="border rounded-md p-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      {resourceTypes.map((type) => (
+                        <div key={type} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`edit-resource-${type}`}
+                            checked={(newEnvironment.resourceTypes || []).includes(type)}
+                            onCheckedChange={() => toggleResourceType(type)}
+                          />
+                          <label
+                            htmlFor={`edit-resource-${type}`}
+                            className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            {type}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Environment Tags</label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Tag key"
+                      value={tagKey}
+                      onChange={(e) => setTagKey(e.target.value)}
+                      className="w-1/3"
+                    />
+                    <Input
+                      placeholder="Tag value"
+                      value={tagValue}
+                      onChange={(e) => setTagValue(e.target.value)}
+                      className="w-1/3"
+                    />
+                    <Button onClick={addTag} type="button" variant="secondary">Add Tag</Button>
+                  </div>
+                  
+                  {Object.keys(newEnvironment.tags || {}).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {Object.entries(newEnvironment.tags || {}).map(([key, value]) => (
+                        <Badge key={key} variant="secondary" className="flex gap-1 items-center">
+                          {key}: {value}
+                          <button 
+                            onClick={() => removeTag(key)}
+                            className="ml-1 hover:bg-primary-foreground rounded-full"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => {
+                  setIsEditing(false);
+                  resetEnvironmentForm();
+                }}>Cancel</Button>
+                <Button onClick={handleCreateEnvironment}>Update Environment</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -423,7 +611,11 @@ const Environments = () => {
                 </CardTitle>
               </div>
               <div className="flex gap-2">
-                <Button variant="ghost" size="icon">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => handleEditEnvironment(environment)}
+                >
                   <Edit className="h-4 w-4" />
                 </Button>
                 <Button 

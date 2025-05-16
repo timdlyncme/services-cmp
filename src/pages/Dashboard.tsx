@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -236,7 +235,7 @@ const Dashboard = () => {
         </Card>
       </div>
       
-      <div className="grid gap-6">
+      <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Connected Cloud Accounts</CardTitle>
@@ -262,9 +261,6 @@ const Dashboard = () => {
                       <div className={`status-dot status-${account.status}`} />
                       <span className="text-xs capitalize">{account.status}</span>
                     </div>
-                    <Button variant="outline" size="sm">
-                      Details
-                    </Button>
                   </div>
                 </div>
               )) : (
@@ -275,7 +271,7 @@ const Dashboard = () => {
             </div>
           </CardContent>
           <CardFooter>
-            <Button variant="outline" className="w-full">
+            <Button variant="outline" className="w-full" onClick={() => navigate('/settings')}>
               Manage Cloud Accounts
             </Button>
           </CardFooter>

@@ -1,4 +1,3 @@
-
 import { CloudProvider, TemplateType } from "./cloud";
 
 // Template interface
@@ -18,6 +17,9 @@ export interface Template {
   isPublished: boolean;
   author?: string;
   commitId?: string;
+  code?: string;  // Added for compatibility
+  tenantId?: string; // Added for compatibility
+  uploadedAt?: string; // Added for compatibility
 }
 
 // Example template code snippets

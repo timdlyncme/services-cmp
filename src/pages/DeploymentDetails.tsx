@@ -1,9 +1,10 @@
-import React, { useState } from "react";
-import { useParams } from "react-router-dom";
+
+import React, { useState, useEffect } from "react";
+import { useParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
@@ -13,6 +14,7 @@ import { toast } from "sonner";
 import {
   Activity,
   AlertCircle,
+  ArrowLeft,
   CheckCircle,
   ChevronRight,
   Clock,
@@ -22,10 +24,18 @@ import {
   FileText,
   GitBranch,
   History,
+  Play,
+  RefreshCw,
   Server,
   Settings,
+  Terminal,
+  Trash2,
   XCircle,
+  Network,
+  MessageSquare,
+  GitCompare,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 const DeploymentDetails = () => {
   const { deploymentId } = useParams();
@@ -34,6 +44,11 @@ const DeploymentDetails = () => {
   const [template, setTemplate] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<string[]>([]);
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatHistory, setChatHistory] = useState<{role: string, content: string}[]>([
+    {role: "system", content: "I'm your Deployment AI Assistant. I can help you understand and manage your deployment."}
+  ]);
+  const [newTemplateVersionAvailable, setNewTemplateVersionAvailable] = useState(false);
   
   useEffect(() => {
     const fetchDeployment = async () => {
@@ -48,6 +63,10 @@ const DeploymentDetails = () => {
           const associatedTemplate = mockTemplates.find(t => t.id === foundDeployment.templateId);
           if (associatedTemplate) {
             setTemplate(associatedTemplate);
+            
+            // In a real scenario, we would check for newer template versions
+            // For demo purposes, we'll simulate a newer version available
+            setNewTemplateVersionAvailable(Math.random() > 0.5);
           }
           
           // Generate some mock logs
@@ -87,7 +106,45 @@ const DeploymentDetails = () => {
         ...deployment,
         status: "stopped"
       });
+    } else if (action === "upgrade") {
+      setLogs([
+        ...logs,
+        `${new Date().toISOString()} [INFO] Starting template upgrade...`,
+        `${new Date().toISOString()} [INFO] Validating new template version...`,
+        `${new Date().toISOString()} [INFO] Initiating rolling update...`
+      ]);
+      
+      toast.success("Deployment upgrade started");
+      setNewTemplateVersionAvailable(false);
     }
+  };
+  
+  const handleSendChatMessage = () => {
+    if (!chatMessage.trim()) return;
+    
+    // Add user message to chat history
+    setChatHistory([...chatHistory, { role: "user", content: chatMessage }]);
+    
+    // Simulate AI response
+    setTimeout(() => {
+      let aiResponse = "I'm analyzing your deployment...";
+      
+      if (chatMessage.toLowerCase().includes("delete")) {
+        aiResponse = "I can help you delete this deployment. To confirm deletion, please click the Delete button in the top-right corner of this page.";
+      } else if (chatMessage.toLowerCase().includes("redeploy") || chatMessage.toLowerCase().includes("restart")) {
+        aiResponse = "I can help you restart this deployment. Click the Restart button in the top-right corner to proceed.";
+      } else if (chatMessage.toLowerCase().includes("resource") || chatMessage.toLowerCase().includes("vm") || chatMessage.toLowerCase().includes("database")) {
+        aiResponse = "This deployment contains several resources including virtual networks, storage accounts, and compute instances. You can see all resources in the Resources section of the Overview tab.";
+      } else if (chatMessage.toLowerCase().includes("status")) {
+        aiResponse = `The current status of this deployment is "${deployment.status}". All resources are functioning normally.`;
+      } else if (chatMessage.toLowerCase().includes("template")) {
+        aiResponse = `This deployment was created using the "${template?.name}" template, version ${template?.version}.` + 
+          (newTemplateVersionAvailable ? " There is a newer version of this template available. You can upgrade to the latest version using the Upgrade button." : "");
+      }
+      
+      setChatHistory([...chatHistory, { role: "user", content: chatMessage }, { role: "assistant", content: aiResponse }]);
+      setChatMessage("");
+    }, 1000);
   };
   
   const getStatusBadge = (status: string) => {
@@ -141,6 +198,13 @@ const DeploymentDetails = () => {
           </div>
         </div>
         <div className="ml-auto flex gap-2">
+          {newTemplateVersionAvailable && (
+            <Button variant="secondary" onClick={() => handleAction("upgrade")}>
+              <GitCompare className="h-4 w-4 mr-2" />
+              Upgrade
+            </Button>
+          )}
+          
           {deployment.status === "running" && (
             <Button variant="outline" onClick={() => handleAction("stop")}>
               <Trash2 className="h-4 w-4 mr-2" />
@@ -161,11 +225,12 @@ const DeploymentDetails = () => {
       </div>
       
       <Tabs defaultValue="overview">
-        <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
+        <TabsList className="grid w-full grid-cols-5 lg:w-[600px]">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="template">Template</TabsTrigger>
           <TabsTrigger value="parameters">Parameters</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
+          <TabsTrigger value="diagram">Diagram</TabsTrigger>
         </TabsList>
         
         <TabsContent value="overview" className="space-y-6 pt-4">
@@ -211,6 +276,12 @@ const DeploymentDetails = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Template Information</CardTitle>
+                {newTemplateVersionAvailable && (
+                  <CardDescription className="flex items-center mt-2 text-amber-500">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    New template version available
+                  </CardDescription>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 {template ? (
@@ -222,7 +293,12 @@ const DeploymentDetails = () => {
                     <div>{template.type}</div>
                     
                     <div className="font-medium">Version</div>
-                    <div>{template.version}</div>
+                    <div className="flex items-center">
+                      {template.version}
+                      {newTemplateVersionAvailable && (
+                        <Badge variant="outline" className="ml-2 text-xs">Outdated</Badge>
+                      )}
+                    </div>
                     
                     <div className="font-medium">Categories</div>
                     <div className="flex flex-wrap gap-1">
@@ -237,6 +313,18 @@ const DeploymentDetails = () => {
                   <div className="text-muted-foreground">Template not found</div>
                 )}
               </CardContent>
+              {newTemplateVersionAvailable && (
+                <CardFooter>
+                  <Button 
+                    className="w-full" 
+                    variant="secondary"
+                    onClick={() => handleAction("upgrade")}
+                  >
+                    <GitCompare className="h-4 w-4 mr-2" />
+                    Upgrade to Latest Version
+                  </Button>
+                </CardFooter>
+              )}
             </Card>
           </div>
           
@@ -252,6 +340,7 @@ const DeploymentDetails = () => {
                     <TableHead>Name</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Details</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -273,17 +362,80 @@ const DeploymentDetails = () => {
                             </div>
                           )}
                         </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm">View Details</Button>
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center text-muted-foreground">
+                      <TableCell colSpan={4} className="text-center text-muted-foreground">
                         No resources found
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Deployment AI Chat</CardTitle>
+              <CardDescription>
+                Chat with the AI to learn more about your deployment
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ScrollArea className="h-[300px] rounded-md border p-4">
+                <div className="space-y-4">
+                  {chatHistory.filter(msg => msg.role !== "system").map((message, index) => (
+                    <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[80%] rounded-lg p-3 ${
+                        message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
+                      }`}>
+                        {message.content}
+                      </div>
+                    </div>
+                  ))}
+                  {chatHistory.length === 1 && (
+                    <div className="text-center text-muted-foreground">
+                      Start chatting with the Deployment AI to get help and insights
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+              
+              <div className="flex gap-2">
+                <Textarea 
+                  placeholder="Ask a question about your deployment..." 
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendChatMessage();
+                    }
+                  }}
+                  className="min-h-[60px]"
+                />
+                <Button onClick={handleSendChatMessage} className="self-end">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Send
+                </Button>
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="cursor-pointer hover:bg-accent" onClick={() => setChatMessage("What resources are in this deployment?")}>
+                  Show resources
+                </Badge>
+                <Badge variant="outline" className="cursor-pointer hover:bg-accent" onClick={() => setChatMessage("What's the status of this deployment?")}>
+                  Check status
+                </Badge>
+                <Badge variant="outline" className="cursor-pointer hover:bg-accent" onClick={() => setChatMessage("Tell me about the template used")}>
+                  Template info
+                </Badge>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -381,6 +533,27 @@ const DeploymentDetails = () => {
                   ))}
                 </div>
               </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="diagram" className="space-y-6 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Deployment Topology</CardTitle>
+              <CardDescription>
+                Visual representation of deployed resources and their relationships
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[500px] border rounded-md bg-muted flex flex-col items-center justify-center">
+                <Network className="h-16 w-16 text-muted-foreground mb-4" />
+                <h3 className="text-xl font-medium">Resource Topology Diagram</h3>
+                <p className="text-sm text-muted-foreground mt-2 max-w-md text-center">
+                  This diagram shows the deployed resources and their connections.
+                  In a production environment, this would be an interactive diagram of your architecture.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

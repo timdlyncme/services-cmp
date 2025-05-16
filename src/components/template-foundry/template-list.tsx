@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, FileCode } from "lucide-react";
+import { Search, FileCode, GitCommit, User } from "lucide-react";
 import { Template } from "@/types/template";
 
 interface TemplateListProps {
@@ -112,6 +112,22 @@ export const TemplateList = ({
                       v{template.version}
                     </div>
                   </div>
+                  {(template.author || template.commitId) && (
+                    <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                      {template.author && (
+                        <div className="flex items-center gap-1">
+                          <User className="h-3 w-3" />
+                          <span>{template.author}</span>
+                        </div>
+                      )}
+                      {template.commitId && (
+                        <div className="flex items-center gap-1 ml-2">
+                          <GitCommit className="h-3 w-3" />
+                          <span className="font-mono">{template.commitId.substring(0, 7)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))
             ) : (

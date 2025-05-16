@@ -18,6 +18,7 @@ import TenantTemplateFoundry from "@/pages/TenantTemplateFoundry";
 import MSPTemplateFoundry from "@/pages/MSPTemplateFoundry";
 import Environments from "@/pages/Environments";
 import UsersAndGroups from "@/pages/UsersAndGroups";
+import CloudAccounts from "@/pages/CloudAccounts";
 import NexusAI from "@/pages/NexusAI";
 import Login from "@/pages/Login";
 import NotFound from "./pages/NotFound";
@@ -46,6 +47,7 @@ const App = () => (
               <Route path="/msp-template-foundry" element={<MSPTemplateFoundry />} />
               <Route path="/environments" element={<Environments />} />
               <Route path="/users-and-groups" element={<UsersAndGroups />} />
+              <Route path="/cloud-accounts" element={<CloudAccounts />} />
               <Route path="/nexus-ai" element={<NexusAI />} />
             </Route>
             
