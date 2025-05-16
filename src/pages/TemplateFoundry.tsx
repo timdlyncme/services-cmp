@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -50,7 +49,7 @@ import { toast } from "sonner";
 import {
   FileCode,
   Plus,
-  Versions,
+  History,
   Check,
   RefreshCw,
   Edit,
@@ -269,13 +268,9 @@ variable "bucket_name" {
 
 output "bucket_url" {
   description = "The URL of the bucket"
-  value       = "gs://${google_storage_bucket.static_website.name}"
+  value       = "gs://\\${google_storage_bucket.static_website.name}"
 }`,
     deploymentCount: 5,
-    uploadedAt: "2023-11-05T08:20:00Z",
-    updatedAt: "2024-02-12T13:45:00Z",
-    categories: ["Storage", "GCP", "IaaS"],
-    tenantId: "tenant-1",
   },
 ];
 
@@ -783,7 +778,7 @@ const TemplateFoundry = () => {
                             <TableCell className="text-right">
                               <div className="flex justify-end space-x-2">
                                 <Button size="sm" variant="outline">
-                                  <Versions className="h-4 w-4" />
+                                  <History className="h-4 w-4" />
                                 </Button>
                                 <Button size="sm" variant="outline">
                                   <Download className="h-4 w-4" />
