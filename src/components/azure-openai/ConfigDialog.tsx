@@ -163,8 +163,21 @@ const ConfigDialog: React.FC<ConfigDialogProps> = ({ children }) => {
               {logs.length > 0 ? (
                 <div className="space-y-1 font-mono text-sm">
                   {logs.map((log, index) => (
-                    <div key={index} className="break-all">
-                      {log}
+                    <div key={index} className="break-all pb-1 border-b border-border last:border-0">
+                      <span className="text-xs text-muted-foreground mr-2">
+                        {new Date(log.timestamp).toLocaleTimeString()}
+                      </span>
+                      <span className={`text-xs font-semibold mr-2 ${
+                        log.level === 'error' ? 'text-red-500' : 
+                        log.level === 'warning' ? 'text-amber-500' :
+                        log.level === 'success' ? 'text-green-500' :
+                        log.level === 'request' ? 'text-blue-500' :
+                        log.level === 'response' ? 'text-purple-500' :
+                        'text-gray-500'
+                      }`}>
+                        [{log.level.toUpperCase()}]
+                      </span>
+                      <span>{log.message}</span>
                     </div>
                   ))}
                 </div>
@@ -211,4 +224,3 @@ const ConfigDialog: React.FC<ConfigDialogProps> = ({ children }) => {
 };
 
 export default ConfigDialog;
-
