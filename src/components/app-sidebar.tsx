@@ -94,8 +94,12 @@ export function AppSidebar() {
     >
       <SidebarHeader className="flex h-14 items-center border-b px-4">
         <div className="flex items-center">
-          <div className="text-primary mr-2">
-            <CloudCog className="h-6 w-6" />
+          <div className="mr-2">
+            <img 
+              src="/new-logo-transparent.png" 
+              alt="Company Logo" 
+              className="h-6 w-auto" 
+            />
           </div>
           {!collapsed && (
             <span className="font-medium">Cloud Management</span>
