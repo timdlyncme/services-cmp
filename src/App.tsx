@@ -14,6 +14,7 @@ import Deployments from "@/pages/Deployments";
 import DeploymentDetails from "@/pages/DeploymentDetails";
 import Settings from "@/pages/Settings";
 import Tenants from "@/pages/Tenants";
+import TemplateFoundry from "@/pages/TemplateFoundry";
 import Login from "@/pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="/deployments/:deploymentId" element={<DeploymentDetails />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/tenants" element={<Tenants />} />
+              <Route path="/template-foundry" element={<TemplateFoundry />} />
             </Route>
             
             <Route path="*" element={<NotFound />} />

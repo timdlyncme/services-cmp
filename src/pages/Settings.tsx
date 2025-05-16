@@ -8,13 +8,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { mockIntegrationConfigs } from "@/data/mock-data";
 import { IntegrationConfig, IntegrationStatus } from "@/types/cloud";
-import { Settings as SettingsIcon, Key, Terminal, CloudCog } from "lucide-react";
+import { Settings as SettingsIcon, Key, Terminal, CloudCog, Github } from "lucide-react";
 import { toast } from "sonner";
 
 const Settings = () => {
-  const { currentTenant } = useAuth();
+  const { currentTenant, user } = useAuth();
   const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
   const [terminalLogs, setTerminalLogs] = useState([
     "[INFO] Testing Azure connection...",
@@ -24,6 +25,17 @@ const Settings = () => {
     "[INFO] Testing GCP connection...",
     "[WARNING] GCP connection issue: Permission denied for resource 'storage-buckets'"
   ]);
+  
+  const [githubSettings, setGithubSettings] = useState({
+    enabled: false,
+    personalAccessToken: "",
+    organizationName: "",
+    repositoryName: "",
+    branch: "main",
+    syncEnabled: false,
+    webhookUrl: "https://cloudflow.example.com/api/webhooks/github",
+    autoDeployEnabled: false,
+  });
   
   useEffect(() => {
     if (currentTenant) {
@@ -51,6 +63,20 @@ const Settings = () => {
     ]);
   };
   
+  const handleSaveGithubSettings = () => {
+    toast.success("GitHub integration settings saved");
+  };
+  
+  const handleTestGithubConnection = () => {
+    toast.success("Testing GitHub connection...");
+    setTerminalLogs(prev => [
+      ...prev,
+      `[INFO] Testing GitHub connection...`,
+      `[INFO] Connecting to repository ${githubSettings.organizationName}/${githubSettings.repositoryName}...`,
+      `[SUCCESS] GitHub connection successful`
+    ]);
+  };
+  
   const statusBadgeVariant = (status: IntegrationStatus) => {
     switch (status) {
       case "connected": return "success";
@@ -72,9 +98,10 @@ const Settings = () => {
       </div>
       
       <Tabs defaultValue="cloud-providers">
-        <TabsList className="grid grid-cols-3 w-full sm:w-[400px]">
+        <TabsList className="grid grid-cols-4 w-full sm:w-[500px]">
           <TabsTrigger value="cloud-providers">Cloud Providers</TabsTrigger>
           <TabsTrigger value="ai-services">AI Services</TabsTrigger>
+          {user?.role === "admin" && <TabsTrigger value="github">GitHub Integration</TabsTrigger>}
           <TabsTrigger value="debug">Debug</TabsTrigger>
         </TabsList>
         
@@ -330,6 +357,134 @@ const Settings = () => {
             </CardFooter>
           </Card>
         </TabsContent>
+        
+        {user?.role === "admin" && (
+          <TabsContent value="github" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Github className="h-5 w-5 mr-2" />
+                  GitHub Integration
+                </CardTitle>
+                <CardDescription>
+                  Connect with GitHub to manage templates from repositories
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center space-x-4">
+                  <Switch
+                    id="github-enable"
+                    checked={githubSettings.enabled}
+                    onCheckedChange={(checked) => setGithubSettings({...githubSettings, enabled: checked})}
+                  />
+                  <Label htmlFor="github-enable">Enable GitHub Integration</Label>
+                </div>
+                
+                {githubSettings.enabled && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="github-token">Personal Access Token</Label>
+                        <Input
+                          id="github-token"
+                          type="password"
+                          placeholder="Enter GitHub Personal Access Token"
+                          value={githubSettings.personalAccessToken}
+                          onChange={(e) => setGithubSettings({...githubSettings, personalAccessToken: e.target.value})}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Token requires repo, read:packages, and webhook scopes
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="github-org">Organization Name</Label>
+                        <Input
+                          id="github-org"
+                          placeholder="Enter GitHub Organization"
+                          value={githubSettings.organizationName}
+                          onChange={(e) => setGithubSettings({...githubSettings, organizationName: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="github-repo">Repository Name</Label>
+                        <Input
+                          id="github-repo"
+                          placeholder="Enter Repository Name"
+                          value={githubSettings.repositoryName}
+                          onChange={(e) => setGithubSettings({...githubSettings, repositoryName: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="github-branch">Default Branch</Label>
+                        <Input
+                          id="github-branch"
+                          placeholder="main"
+                          value={githubSettings.branch}
+                          onChange={(e) => setGithubSettings({...githubSettings, branch: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="github-webhook">Webhook URL</Label>
+                        <div className="flex space-x-2">
+                          <Input
+                            id="github-webhook"
+                            readOnly
+                            value={githubSettings.webhookUrl}
+                          />
+                          <Button variant="outline" onClick={() => {
+                            navigator.clipboard.writeText(githubSettings.webhookUrl);
+                            toast.success("Webhook URL copied to clipboard");
+                          }}>
+                            Copy
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Add this URL to your GitHub repository webhooks with content type: application/json
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-4">
+                        <Switch
+                          id="github-sync"
+                          checked={githubSettings.syncEnabled}
+                          onCheckedChange={(checked) => setGithubSettings({...githubSettings, syncEnabled: checked})}
+                        />
+                        <div>
+                          <Label htmlFor="github-sync">Enable Template Synchronization</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Automatically sync templates when changes are pushed to the repository
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-4">
+                        <Switch
+                          id="github-autodeploy"
+                          checked={githubSettings.autoDeployEnabled}
+                          onCheckedChange={(checked) => setGithubSettings({...githubSettings, autoDeployEnabled: checked})}
+                        />
+                        <div>
+                          <Label htmlFor="github-autodeploy">Enable Auto-Deployment</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Automatically deploy template changes to connected environments
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                <Button variant="outline" onClick={handleTestGithubConnection} disabled={!githubSettings.enabled}>
+                  Test Connection
+                </Button>
+                <Button onClick={handleSaveGithubSettings}>Save Changes</Button>
+              </CardFooter>
+            </Card>
+          </TabsContent>
+        )}
         
         <TabsContent value="debug">
           <Card>

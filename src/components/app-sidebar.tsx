@@ -11,7 +11,8 @@ import {
   FileCode, 
   ChevronLeft, 
   ChevronRight,
-  Users
+  Users,
+  Upload
 } from "lucide-react";
 import {
   Sidebar,
@@ -84,7 +85,10 @@ export function AppSidebar() {
                 <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} />
               )}
               {user?.role === "msp" && (
-                <NavItem to="/tenants" icon={Users} label="Tenants" collapsed={collapsed} />
+                <>
+                  <NavItem to="/tenants" icon={Users} label="Tenants" collapsed={collapsed} />
+                  <NavItem to="/template-foundry" icon={Upload} label="Template Foundry" collapsed={collapsed} />
+                </>
               )}
             </SidebarMenu>
           </div>

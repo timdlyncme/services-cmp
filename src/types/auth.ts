@@ -24,3 +24,6 @@ export interface User {
   tenantId: string;
   avatar?: string;
 }
+
+// Badge variants for consistency
+export type BadgeVariant = "default" | "destructive" | "outline" | "secondary";
