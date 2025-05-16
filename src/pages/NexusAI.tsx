@@ -244,7 +244,7 @@ const NexusAI = () => {
       const lastUserMessage = [...messages].reverse()[lastUserMessageIndex];
       
       // Remove all messages after the last user message
-      const messagesToKeep = messages.slice(0, messages.length - lastUserMessageIndex);
+      const messagesToKeep = messages.slice(0, messages.length - lastUserMessageIndex - 1);
       setMessages(messagesToKeep);
       
       // Retry with the last user message
@@ -282,8 +282,8 @@ const NexusAI = () => {
     return (
       // Only show for user messages
       message.sender === "user" &&
-      // Only show for the last user message
-      index === messages.filter(m => m.sender === "user").length - 1 &&
+      // Only show for the most recent user message (the last one in the array)
+      index === messages.length - 1 - (messages[messages.length - 1].sender === "ai" ? 1 : 0) &&
       // Don't show while loading or retrying
       !isLoading && !isRetrying &&
       // Don't show if already editing
@@ -351,6 +351,20 @@ const NexusAI = () => {
                               >
                                 <Edit className="h-3 w-3" />
                               </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-5 w-5 rounded-full opacity-70 hover:opacity-100"
+                                onClick={handleRetry}
+                                title="Regenerate response"
+                                disabled={isLoading || isRetrying}
+                              >
+                                {isRetrying ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-3 w-3" />
+                                )}
+                              </Button>
                             </div>
                           )}
                         </div>
@@ -372,29 +386,6 @@ const NexusAI = () => {
                 </div>
               </ScrollArea>
               <div className="mt-auto flex flex-col gap-2 px-6 py-4 border-t">
-                {!isLoading && !isRetrying && messages.length > 1 && messages[messages.length - 1].sender === "ai" && (
-                  <div className="flex justify-end mb-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={handleRetry}
-                      disabled={isLoading || isRetrying}
-                    >
-                      {isRetrying ? (
-                        <>
-                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                          Regenerating...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="h-3 w-3 mr-1" />
-                          Regenerate response
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                )}
                 <div className="flex gap-2">
                   <Input
                     value={messageInput}
