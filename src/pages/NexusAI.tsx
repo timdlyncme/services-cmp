@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,22 +6,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, FileText, CloudCog, Server, Users, Database, Settings, Send } from "lucide-react";
 import { toast } from "sonner";
-
-interface Message {
-  id: string;
-  sender: "user" | "ai";
-  content: string;
-  timestamp: string;
-}
-
-interface AIInsight {
-  id: string;
-  title: string;
-  description: string;
-  category: "deployment" | "tenant" | "template" | "security";
-  severity: "low" | "medium" | "high";
-  timestamp: string;
-}
+import { useAzureOpenAI } from "@/contexts/AzureOpenAIContext";
+import { AzureOpenAIService } from "@/services/azureOpenAIService";
+import ConfigDialog from "@/components/azure-openai/ConfigDialog";
+import ConnectionStatus from "@/components/azure-openai/ConnectionStatus";
+import DebugLogs from "@/components/azure-openai/DebugLogs";
+import { Message, AIInsight } from "@/types/azure-openai";
 
 // Sample insights for the demo
 const sampleInsights: AIInsight[] = [
@@ -84,10 +73,18 @@ const NexusAI = () => {
   const [insights] = useState<AIInsight[]>(sampleInsights);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { config, isConfigured, isConnected, connectionStatus, testConnection } = useAzureOpenAI();
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // If configured, test the connection on component mount
+  useEffect(() => {
+    if (isConfigured && connectionStatus === "disconnected") {
+      testConnection();
+    }
+  }, [isConfigured, connectionStatus, testConnection]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -107,28 +104,76 @@ const NexusAI = () => {
     setMessageInput("");
     setIsLoading(true);
     
-    // Simulate AI response with some delay
-    setTimeout(() => {
-      const aiResponses = [
-        "Based on my analysis of your platform, I see that you currently have 3 active tenants with a total of 42 deployments. The 'Acme Corp' tenant has the most resources provisioned.",
-        "I've analyzed your templates and found that the 'Network Security Group' template could be optimized for better security. Would you like me to suggest specific improvements?",
-        "Looking at your recent deployments, I noticed an increase in failure rate for database deployments. The most common error is related to networking configuration.",
-        "I can see that tenant 'Dev Team' has been particularly active today with 5 new deployments. All deployments are healthy and running without issues.",
-        "Based on current usage patterns, I predict that you'll need to increase resource quotas for 'Cloud Ops' tenant within the next 30 days to accommodate their growth."
-      ];
-      
-      const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
+    try {
+      if (isConfigured && isConnected) {
+        // Use Azure OpenAI service
+        const azureOpenAIService = new AzureOpenAIService(config, (log) => {
+          // This callback will be called with log messages from the service
+          console.log(log);
+        });
+        
+        // Convert our messages to the format expected by the API
+        const apiMessages = messages.concat(userMessage).map(msg => ({
+          role: msg.sender === "user" ? "user" : "assistant",
+          content: msg.content
+        }));
+        
+        // Add a system message at the beginning
+        apiMessages.unshift({
+          role: "system",
+          content: "You are NexusAI, a helpful assistant for the cloud management platform. You help users with information about their tenants, deployments, templates, and platform health."
+        });
+        
+        // Send the request to Azure OpenAI
+        const response = await azureOpenAIService.sendChatCompletion(apiMessages);
+        
+        const aiMessage: Message = {
+          id: `msg-${Date.now()}`,
+          sender: "ai",
+          content: response,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prevMessages => [...prevMessages, aiMessage]);
+      } else {
+        // Fallback to sample responses if not configured or connected
+        setTimeout(() => {
+          const aiResponses = [
+            "Based on my analysis of your platform, I see that you currently have 3 active tenants with a total of 42 deployments. The 'Acme Corp' tenant has the most resources provisioned.",
+            "I've analyzed your templates and found that the 'Network Security Group' template could be optimized for better security. Would you like me to suggest specific improvements?",
+            "Looking at your recent deployments, I noticed an increase in failure rate for database deployments. The most common error is related to networking configuration.",
+            "I can see that tenant 'Dev Team' has been particularly active today with 5 new deployments. All deployments are healthy and running without issues.",
+            "Based on current usage patterns, I predict that you'll need to increase resource quotas for 'Cloud Ops' tenant within the next 30 days to accommodate their growth."
+          ];
+          
+          const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
+          
+          const aiMessage: Message = {
+            id: `msg-${Date.now()}`,
+            sender: "ai",
+            content: randomResponse,
+            timestamp: new Date().toISOString()
+          };
+          
+          setMessages(prevMessages => [...prevMessages, aiMessage]);
+          setIsLoading(false);
+        }, 1500);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`Error: ${errorMessage}`);
       
       const aiMessage: Message = {
         id: `msg-${Date.now()}`,
         sender: "ai",
-        content: randomResponse,
+        content: `I'm sorry, I encountered an error while processing your request. ${errorMessage}`,
         timestamp: new Date().toISOString()
       };
       
       setMessages(prevMessages => [...prevMessages, aiMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -164,12 +209,20 @@ const NexusAI = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">NexusAI Assistant</h1>
-        <p className="text-muted-foreground">
-          Your intelligent assistant for platform management and insights
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">NexusAI Assistant</h1>
+          <p className="text-muted-foreground">
+            Your intelligent assistant for platform management and insights
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <ConnectionStatus />
+          <ConfigDialog />
+        </div>
       </div>
+      
+      <DebugLogs />
       
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
