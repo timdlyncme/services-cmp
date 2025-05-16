@@ -1,56 +1,7 @@
-
-import { useState, useEffect } from "react";
-import { useAuth } from "@/context/auth-context";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { CloudTemplate, CloudProvider } from "@/types/cloud";
-import { Tenant } from "@/types/auth";
-import { toast } from "sonner";
 import {
   FileCode,
   Plus,
-  Versions,
+  History,
   Check,
   RefreshCw,
   Edit,
@@ -783,7 +734,7 @@ const TemplateFoundry = () => {
                             <TableCell className="text-right">
                               <div className="flex justify-end space-x-2">
                                 <Button size="sm" variant="outline">
-                                  <Versions className="h-4 w-4" />
+                                  <History className="h-4 w-4" />
                                 </Button>
                                 <Button size="sm" variant="outline">
                                   <Download className="h-4 w-4" />
