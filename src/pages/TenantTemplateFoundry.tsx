@@ -11,7 +11,7 @@ import { TemplateDetails } from "@/components/template-foundry/template-details"
 import { Template, codeExamples } from "@/types/template";
 import { mockTemplates } from "@/data/mock-data";
 
-const TenantTemplateFoundry = () => {
+const TemplateManagement = () => {
   const { user, currentTenant } = useAuth();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [activeTemplate, setActiveTemplate] = useState<Template | null>(null);
@@ -226,4 +226,4 @@ const TenantTemplateFoundry = () => {
   );
 };
 
-export default TenantTemplateFoundry;
+export default TemplateManagement;

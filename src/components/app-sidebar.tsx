@@ -122,7 +122,7 @@ export function AppSidebar() {
               <SidebarSection title="Tenant Settings" collapsed={collapsed}>
                 <NavItem to="/cloud-accounts" icon={CloudCog} label="Cloud Accounts" collapsed={collapsed} />
                 <NavItem to="/environments" icon={Server} label="Environments" collapsed={collapsed} />
-                <NavItem to="/template-foundry" icon={NotebookText} label="Template Management" collapsed={collapsed} />
+                <NavItem to="/template-management" icon={NotebookText} label="Template Management" collapsed={collapsed} />
                 <NavItem to="/users-and-groups" icon={Shield} label="Users & Groups" collapsed={collapsed} />
                 <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} />
               </SidebarSection>
