@@ -1,48 +1,48 @@
-version: '3.8'
+version: '3'
 
 services:
-  postgres:
-    image: postgres:14
-    container_name: cmp-postgres
-    restart: always
+  db:
+    image: postgres:15
     environment:
-      POSTGRES_USER: cmpuser
-      POSTGRES_PASSWORD: cmppassword
-      POSTGRES_DB: cmpdb
+      - POSTGRES_USER=cmpuser
+      - POSTGRES_PASSWORD=cmppassword
+      - POSTGRES_DB=cmpdb
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d
-    networks:
-      - cmp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cmpuser -d cmpdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   api:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: cmp-api
-    restart: always
-    depends_on:
-      - postgres
+    build: ./backend
+    ports:
+      - "8000:8000"
     environment:
-      - POSTGRES_SERVER=postgres
+      - POSTGRES_SERVER=db
       - POSTGRES_PORT=5432
       - POSTGRES_USER=cmpuser
       - POSTGRES_PASSWORD=cmppassword
       - POSTGRES_DB=cmpdb
-      - JWT_SECRET=your_jwt_secret_key_change_in_production
-    ports:
-      - "8000:8000"
+    depends_on:
+      - db
     volumes:
       - ./backend:/app
-    networks:
-      - cmp-network
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: always
 
-networks:
-  cmp-network:
-    driver: bridge
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    volumes:
+      - ./frontend:/app
+    restart: always
 
 volumes:
   postgres_data:
+
