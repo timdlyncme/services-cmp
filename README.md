@@ -9,7 +9,31 @@ A modern cloud management platform for managing cloud resources, templates, and 
 - Template management
 - Deployment tracking
 - Multi-tenant support
-- NexusAI integration
+- NexusAI integration with Azure OpenAI
+
+## Architecture
+
+The application consists of two main components:
+
+1. **Frontend**: React/TypeScript application with Vite
+2. **Backend**: FastAPI application with PostgreSQL database
+
+### Frontend
+
+- React with TypeScript
+- Vite for build and development
+- shadcn/ui for UI components
+- Tailwind CSS for styling
+- React Router for routing
+- React Query for data fetching
+
+### Backend
+
+- FastAPI for API endpoints
+- SQLAlchemy for database ORM
+- PostgreSQL for data storage
+- JWT for authentication
+- Pydantic for data validation
 
 ## Getting Started
 
@@ -34,30 +58,23 @@ cd services-cmp
 npm install
 ```
 
-3. Start the PostgreSQL database:
+3. Start the services with Docker Compose:
 
 ```bash
-docker-compose up -d
+npm run docker:up
 ```
 
-4. Create a `.env` file in the root directory with the following content:
+This will start:
+- PostgreSQL database
+- FastAPI backend
 
-```
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=cmpuser
-DB_PASSWORD=cmppassword
-DB_NAME=cmpdb
-JWT_SECRET=your_jwt_secret_key_change_in_production
-```
-
-5. Start the development server:
+4. Start the frontend development server:
 
 ```bash
 npm run dev
 ```
 
-6. Open your browser and navigate to `http://localhost:5173`
+5. Open your browser and navigate to `http://localhost:5173`
 
 ### Default Users
 
@@ -101,3 +118,11 @@ The application uses PostgreSQL with the following schema:
 2. Assign permissions to the role in the `role_permissions` table
 3. Update the `UserRole` type in `src/types/auth.ts`
 
+## NexusAI Integration
+
+The NexusAI feature integrates with Azure OpenAI to provide AI-powered assistance. Configuration options include:
+
+- API Key
+- Endpoint URL
+- Deployment Name
+- Model Version

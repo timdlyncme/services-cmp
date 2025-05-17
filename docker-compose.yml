@@ -14,7 +14,34 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d
+    networks:
+      - cmp-network
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cmp-api
+    restart: always
+    depends_on:
+      - postgres
+    environment:
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=cmpuser
+      - POSTGRES_PASSWORD=cmppassword
+      - POSTGRES_DB=cmpdb
+      - JWT_SECRET=your_jwt_secret_key_change_in_production
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    networks:
+      - cmp-network
+
+networks:
+  cmp-network:
+    driver: bridge
 
 volumes:
   postgres_data:
-
