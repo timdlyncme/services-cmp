@@ -220,7 +220,7 @@ const NexusAI = () => {
                     {
                       ...lastMessage,
                       content: updatedContent,
-                      formattedContent: updatedContent // We'll format this when streaming is complete
+                      formattedContent: parseMarkdown(updatedContent)
                     }
                   ];
                 }
@@ -238,7 +238,7 @@ const NexusAI = () => {
                 {
                   ...lastMessage,
                   content: fullResponse,
-                  formattedContent: fullResponse,
+                  formattedContent: parseMarkdown(fullResponse),
                   isStreaming: false
                 }
               ];
@@ -251,88 +251,46 @@ const NexusAI = () => {
         setTimeout(() => {
           const aiResponses = [
             "Based on my analysis of your platform, I see that you currently have 3 active tenants with a total of 42 deployments. The 'Acme Corp' tenant has the most resources provisioned.\n\n**Key Statistics:**\n- 3 Active Tenants\n- 42 Total Deployments\n- 17 Templates\n- 98.2% Platform Health\n\nWould you like more detailed information about any specific tenant or deployment?",
-            "I've analyzed your templates and found that the 'Network Security Group' template could be optimized for better security. Would you like me to suggest specific improvements?\n\n**Potential Improvements:**\n1. Restrict inbound traffic to specific IP ranges\n2. Implement just-in-time access for management ports\n3. Enable advanced threat protection\n\n```json\n{\n  \"securityRules\": [\n    {\n      \"name\": \"RestrictedAccess\",\n      \"properties\": {\n        \"priority\": 100,\n        \"sourceAddressPrefix\": \"YOUR-IP-RANGE\",\n        \"destinationPortRange\": \"3389\"\n      }\n    }\n  ]\n}\n```",
-            "Looking at your recent deployments, I noticed an increase in failure rate for database deployments. The most common error is related to networking configuration.\n\n**Error Analysis:**\n- 7 failures in the last 24 hours\n- 5 related to networking configuration\n- 2 related to resource quotas\n\nI recommend checking the subnet configuration in your VNet settings.",
-            "I can see that tenant 'Dev Team' has been particularly active today with 5 new deployments. All deployments are healthy and running without issues.\n\n**Today's Activity:**\n- 5 new deployments\n- 3 template modifications\n- 2 resource scaling operations\n\nAll systems are operating at optimal performance levels.",
-            "Based on current usage patterns, I predict that you'll need to increase resource quotas for 'Cloud Ops' tenant within the next 30 days to accommodate their growth.\n\n**Growth Forecast:**\n- Current VM usage: 85% of quota\n- Storage account usage: 78% of quota\n- Network bandwidth: 62% of quota\n\nI recommend requesting a quota increase for VMs and storage accounts."
+            "I've analyzed your deployment patterns and noticed that the 'Database Cluster' template has a 23% failure rate across tenants. The most common error is related to network configuration. Would you like me to suggest some optimization strategies?",
+            "Looking at your cloud spend, I've identified potential savings of approximately 15% by rightsizing underutilized resources and implementing auto-scaling for the 'Web Application' deployments. Would you like a detailed breakdown of these recommendations?",
+            "I've detected 3 security vulnerabilities in your deployed resources. The most critical one affects the 'Network Security' template which has overly permissive inbound rules. I recommend restricting access to specific IP ranges to mitigate this risk.",
+            "The 'Dev Team' tenant is approaching its quota for storage accounts. Based on current usage patterns, you'll reach the limit in approximately 14 days. Consider increasing the quota or implementing a cleanup policy for unused storage resources."
           ];
           
           const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
           
-          // Create a placeholder message for simulated streaming
-          const aiMessageId = `msg-${Date.now()}`;
           const aiMessage: Message = {
-            id: aiMessageId,
+            id: `msg-${Date.now()}`,
             sender: "ai",
-            content: "",
-            timestamp: new Date().toISOString(),
-            isStreaming: true
+            content: randomResponse,
+            formattedContent: parseMarkdown(randomResponse),
+            timestamp: new Date().toISOString()
           };
           
-          setMessages(prevMessages => [...prevMessages, aiMessage]);
-          
-          // Simulate streaming by adding characters one by one
-          let currentIndex = 0;
-          const streamInterval = setInterval(() => {
-            if (currentIndex < randomResponse.length) {
-              const chunk = randomResponse.charAt(currentIndex);
-              setMessages(prevMessages => {
-                const lastMessage = prevMessages[prevMessages.length - 1];
-                if (lastMessage.id === aiMessageId) {
-                  const updatedContent = lastMessage.content + chunk;
-                  return [
-                    ...prevMessages.slice(0, -1),
-                    {
-                      ...lastMessage,
-                      content: updatedContent,
-                      formattedContent: updatedContent
-                    }
-                  ];
-                }
-                return prevMessages;
-              });
-              currentIndex++;
-            } else {
-              clearInterval(streamInterval);
-              setMessages(prevMessages => {
-                const lastMessage = prevMessages[prevMessages.length - 1];
-                if (lastMessage.id === aiMessageId) {
-                  return [
-                    ...prevMessages.slice(0, -1),
-                    {
-                      ...lastMessage,
-                      content: randomResponse,
-                      formattedContent: randomResponse,
-                      isStreaming: false
-                    }
-                  ];
-                }
-                return prevMessages;
-              });
-              setIsLoading(false);
-            }
-          }, 15); // Adjust speed as needed
-        }, 500);
+          setMessages(prev => [...prev, aiMessage]);
+        }, 1500);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Error: ${errorMessage}`);
+      console.error("Error sending message:", error);
+      toast.error("Failed to send message. Please try again.");
       
+      // Add error message
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
       const aiMessage: Message = {
         id: `msg-${Date.now()}`,
         sender: "ai",
-        content: `I'm sorry, I encountered an error while processing your request. ${errorMessage}`,
+        content: `I'm sorry, I encountered an error: ${errorMessage}. Please try again or check your connection settings.`,
+        formattedContent: parseMarkdown(`I'm sorry, I encountered an error: ${errorMessage}. Please try again or check your connection settings.`),
         timestamp: new Date().toISOString()
       };
       
-      setMessages(prevMessages => [...prevMessages, aiMessage]);
+      setMessages(prev => [...prev, aiMessage]);
     } finally {
       setIsLoading(false);
-      setIsRetrying(false);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
@@ -340,227 +298,216 @@ const NexusAI = () => {
   };
 
   const handleEditMessage = (messageId: string) => {
-    const messageToEdit = messages.find(msg => msg.id === messageId);
-    if (messageToEdit) {
+    const message = messages.find(msg => msg.id === messageId);
+    if (message && message.sender === "user") {
       setEditingMessageId(messageId);
-      setMessageInput(messageToEdit.content);
-      
-      // Focus the input field
-      const inputElement = document.querySelector('input[type="text"]') as HTMLInputElement;
-      if (inputElement) {
-        setTimeout(() => {
-          inputElement.focus();
-        }, 0);
-      }
+      setMessageInput(message.content);
     }
   };
 
   const handleRetry = () => {
+    if (messages.length < 2) return;
+    
+    setIsRetrying(true);
+    
     // Find the last user message
     const lastUserMessageIndex = [...messages].reverse().findIndex(msg => msg.sender === "user");
+    
     if (lastUserMessageIndex >= 0) {
-      const lastUserMessage = [...messages].reverse()[lastUserMessageIndex];
+      const lastUserMessage = messages[messages.length - 1 - lastUserMessageIndex];
       
       // Remove all messages after the last user message
-      const messagesToKeep = messages.slice(0, messages.length - lastUserMessageIndex - 1);
-      setMessages(messagesToKeep);
+      setMessages(messages.slice(0, messages.length - lastUserMessageIndex));
       
-      // Retry with the last user message
-      setIsRetrying(true);
-      handleSendMessage(lastUserMessage.content);
+      // Re-send the last user message
+      setTimeout(() => {
+        handleSendMessage(lastUserMessage.content);
+        setIsRetrying(false);
+      }, 500);
+    } else {
+      setIsRetrying(false);
+    }
+  };
+
+  const handleAskAboutInsight = (insight: AIInsight) => {
+    const prompt = `Tell me more about this insight: "${insight.title}" - ${insight.description}`;
+    handleSendMessage(prompt);
+  };
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case "deployment":
+        return <Server className="h-4 w-4" />;
+      case "tenant":
+        return <Users className="h-4 w-4" />;
+      case "template":
+        return <FileText className="h-4 w-4" />;
+      case "security":
+        return <Settings className="h-4 w-4" />;
+      default:
+        return <Database className="h-4 w-4" />;
     }
   };
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case "high": return "bg-red-100 text-red-800";
-      case "medium": return "bg-amber-100 text-amber-800";
-      case "low": return "bg-green-100 text-green-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "high":
+        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+      case "medium":
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
+      case "low":
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+      default:
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
     }
-  };
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case "deployment": return <Server className="h-4 w-4" />;
-      case "tenant": return <Users className="h-4 w-4" />;
-      case "template": return <FileText className="h-4 w-4" />;
-      case "security": return <Settings className="h-4 w-4" />;
-      default: return <Database className="h-4 w-4" />;
-    }
-  };
-
-  const handleAskAboutInsight = (insight: AIInsight) => {
-    const question = `Tell me more about the insight: "${insight.title}"`;
-    setMessageInput(question);
-  };
-
-  // Determine if we should show message actions (edit/retry)
-  const canShowMessageActions = (message: Message, index: number) => {
-    return (
-      // Only show for user messages
-      message.sender === "user" &&
-      // Only show for the most recent user message (the last one in the array)
-      index === messages.length - 1 - (messages[messages.length - 1].sender === "ai" ? 1 : 0) &&
-      // Don't show while loading or retrying
-      !isLoading && !isRetrying &&
-      // Don't show if already editing
-      !editingMessageId
-    );
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">NexusAI Assistant</h1>
-          <p className="text-muted-foreground">
-            Your intelligent assistant for platform management and insights
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+    <div className="container mx-auto py-6 space-y-6">
+      {/* Header with Configure Button and Connection Status */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">NexusAI Assistant</h1>
+        <div className="flex items-center gap-4">
           <ConnectionStatus />
           <ConfigDialog />
         </div>
       </div>
       
+      {/* Debug Logs */}
       <DebugLogs />
       
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <Card className="h-[calc(100vh-300px)] min-h-[600px] flex flex-col">
-            <CardHeader className="pb-3 flex-shrink-0">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="h-[600px] flex flex-col">
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center">
-                <CloudCog className="h-5 w-5 mr-2 text-primary" />
-                NexusAI Chat
+                <CloudCog className="h-5 w-5 mr-2" />
+                AI Chat
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col overflow-hidden p-0">
-              <ScrollArea className="flex-1 px-6" onScroll={handleScroll} ref={chatContainerRef}>
+              <ScrollArea 
+                className="flex-1 px-4" 
+                ref={chatContainerRef}
+                onScroll={handleScroll}
+              >
                 <div className="space-y-4 pb-4">
                   {messages.map((message, index) => (
                     <div
                       key={message.id}
-                      className={`flex ${
-                        message.sender === "user" ? "justify-end" : "justify-start"
-                      }`}
+                      className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[80%] p-3 rounded-lg ${
+                        className={`max-w-[80%] rounded-lg p-4 ${
                           message.sender === "user"
                             ? "bg-primary text-primary-foreground"
                             : "bg-muted"
                         }`}
                       >
-                        {message.sender === "ai" && message.formattedContent ? (
-                          <div className="markdown-content break-words">
-                            {parseMarkdown(message.formattedContent)}
-                            {message.isStreaming && (
-                              <span className="inline-block w-2 h-4 ml-1 bg-current opacity-75 animate-pulse" />
+                        {message.sender === "user" ? (
+                          <div className="flex items-start justify-between">
+                            <div>{message.content}</div>
+                            {!isLoading && !editingMessageId && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 ml-2 -mr-2 -mt-2 text-primary-foreground/70 hover:text-primary-foreground"
+                                onClick={() => handleEditMessage(message.id)}
+                              >
+                                <Edit className="h-3 w-3" />
+                                <span className="sr-only">Edit</span>
+                              </Button>
                             )}
                           </div>
                         ) : (
-                          <p className="break-words">{message.content}</p>
+                          <div>
+                            {message.formattedContent ? (
+                              <div 
+                                className="markdown-content"
+                                dangerouslySetInnerHTML={{ __html: message.formattedContent }}
+                              />
+                            ) : (
+                              <div className="markdown-content">{message.content}</div>
+                            )}
+                            {message.isStreaming && (
+                              <span className="cursor-blink" />
+                            )}
+                          </div>
                         )}
-                        <div className="flex justify-between items-center mt-1">
-                          <p className="text-xs opacity-70">
-                            {new Date(message.timestamp).toLocaleTimeString()}
-                          </p>
-                          
-                          {canShowMessageActions(message, index) && (
-                            <div className="flex gap-1 ml-2">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-5 w-5 rounded-full opacity-70 hover:opacity-100"
-                                onClick={() => handleEditMessage(message.id)}
-                                title="Edit message"
-                              >
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-5 w-5 rounded-full opacity-70 hover:opacity-100"
-                                onClick={handleRetry}
-                                title="Regenerate response"
-                                disabled={isLoading || isRetrying}
-                              >
-                                {isRetrying ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <RefreshCw className="h-3 w-3" />
-                                )}
-                              </Button>
-                            </div>
-                          )}
-                        </div>
                       </div>
                     </div>
                   ))}
-                  {isLoading && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%] p-3 rounded-lg bg-muted">
-                        <div className="flex space-x-2">
-                          <div className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                          <div className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                          <div className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollArea>
-              <div className="mt-auto flex flex-col gap-2 px-6 py-4 border-t">
+              <div className="p-4 border-t">
                 <div className="flex gap-2">
                   <Input
+                    placeholder={
+                      editingMessageId
+                        ? "Edit your message..."
+                        : "Type your message..."
+                    }
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
-                    onKeyDown={handleKeyPress}
-                    placeholder={editingMessageId ? "Edit your message..." : "Ask NexusAI about your platform..."}
+                    onKeyDown={handleKeyDown}
+                    disabled={isLoading}
                     className="flex-1"
-                    disabled={isLoading || isRetrying}
                   />
-                  <Button 
-                    onClick={() => handleSendMessage()} 
-                    disabled={!messageInput.trim() || isLoading || isRetrying}
+                  <Button
+                    onClick={() => handleSendMessage()}
+                    disabled={isLoading || !messageInput.trim()}
                   >
-                    {editingMessageId ? "Update" : <Send className="h-4 w-4" />}
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    <span className="sr-only">Send</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleRetry}
+                    disabled={isLoading || isRetrying || messages.length < 2}
+                    title="Retry last message"
+                  >
+                    {isRetrying ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    <span className="sr-only">Retry</span>
                   </Button>
                 </div>
-                {editingMessageId && (
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Editing a previous message. This will regenerate the AI response.
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="h-auto p-0 ml-2 text-xs"
-                      onClick={() => {
-                        setEditingMessageId(null);
-                        setMessageInput("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
+                {!isConfigured && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Azure OpenAI is not configured. Click the Configure button to set up the integration.
+                  </p>
+                )}
+                {isConfigured && !isConnected && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Not connected to Azure OpenAI. Check your configuration and connection status.
+                  </p>
                 )}
               </div>
             </CardContent>
           </Card>
         </div>
         
-        <div>
-          <Card className="h-[calc(100vh-300px)] min-h-[600px] flex flex-col">
-            <CardHeader className="pb-3 flex-shrink-0">
-              <CardTitle>AI Insights</CardTitle>
+        <div className="space-y-6">
+          <Card className="h-[600px] flex flex-col">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center">
+                <BarChart className="h-5 w-5 mr-2" />
+                AI Insights
+              </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 overflow-hidden p-0">
-              <Tabs defaultValue="all" className="h-full flex flex-col">
-                <TabsList className="flex w-full mx-6 justify-between">
+            <CardContent className="flex-1 flex flex-col overflow-hidden p-0">
+              <Tabs defaultValue="all" className="flex flex-col h-full">
+                <TabsList className="mx-4 mt-2 grid grid-cols-5">
                   <TabsTrigger value="all" className="flex-1 text-xs">All</TabsTrigger>
-                  <TabsTrigger value="tenant" className="flex-1 text-xs">Tenants</TabsTrigger>
-                  <TabsTrigger value="template" className="flex-1 text-xs">Templates</TabsTrigger>
+                  <TabsTrigger value="tenant" className="flex-1 text-xs">Tenant</TabsTrigger>
+                  <TabsTrigger value="template" className="flex-1 text-xs">Template</TabsTrigger>
                   <TabsTrigger value="deployment" className="flex-1 text-xs">Deploy</TabsTrigger>
                   <TabsTrigger value="security" className="flex-1 text-xs">Security</TabsTrigger>
                 </TabsList>
