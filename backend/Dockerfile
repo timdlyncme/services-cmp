@@ -9,11 +9,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install netcat for the entrypoint script
 RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
+# Copy entrypoint script first and fix line endings
+COPY entrypoint.sh /app/
+RUN sed -i 's/\r$//' /app/entrypoint.sh && \
+    chmod +x /app/entrypoint.sh
+
 # Copy application code
 COPY . .
-
-# Make the entrypoint script executable
-RUN chmod +x /app/entrypoint.sh
 
 # Set environment variables
 ENV PYTHONPATH=/app
