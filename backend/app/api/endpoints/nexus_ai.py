@@ -1,8 +1,9 @@
+import json
+import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 import requests
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.endpoints.auth import get_current_user
@@ -12,114 +13,166 @@ from app.models.user import User
 
 router = APIRouter()
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-class AzureOpenAIConfig(BaseModel):
-    api_key: str
-    endpoint: str
-    deployment_name: str
+
+class NexusAIConfig:
+    """
+    Class to store NexusAI configuration
+    """
+    api_key: Optional[str] = None
+    endpoint: Optional[str] = None
     api_version: str = "2023-05-15"
-
-
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-
-class ChatRequest(BaseModel):
-    messages: List[ChatMessage]
-    max_tokens: Optional[int] = 1000
-    temperature: Optional[float] = 0.7
-    top_p: Optional[float] = 0.95
-    frequency_penalty: Optional[float] = 0
-    presence_penalty: Optional[float] = 0
-    stop: Optional[List[str]] = None
-
-
-class ChatResponse(BaseModel):
-    message: ChatMessage
-    usage: Dict[str, int]
-    model: str
-
-
-class ConfigUpdateRequest(BaseModel):
-    api_key: str
-    endpoint: str
-    deployment_name: str
-    api_version: Optional[str] = "2023-05-15"
-
-
-@router.post("/chat", response_model=ChatResponse)
-def chat(
-    request: ChatRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> Any:
-    """
-    Chat with Azure OpenAI
-    """
-    # Check if Azure OpenAI is configured
-    if not all([
-        settings.AZURE_OPENAI_API_KEY,
-        settings.AZURE_OPENAI_ENDPOINT,
-        settings.AZURE_OPENAI_DEPLOYMENT_NAME
-    ]):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Azure OpenAI is not configured. Please configure it first."
+    deployment_name: Optional[str] = None
+    
+    @classmethod
+    def is_configured(cls) -> bool:
+        """
+        Check if NexusAI is configured
+        """
+        return (
+            cls.api_key is not None and
+            cls.endpoint is not None and
+            cls.deployment_name is not None
         )
     
-    # Prepare request to Azure OpenAI
-    url = f"{settings.AZURE_OPENAI_ENDPOINT}/openai/deployments/{settings.AZURE_OPENAI_DEPLOYMENT_NAME}/chat/completions?api-version={settings.AZURE_OPENAI_API_VERSION}"
+    @classmethod
+    def update_config(
+        cls,
+        api_key: Optional[str] = None,
+        endpoint: Optional[str] = None,
+        api_version: Optional[str] = None,
+        deployment_name: Optional[str] = None
+    ) -> None:
+        """
+        Update NexusAI configuration
+        """
+        if api_key is not None:
+            cls.api_key = api_key
+        if endpoint is not None:
+            cls.endpoint = endpoint
+        if api_version is not None:
+            cls.api_version = api_version
+        if deployment_name is not None:
+            cls.deployment_name = deployment_name
+
+
+# Initialize NexusAI configuration from settings
+NexusAIConfig.update_config(
+    api_key=settings.AZURE_OPENAI_API_KEY,
+    endpoint=settings.AZURE_OPENAI_ENDPOINT,
+    api_version=settings.AZURE_OPENAI_API_VERSION,
+    deployment_name=settings.AZURE_OPENAI_DEPLOYMENT_NAME
+)
+
+# Store chat history
+chat_history: Dict[str, List[Dict[str, str]]] = {}
+
+
+@router.post("/chat")
+def chat(
+    message: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Chat with NexusAI
+    """
+    # Check if user has permission to use NexusAI
+    has_permission = any(p.name == "use:nexus_ai" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
     
-    headers = {
-        "Content-Type": "application/json",
-        "api-key": settings.AZURE_OPENAI_API_KEY
-    }
+    # Check if NexusAI is configured
+    if not NexusAIConfig.is_configured():
+        return {
+            "message": "NexusAI is not configured. Please configure it first.",
+            "configured": False
+        }
     
-    payload = {
-        "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
-        "max_tokens": request.max_tokens,
-        "temperature": request.temperature,
-        "top_p": request.top_p,
-        "frequency_penalty": request.frequency_penalty,
-        "presence_penalty": request.presence_penalty,
-    }
+    # Get chat history for user
+    user_id = str(current_user.id)
+    if user_id not in chat_history:
+        chat_history[user_id] = []
     
-    if request.stop:
-        payload["stop"] = request.stop
+    # Add user message to chat history
+    chat_history[user_id].append({
+        "role": "user",
+        "content": message
+    })
     
     try:
+        # Call Azure OpenAI API
+        url = f"{NexusAIConfig.endpoint}/openai/deployments/{NexusAIConfig.deployment_name}/chat/completions?api-version={NexusAIConfig.api_version}"
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": NexusAIConfig.api_key
+        }
+        payload = {
+            "messages": chat_history[user_id],
+            "max_tokens": 1000,
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "frequency_penalty": 0,
+            "presence_penalty": 0,
+            "stop": None
+        }
+        
+        logger.info(f"Sending request to Azure OpenAI API: {url}")
         response = requests.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-        result = response.json()
+        
+        if response.status_code != 200:
+            logger.error(f"Error from Azure OpenAI API: {response.text}")
+            return {
+                "message": f"Error from Azure OpenAI API: {response.text}",
+                "configured": True,
+                "success": False
+            }
+        
+        # Parse response
+        response_json = response.json()
+        assistant_message = response_json["choices"][0]["message"]["content"]
+        
+        # Add assistant message to chat history
+        chat_history[user_id].append({
+            "role": "assistant",
+            "content": assistant_message
+        })
+        
+        # Limit chat history to last 20 messages
+        if len(chat_history[user_id]) > 20:
+            chat_history[user_id] = chat_history[user_id][-20:]
         
         return {
-            "message": {
-                "role": result["choices"][0]["message"]["role"],
-                "content": result["choices"][0]["message"]["content"]
-            },
-            "usage": result["usage"],
-            "model": result["model"]
+            "message": assistant_message,
+            "configured": True,
+            "success": True
         }
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error communicating with Azure OpenAI: {str(e)}"
-        )
+    
+    except Exception as e:
+        logger.error(f"Error calling Azure OpenAI API: {str(e)}")
+        return {
+            "message": f"Error calling Azure OpenAI API: {str(e)}",
+            "configured": True,
+            "success": False
+        }
 
 
-@router.get("/config", response_model=AzureOpenAIConfig)
+@router.get("/config")
 def get_config(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db)
 ) -> Any:
     """
-    Get Azure OpenAI configuration
+    Get NexusAI configuration
     """
-    # Check if user has permission to view settings
-    # This would be a more robust check in a real application
-    has_permission = True
-    
+    # Check if user has permission to manage NexusAI
+    has_permission = any(p.name == "manage:nexus_ai" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -127,95 +180,135 @@ def get_config(
         )
     
     return {
-        "api_key": settings.AZURE_OPENAI_API_KEY or "",
-        "endpoint": settings.AZURE_OPENAI_ENDPOINT or "",
-        "deployment_name": settings.AZURE_OPENAI_DEPLOYMENT_NAME or "",
-        "api_version": settings.AZURE_OPENAI_API_VERSION
+        "endpoint": NexusAIConfig.endpoint,
+        "api_version": NexusAIConfig.api_version,
+        "deployment_name": NexusAIConfig.deployment_name,
+        "configured": NexusAIConfig.is_configured()
     }
 
 
-@router.post("/config", response_model=AzureOpenAIConfig)
+@router.post("/config")
 def update_config(
-    request: ConfigUpdateRequest,
+    api_key: Optional[str] = None,
+    endpoint: Optional[str] = None,
+    api_version: Optional[str] = None,
+    deployment_name: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db)
 ) -> Any:
     """
-    Update Azure OpenAI configuration
+    Update NexusAI configuration
     """
-    # Check if user has permission to manage settings
-    # This would be a more robust check in a real application
-    has_permission = True
-    
+    # Check if user has permission to manage NexusAI
+    has_permission = any(p.name == "manage:nexus_ai" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
     
-    # In a real application, you would update these settings in a database
-    # For this example, we'll just update the settings object
-    # Note: This is not persistent across restarts
-    settings.AZURE_OPENAI_API_KEY = request.api_key
-    settings.AZURE_OPENAI_ENDPOINT = request.endpoint
-    settings.AZURE_OPENAI_DEPLOYMENT_NAME = request.deployment_name
-    settings.AZURE_OPENAI_API_VERSION = request.api_version
+    # Update configuration
+    NexusAIConfig.update_config(
+        api_key=api_key,
+        endpoint=endpoint,
+        api_version=api_version,
+        deployment_name=deployment_name
+    )
     
     return {
-        "api_key": settings.AZURE_OPENAI_API_KEY,
-        "endpoint": settings.AZURE_OPENAI_ENDPOINT,
-        "deployment_name": settings.AZURE_OPENAI_DEPLOYMENT_NAME,
-        "api_version": settings.AZURE_OPENAI_API_VERSION
+        "message": "Configuration updated successfully",
+        "configured": NexusAIConfig.is_configured()
     }
 
 
 @router.get("/status")
-def check_status(
+def get_status(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db)
 ) -> Any:
     """
-    Check Azure OpenAI connection status
+    Get NexusAI status
     """
-    # Check if Azure OpenAI is configured
-    if not all([
-        settings.AZURE_OPENAI_API_KEY,
-        settings.AZURE_OPENAI_ENDPOINT,
-        settings.AZURE_OPENAI_DEPLOYMENT_NAME
-    ]):
+    # Check if user has permission to use NexusAI
+    has_permission = any(p.name == "use:nexus_ai" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    # Check if NexusAI is configured
+    if not NexusAIConfig.is_configured():
         return {
             "status": "not_configured",
-            "message": "Azure OpenAI is not configured"
+            "message": "NexusAI is not configured. Please configure it first."
         }
-    
-    # Test connection to Azure OpenAI
-    url = f"{settings.AZURE_OPENAI_ENDPOINT}/openai/deployments?api-version={settings.AZURE_OPENAI_API_VERSION}"
-    
-    headers = {
-        "api-key": settings.AZURE_OPENAI_API_KEY
-    }
     
     try:
+        # Test connection to Azure OpenAI API
+        url = f"{NexusAIConfig.endpoint}/openai/deployments?api-version={NexusAIConfig.api_version}"
+        headers = {
+            "api-key": NexusAIConfig.api_key
+        }
+        
+        logger.info(f"Testing connection to Azure OpenAI API: {url}")
         response = requests.get(url, headers=headers)
-        response.raise_for_status()
         
-        # Check if the deployment exists
+        if response.status_code != 200:
+            logger.error(f"Error connecting to Azure OpenAI API: {response.text}")
+            return {
+                "status": "error",
+                "message": f"Error connecting to Azure OpenAI API: {response.text}"
+            }
+        
+        # Check if deployment exists
         deployments = response.json()["data"]
-        deployment_exists = any(d["id"] == settings.AZURE_OPENAI_DEPLOYMENT_NAME for d in deployments)
+        deployment_exists = any(d["id"] == NexusAIConfig.deployment_name for d in deployments)
         
-        if deployment_exists:
+        if not deployment_exists:
+            logger.error(f"Deployment {NexusAIConfig.deployment_name} not found")
             return {
-                "status": "connected",
-                "message": "Successfully connected to Azure OpenAI"
+                "status": "error",
+                "message": f"Deployment {NexusAIConfig.deployment_name} not found"
             }
-        else:
-            return {
-                "status": "deployment_not_found",
-                "message": f"Deployment '{settings.AZURE_OPENAI_DEPLOYMENT_NAME}' not found"
-            }
-    except requests.exceptions.RequestException as e:
+        
+        return {
+            "status": "connected",
+            "message": "Connected to Azure OpenAI API"
+        }
+    
+    except Exception as e:
+        logger.error(f"Error testing connection to Azure OpenAI API: {str(e)}")
         return {
             "status": "error",
-            "message": f"Error connecting to Azure OpenAI: {str(e)}"
+            "message": f"Error testing connection to Azure OpenAI API: {str(e)}"
         }
+
+
+@router.get("/logs")
+def get_logs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Get NexusAI logs
+    """
+    # Check if user has permission to manage NexusAI
+    has_permission = any(p.name == "manage:nexus_ai" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    # Get chat history for user
+    user_id = str(current_user.id)
+    if user_id not in chat_history:
+        return {
+            "logs": []
+        }
+    
+    return {
+        "logs": chat_history[user_id]
+    }
 

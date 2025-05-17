@@ -4,18 +4,12 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 
-# Create SQLAlchemy engine
-SQLALCHEMY_DATABASE_URL = f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_SERVER}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
-
-# Create SessionLocal class
+engine = create_engine(settings.SQLALCHEMY_DATABASE_URI)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create Base class
 Base = declarative_base()
 
 
-# Dependency to get DB session
 def get_db():
     db = SessionLocal()
     try:
