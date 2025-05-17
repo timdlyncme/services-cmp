@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -53,6 +53,12 @@ def login_for_access_token(
     """
     OAuth2 compatible token login, get an access token for future requests
     """
+    # Add CORS headers
+    response = Response()
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -73,13 +79,25 @@ def login_for_access_token(
         email=user.email,
         role=user.role.name,
         tenantId=user.tenant.tenant_id,
-        permissions=[p for p in user.role.permissions]
+        permissions=[p.name for p in user.role.permissions]
     )
     
     return {
         "user": user_schema,
         "token": access_token
     }
+
+
+@router.options("/login")
+def options_login():
+    """
+    Handle preflight requests for login
+    """
+    response = Response(status_code=200)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    return response
 
 
 @router.get("/me", response_model=UserSchema)
@@ -94,8 +112,7 @@ def read_users_me(current_user: User = Depends(get_current_user)) -> Any:
         email=current_user.email,
         role=current_user.role.name,
         tenantId=current_user.tenant.tenant_id,
-        permissions=[p for p in current_user.role.permissions]
+        permissions=[p.name for p in current_user.role.permissions]
     )
     
     return user_schema
-

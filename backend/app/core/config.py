@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     AZURE_OPENAI_API_VERSION: str = "2023-05-15"
     AZURE_OPENAI_DEPLOYMENT_NAME: Optional[str] = None
     
-    # CORS Settings
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:8080", "http://127.0.0.1:8080", "http://192.168.200.108:8080", "*"]
+    # CORS Settings - Allow all origins for development
+    BACKEND_CORS_ORIGINS: List[str] = ["*"]
     
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
