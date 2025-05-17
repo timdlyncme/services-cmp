@@ -1,73 +1,103 @@
-# Welcome to your Lovable project
+# Cloud Management Platform
 
-## Project info
+A modern cloud management platform for managing cloud resources, templates, and deployments.
 
-**URL**: https://lovable.dev/projects/5bf24dcd-a9c6-446a-a430-ca8fd808e430
+## Features
 
-## How can I edit this code?
+- User authentication with PostgreSQL database
+- Role-based access control with permissions
+- Template management
+- Deployment tracking
+- Multi-tenant support
+- NexusAI integration
 
-There are several ways of editing your application.
+## Getting Started
 
-**Use Lovable**
+### Prerequisites
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/5bf24dcd-a9c6-446a-a430-ca8fd808e430) and start prompting.
+- Node.js 16+
+- Docker and Docker Compose
+- npm or yarn
 
-Changes made via Lovable will be committed automatically to this repo.
+### Setup
 
-**Use your preferred IDE**
+1. Clone the repository:
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+```bash
+git clone <repository-url>
+cd services-cmp
+```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+2. Install dependencies:
 
-Follow these steps:
+```bash
+npm install
+```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+3. Start the PostgreSQL database:
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+```bash
+docker-compose up -d
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+4. Create a `.env` file in the root directory with the following content:
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=cmpuser
+DB_PASSWORD=cmppassword
+DB_NAME=cmpdb
+JWT_SECRET=your_jwt_secret_key_change_in_production
+```
+
+5. Start the development server:
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+6. Open your browser and navigate to `http://localhost:5173`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Default Users
 
-**Use GitHub Codespaces**
+The application comes with three default users:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- **Admin User**: admin@example.com / password
+- **Regular User**: user@example.com / password
+- **MSP User**: msp@example.com / password
 
-## What technologies are used for this project?
+## Database Schema
 
-This project is built with:
+The application uses PostgreSQL with the following schema:
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- **tenants**: Stores tenant information
+- **roles**: Defines user roles (user, admin, msp)
+- **permissions**: Lists all available permissions
+- **role_permissions**: Maps roles to permissions
+- **users**: Stores user information including role and tenant
+- **user_permissions**: Maps custom permissions to users
 
-## How can I deploy this project?
+## Authentication Flow
 
-Simply open [Lovable](https://lovable.dev/projects/5bf24dcd-a9c6-446a-a430-ca8fd808e430) and click on Share -> Publish.
+1. User enters email and password
+2. The system verifies credentials against the database
+3. If valid, a JWT token is generated and stored in localStorage
+4. The token is used for subsequent API requests
+5. Permissions are checked for each protected route and UI element
 
-## Can I connect a custom domain to my Lovable project?
+## Development
 
-Yes, you can!
+### Adding New Permissions
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+1. Add the permission to the `permissions` table
+2. Assign the permission to roles in the `role_permissions` table
+3. Use the `hasPermission` function to check permissions in components
+4. Add the permission check to protected routes
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+### Adding New Roles
+
+1. Add the role to the `roles` table
+2. Assign permissions to the role in the `role_permissions` table
+3. Update the `UserRole` type in `src/types/auth.ts`
+
