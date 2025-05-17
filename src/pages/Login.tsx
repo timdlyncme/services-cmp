@@ -27,7 +27,7 @@ const Login = () => {
       await login(email, password);
       navigate("/");
     } catch (error) {
-      setError("Invalid email or password. Try admin@example.com / user@example.com / msp@example.com with any password.");
+      setError("Invalid email or password. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -116,7 +116,7 @@ const Login = () => {
             <p>admin@example.com (Admin)</p>
             <p>user@example.com (User)</p>
             <p>msp@example.com (MSP)</p>
-            <p className="mt-1">Any password will work</p>
+            <p className="mt-1">Password: password</p>
           </div>
         </CardFooter>
       </Card>

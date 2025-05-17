@@ -7,6 +7,7 @@ import { AuthProvider } from "@/context/auth-context";
 import { AzureOpenAIProvider } from "@/contexts/AzureOpenAIContext";
 
 import { AppLayout } from "@/components/app-layout";
+import { ProtectedRoute } from "@/components/protected-route";
 import Dashboard from "@/pages/Dashboard";
 import Catalog from "@/pages/Catalog";
 import TemplateDetails from "@/pages/TemplateDetails";
@@ -36,20 +37,56 @@ const App = () => (
             <Routes>
               <Route path="/login" element={<Login />} />
               
-              <Route element={<AppLayout />}>
+              <Route element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
+              }>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/catalog" element={<Catalog />} />
                 <Route path="/catalog/:templateId" element={<TemplateDetails />} />
                 <Route path="/deployments" element={<Deployments />} />
                 <Route path="/deployments/:deploymentId" element={<DeploymentDetails />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/tenants" element={<Tenants />} />
-                <Route path="/template-management" element={<TemplateManagement />} />
-                <Route path="/msp-template-foundry" element={<MSPTemplateFoundry />} />
-                <Route path="/environments" element={<Environments />} />
-                <Route path="/users-and-groups" element={<UsersAndGroups />} />
-                <Route path="/cloud-accounts" element={<CloudAccounts />} />
-                <Route path="/nexus-ai" element={<NexusAI />} />
+                <Route path="/settings" element={
+                  <ProtectedRoute requiredPermission="view:settings">
+                    <Settings />
+                  </ProtectedRoute>
+                } />
+                <Route path="/tenants" element={
+                  <ProtectedRoute requiredPermission="view:tenants">
+                    <Tenants />
+                  </ProtectedRoute>
+                } />
+                <Route path="/template-management" element={
+                  <ProtectedRoute requiredPermission="view:templates">
+                    <TemplateManagement />
+                  </ProtectedRoute>
+                } />
+                <Route path="/msp-template-foundry" element={
+                  <ProtectedRoute requiredPermission="manage:templates">
+                    <MSPTemplateFoundry />
+                  </ProtectedRoute>
+                } />
+                <Route path="/environments" element={
+                  <ProtectedRoute requiredPermission="view:environments">
+                    <Environments />
+                  </ProtectedRoute>
+                } />
+                <Route path="/users-and-groups" element={
+                  <ProtectedRoute requiredPermission="view:users">
+                    <UsersAndGroups />
+                  </ProtectedRoute>
+                } />
+                <Route path="/cloud-accounts" element={
+                  <ProtectedRoute requiredPermission="view:cloud-accounts">
+                    <CloudAccounts />
+                  </ProtectedRoute>
+                } />
+                <Route path="/nexus-ai" element={
+                  <ProtectedRoute requiredPermission="use:nexus-ai">
+                    <NexusAI />
+                  </ProtectedRoute>
+                } />
               </Route>
               
               <Route path="*" element={<NotFound />} />
