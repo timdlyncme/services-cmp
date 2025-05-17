@@ -14,7 +14,7 @@ import Deployments from "@/pages/Deployments";
 import DeploymentDetails from "@/pages/DeploymentDetails";
 import Settings from "@/pages/Settings";
 import Tenants from "@/pages/Tenants";
-import TenantTemplateFoundry from "@/pages/TenantTemplateFoundry";
+import TemplateManagement from "@/pages/TemplateManagement";
 import MSPTemplateFoundry from "@/pages/MSPTemplateFoundry";
 import Environments from "@/pages/Environments";
 import UsersAndGroups from "@/pages/UsersAndGroups";
@@ -44,7 +44,7 @@ const App = () => (
                 <Route path="/deployments/:deploymentId" element={<DeploymentDetails />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/tenants" element={<Tenants />} />
-                <Route path="/template-foundry" element={<TenantTemplateFoundry />} />
+                <Route path="/template-management" element={<TemplateManagement />} />
                 <Route path="/msp-template-foundry" element={<MSPTemplateFoundry />} />
                 <Route path="/environments" element={<Environments />} />
                 <Route path="/users-and-groups" element={<UsersAndGroups />} />
@@ -62,4 +62,3 @@ const App = () => (
 );
 
 export default App;
-
