@@ -1,6 +1,6 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { User, Tenant, UserRole } from "@/types/auth";
+import { User, Tenant, UserRole, Permission } from "@/types/auth";
+import { AuthService } from "@/services/auth-service";
 
 interface AuthContextType {
   user: User | null;
@@ -11,9 +11,13 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   switchTenant: (tenantId: string) => void;
+  hasPermission: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Initialize auth service
+const authService = new AuthService();
 
 // Mock data for demo purposes
 const mockTenants: Tenant[] = [
@@ -65,19 +69,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Check for existing session
     const checkAuth = async () => {
       try {
-        // In a real app, this would verify a token with your backend
-        const savedUser = localStorage.getItem("user");
-        const savedTenantId = localStorage.getItem("currentTenantId");
+        // Check for token in localStorage
+        const token = localStorage.getItem("token");
         
-        if (savedUser) {
-          const parsedUser = JSON.parse(savedUser) as User;
-          setUser(parsedUser);
-          setTenants(mockTenants);
+        if (token) {
+          // Verify token and get user data
+          const authUser = await authService.verifyToken(token);
           
-          const tenant = mockTenants.find(t => 
-            savedTenantId ? t.id === savedTenantId : t.id === parsedUser.tenantId
-          );
-          setCurrentTenant(tenant || null);
+          if (authUser) {
+            setUser(authUser);
+            
+            // Get user's tenants
+            const userTenants = await authService.getUserTenants(authUser.id);
+            setTenants(userTenants);
+            
+            // Set current tenant
+            const savedTenantId = localStorage.getItem("currentTenantId");
+            const tenant = userTenants.find(t => 
+              savedTenantId ? t.id === savedTenantId : t.id === authUser.tenantId
+            );
+            setCurrentTenant(tenant || null);
+          } else {
+            // Token is invalid, clear localStorage
+            localStorage.removeItem("token");
+            localStorage.removeItem("currentTenantId");
+          }
         }
       } catch (error) {
         console.error("Auth check failed:", error);
@@ -93,25 +109,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Authenticate user
+      const { user: authUser, token } = await authService.login(email, password);
       
-      // Find user (in a real app, this would be a backend call)
-      const matchedUser = mockUsers.find(u => u.email === email);
+      // Store token in localStorage
+      localStorage.setItem("token", token);
       
-      if (!matchedUser) {
-        throw new Error("Invalid credentials");
-      }
+      // Set user in state
+      setUser(authUser);
       
-      // Set user in state and localStorage
-      setUser(matchedUser);
-      localStorage.setItem("user", JSON.stringify(matchedUser));
-      
-      // Set tenants the user has access to
-      setTenants(mockTenants);
+      // Get user's tenants
+      const userTenants = await authService.getUserTenants(authUser.id);
+      setTenants(userTenants);
       
       // Set current tenant to user's default tenant
-      const defaultTenant = mockTenants.find(t => t.id === matchedUser.tenantId) || null;
+      const defaultTenant = userTenants.find(t => t.id === authUser.tenantId) || null;
       setCurrentTenant(defaultTenant);
       
       if (defaultTenant) {
@@ -128,7 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     setCurrentTenant(null);
-    localStorage.removeItem("user");
+    localStorage.removeItem("token");
     localStorage.removeItem("currentTenantId");
   };
 
@@ -138,6 +150,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentTenant(tenant);
       localStorage.setItem("currentTenantId", tenantId);
     }
+  };
+
+  const hasPermission = (permission: string): boolean => {
+    if (!user || !user.permissions) return false;
+    return user.permissions.some(p => p.name === permission);
   };
 
   return (
@@ -151,6 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         switchTenant,
+        hasPermission,
       }}
     >
       {children}
