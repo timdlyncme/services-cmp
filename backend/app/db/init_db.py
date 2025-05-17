@@ -1,153 +1,163 @@
 from sqlalchemy.orm import Session
 
-from app.core.security import get_password_hash
 from app.db.session import Base, engine
-from app.models.user import User, Role, Permission, Tenant, RolePermission, UserPermission
+from app.models.user import User, Role, Permission, Tenant, user_permissions, role_permissions
 
 
 def init_db(db: Session) -> None:
+    """
+    Initialize the database with default data
+    """
     # Create tables
     Base.metadata.create_all(bind=engine)
     
-    # Check if database is already initialized
+    # Check if we already have data
     if db.query(User).first():
         return
     
-    # Create roles
-    user_role = Role(name="user", description="Regular user with limited access")
-    admin_role = Role(name="admin", description="Administrator with tenant-level access")
-    msp_role = Role(name="msp", description="Managed Service Provider with multi-tenant access")
+    # Create default tenants
+    default_tenant = Tenant(
+        tenant_id="default",
+        name="Default Tenant",
+        description="Default tenant for the system"
+    )
     
-    db.add(user_role)
-    db.add(admin_role)
-    db.add(msp_role)
-    db.commit()
+    acme_tenant = Tenant(
+        tenant_id="acme",
+        name="Acme Corporation",
+        description="Acme Corporation tenant"
+    )
     
-    # Create permissions
-    permissions = [
-        Permission(name="view:dashboard", description="View dashboard"),
-        Permission(name="view:catalog", description="View template catalog"),
-        Permission(name="deploy:template", description="Deploy templates"),
-        Permission(name="view:deployments", description="View deployments"),
-        Permission(name="manage:deployments", description="Manage deployments"),
-        Permission(name="view:templates", description="View templates"),
-        Permission(name="manage:templates", description="Manage templates"),
-        Permission(name="view:environments", description="View environments"),
-        Permission(name="manage:environments", description="Manage environments"),
-        Permission(name="view:cloud-accounts", description="View cloud accounts"),
-        Permission(name="manage:cloud-accounts", description="Manage cloud accounts"),
-        Permission(name="view:users", description="View users and groups"),
-        Permission(name="manage:users", description="Manage users and groups"),
-        Permission(name="view:settings", description="View settings"),
-        Permission(name="manage:settings", description="Manage settings"),
-        Permission(name="view:tenants", description="View tenants"),
-        Permission(name="manage:tenants", description="Manage tenants"),
-        Permission(name="use:nexus-ai", description="Use NexusAI"),
-    ]
+    db.add(default_tenant)
+    db.add(acme_tenant)
+    db.flush()
     
-    for permission in permissions:
-        db.add(permission)
+    # Create default permissions
+    view_dashboard = Permission(
+        name="view:dashboard",
+        description="View dashboard"
+    )
     
-    db.commit()
+    manage_users = Permission(
+        name="manage:users",
+        description="Manage users"
+    )
+    
+    manage_tenants = Permission(
+        name="manage:tenants",
+        description="Manage tenants"
+    )
+    
+    view_templates = Permission(
+        name="view:templates",
+        description="View templates"
+    )
+    
+    manage_templates = Permission(
+        name="manage:templates",
+        description="Manage templates"
+    )
+    
+    view_deployments = Permission(
+        name="view:deployments",
+        description="View deployments"
+    )
+    
+    manage_deployments = Permission(
+        name="manage:deployments",
+        description="Manage deployments"
+    )
+    
+    use_nexus_ai = Permission(
+        name="use:nexus_ai",
+        description="Use NexusAI"
+    )
+    
+    manage_nexus_ai = Permission(
+        name="manage:nexus_ai",
+        description="Manage NexusAI settings"
+    )
+    
+    db.add_all([
+        view_dashboard, manage_users, manage_tenants,
+        view_templates, manage_templates,
+        view_deployments, manage_deployments,
+        use_nexus_ai, manage_nexus_ai
+    ])
+    db.flush()
+    
+    # Create default roles
+    admin_role = Role(
+        name="admin",
+        description="Administrator role"
+    )
+    
+    user_role = Role(
+        name="user",
+        description="Regular user role"
+    )
+    
+    msp_role = Role(
+        name="msp",
+        description="Managed Service Provider role"
+    )
+    
+    db.add_all([admin_role, user_role, msp_role])
+    db.flush()
     
     # Assign permissions to roles
-    # User role permissions
-    user_permissions = [
-        "view:dashboard", 
-        "view:catalog", 
-        "deploy:template", 
-        "view:deployments", 
-        "view:templates",
-        "view:environments",
-        "view:cloud-accounts",
-        "view:settings",
-        "use:nexus-ai"
+    admin_role.permissions = [
+        view_dashboard, manage_users, manage_tenants,
+        view_templates, manage_templates,
+        view_deployments, manage_deployments,
+        use_nexus_ai, manage_nexus_ai
     ]
     
-    for perm_name in user_permissions:
-        permission = db.query(Permission).filter(Permission.name == perm_name).first()
-        if permission:
-            db.add(RolePermission(role_id=user_role.id, permission_id=permission.id))
-    
-    # Admin role permissions
-    admin_permissions = [
-        "view:dashboard", 
-        "view:catalog", 
-        "deploy:template", 
-        "view:deployments", 
-        "manage:deployments",
-        "view:templates",
-        "manage:templates",
-        "view:environments",
-        "manage:environments",
-        "view:cloud-accounts",
-        "manage:cloud-accounts",
-        "view:users",
-        "manage:users",
-        "view:settings",
-        "manage:settings",
-        "use:nexus-ai"
+    user_role.permissions = [
+        view_dashboard,
+        view_templates,
+        view_deployments,
+        use_nexus_ai
     ]
     
-    for perm_name in admin_permissions:
-        permission = db.query(Permission).filter(Permission.name == perm_name).first()
-        if permission:
-            db.add(RolePermission(role_id=admin_role.id, permission_id=permission.id))
+    msp_role.permissions = [
+        view_dashboard,
+        view_templates, manage_templates,
+        view_deployments, manage_deployments,
+        use_nexus_ai
+    ]
     
-    # MSP role permissions (all permissions)
-    for permission in permissions:
-        db.add(RolePermission(role_id=msp_role.id, permission_id=permission.id))
+    db.flush()
     
-    db.commit()
-    
-    # Create tenants
-    tenant1 = Tenant(
-        tenant_id="tenant-1",
-        name="Acme Corp",
-        description="Main corporate tenant"
-    )
-    
-    tenant2 = Tenant(
-        tenant_id="tenant-2",
-        name="Dev Team",
-        description="Development team workspace"
-    )
-    
-    db.add(tenant1)
-    db.add(tenant2)
-    db.commit()
-    
-    # Create users
+    # Create default users
     admin_user = User(
-        user_id="user-1",
+        user_id="admin",
         name="Admin User",
         email="admin@example.com",
-        password_hash=get_password_hash("password"),
+        hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",  # "password"
         role_id=admin_role.id,
-        tenant_id=tenant1.id
+        tenant_id=default_tenant.id
     )
     
     regular_user = User(
-        user_id="user-2",
+        user_id="user",
         name="Regular User",
         email="user@example.com",
-        password_hash=get_password_hash("password"),
+        hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",  # "password"
         role_id=user_role.id,
-        tenant_id=tenant1.id
+        tenant_id=acme_tenant.id
     )
     
     msp_user = User(
-        user_id="user-3",
+        user_id="msp",
         name="MSP User",
         email="msp@example.com",
-        password_hash=get_password_hash("password"),
+        hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",  # "password"
         role_id=msp_role.id,
-        tenant_id=tenant2.id
+        tenant_id=default_tenant.id
     )
     
-    db.add(admin_user)
-    db.add(regular_user)
-    db.add(msp_user)
+    db.add_all([admin_user, regular_user, msp_user])
     db.commit()
 
 

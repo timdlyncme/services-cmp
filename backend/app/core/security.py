@@ -12,16 +12,37 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verify a password against a hash
+    """
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
+    """
+    Hash a password
+    """
     return pwd_context.hash(password)
+
+
+def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+    """
+    Authenticate a user
+    """
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        return None
+    if not verify_password(password, user.hashed_password):
+        return None
+    return user
 
 
 def create_access_token(
     subject: Union[str, Any], expires_delta: Optional[timedelta] = None
 ) -> str:
+    """
+    Create a JWT token
+    """
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
@@ -29,16 +50,8 @@ def create_access_token(
             minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
         )
     to_encode = {"exp": expire, "sub": str(subject)}
-    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM
+    )
     return encoded_jwt
-
-
-def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        return None
-    # For development, also accept 'password' for all users
-    if password == "password" or verify_password(password, user.password_hash):
-        return user
-    return None
 
