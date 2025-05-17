@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -8,15 +8,29 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Fingerprint, Server } from "lucide-react";
+import { Fingerprint, Server, AlertCircle, CheckCircle2 } from "lucide-react";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, isServerConnected, checkServerConnection } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check server connection on component mount
+    const checkConnection = async () => {
+      await checkServerConnection();
+    };
+    
+    checkConnection();
+    
+    // Set up interval to check connection every 10 seconds
+    const interval = setInterval(checkConnection, 10000);
+    
+    return () => clearInterval(interval);
+  }, [checkServerConnection]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +41,11 @@ const Login = () => {
       await login(email, password);
       navigate("/");
     } catch (error) {
-      setError("Invalid email or password. Please try again.");
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError("Invalid email or password. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -54,6 +72,19 @@ const Login = () => {
           <CardDescription className="text-center">
             Sign in to your account to continue
           </CardDescription>
+          <div className="flex items-center justify-center mt-2">
+            {isServerConnected ? (
+              <div className="flex items-center text-green-500 text-sm">
+                <CheckCircle2 className="h-4 w-4 mr-1" />
+                <span>Server connected</span>
+              </div>
+            ) : (
+              <div className="flex items-center text-red-500 text-sm">
+                <AlertCircle className="h-4 w-4 mr-1" />
+                <span>Server disconnected</span>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <Tabs defaultValue="email">
           <TabsList className="grid grid-cols-2 mx-6">
@@ -67,6 +98,13 @@ const Login = () => {
                   {error && (
                     <Alert variant="destructive">
                       <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+                  {!isServerConnected && (
+                    <Alert variant="destructive">
+                      <AlertDescription>
+                        Authentication server is not available. Please make sure the server is running.
+                      </AlertDescription>
                     </Alert>
                   )}
                   <div className="space-y-2">
@@ -91,7 +129,11 @@ const Login = () => {
                       required
                     />
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
+                  <Button 
+                    type="submit" 
+                    className="w-full" 
+                    disabled={isLoading || !isServerConnected}
+                  >
                     {isLoading ? "Signing in..." : "Sign In"}
                   </Button>
                 </div>
@@ -105,7 +147,7 @@ const Login = () => {
                   Enterprise SSO login is available for configured tenants.
                 </p>
                 <Input placeholder="company-domain.com" />
-                <Button className="w-full">Continue with SSO</Button>
+                <Button className="w-full" disabled={!isServerConnected}>Continue with SSO</Button>
               </div>
             </CardContent>
           </TabsContent>
