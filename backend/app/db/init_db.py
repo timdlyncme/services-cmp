@@ -1,170 +1,100 @@
+import logging
 from sqlalchemy.orm import Session
 
-from app.db.session import Base, engine
-from app.models.user import User, Role, Permission, Tenant, user_permissions, role_permissions
+from app.core.security import get_password_hash
+from app.db.session import Base, engine, SessionLocal
+from app.models.user import User, Role, Permission, Tenant
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
-def init_db(db: Session) -> None:
+def init_db() -> None:
     """
-    Initialize the database with default data
+    Initialize the database with some data
     """
-    # Create tables
-    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
     
-    # Check if we already have data
-    if db.query(User).first():
-        return
+    try:
+        # Create tables
+        Base.metadata.create_all(bind=engine)
+        
+        # Check if database is already initialized
+        if db.query(User).first():
+            logger.info("Database already initialized")
+            return
+        
+        # Create permissions
+        logger.info("Creating permissions")
+        permissions = {
+            "view:tenants": db.merge(Permission(name="view:tenants")),
+            "create:tenants": db.merge(Permission(name="create:tenants")),
+            "update:tenants": db.merge(Permission(name="update:tenants")),
+            "delete:tenants": db.merge(Permission(name="delete:tenants")),
+            "view:permissions": db.merge(Permission(name="view:permissions")),
+            "create:permissions": db.merge(Permission(name="create:permissions")),
+            "update:permissions": db.merge(Permission(name="update:permissions")),
+            "delete:permissions": db.merge(Permission(name="delete:permissions")),
+            "use:nexus_ai": db.merge(Permission(name="use:nexus_ai")),
+            "manage:nexus_ai": db.merge(Permission(name="manage:nexus_ai")),
+        }
+        
+        # Create roles
+        logger.info("Creating roles")
+        admin_role = Role(name="admin")
+        admin_role.permissions = list(permissions.values())
+        db.add(admin_role)
+        
+        user_role = Role(name="user")
+        user_role.permissions = [
+            permissions["view:tenants"],
+            permissions["use:nexus_ai"],
+        ]
+        db.add(user_role)
+        
+        # Create tenants
+        logger.info("Creating tenants")
+        default_tenant = Tenant(
+            tenant_id="default",
+            name="Default Tenant"
+        )
+        db.add(default_tenant)
+        
+        # Create users
+        logger.info("Creating users")
+        admin_user = User(
+            user_id="admin",
+            name="Admin User",
+            email="admin@example.com",
+            hashed_password=get_password_hash("admin"),
+            role=admin_role,
+            tenant=default_tenant
+        )
+        db.add(admin_user)
+        
+        test_user = User(
+            user_id="user",
+            name="Test User",
+            email="user@example.com",
+            hashed_password=get_password_hash("user"),
+            role=user_role,
+            tenant=default_tenant
+        )
+        db.add(test_user)
+        
+        db.commit()
+        logger.info("Database initialized")
     
-    # Create default tenants
-    default_tenant = Tenant(
-        tenant_id="default",
-        name="Default Tenant",
-        description="Default tenant for the system"
-    )
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+        db.rollback()
+        raise
     
-    acme_tenant = Tenant(
-        tenant_id="acme",
-        name="Acme Corporation",
-        description="Acme Corporation tenant"
-    )
-    
-    db.add(default_tenant)
-    db.add(acme_tenant)
-    db.flush()
-    
-    # Create default permissions
-    view_dashboard = Permission(
-        name="view:dashboard",
-        description="View dashboard"
-    )
-    
-    manage_users = Permission(
-        name="manage:users",
-        description="Manage users"
-    )
-    
-    manage_tenants = Permission(
-        name="manage:tenants",
-        description="Manage tenants"
-    )
-    
-    view_templates = Permission(
-        name="view:templates",
-        description="View templates"
-    )
-    
-    manage_templates = Permission(
-        name="manage:templates",
-        description="Manage templates"
-    )
-    
-    view_deployments = Permission(
-        name="view:deployments",
-        description="View deployments"
-    )
-    
-    manage_deployments = Permission(
-        name="manage:deployments",
-        description="Manage deployments"
-    )
-    
-    use_nexus_ai = Permission(
-        name="use:nexus_ai",
-        description="Use NexusAI"
-    )
-    
-    manage_nexus_ai = Permission(
-        name="manage:nexus_ai",
-        description="Manage NexusAI settings"
-    )
-    
-    db.add_all([
-        view_dashboard, manage_users, manage_tenants,
-        view_templates, manage_templates,
-        view_deployments, manage_deployments,
-        use_nexus_ai, manage_nexus_ai
-    ])
-    db.flush()
-    
-    # Create default roles
-    admin_role = Role(
-        name="admin",
-        description="Administrator role"
-    )
-    
-    user_role = Role(
-        name="user",
-        description="Regular user role"
-    )
-    
-    msp_role = Role(
-        name="msp",
-        description="Managed Service Provider role"
-    )
-    
-    db.add_all([admin_role, user_role, msp_role])
-    db.flush()
-    
-    # Assign permissions to roles
-    admin_role.permissions = [
-        view_dashboard, manage_users, manage_tenants,
-        view_templates, manage_templates,
-        view_deployments, manage_deployments,
-        use_nexus_ai, manage_nexus_ai
-    ]
-    
-    user_role.permissions = [
-        view_dashboard,
-        view_templates,
-        view_deployments,
-        use_nexus_ai
-    ]
-    
-    msp_role.permissions = [
-        view_dashboard,
-        view_templates, manage_templates,
-        view_deployments, manage_deployments,
-        use_nexus_ai
-    ]
-    
-    db.flush()
-    
-    # Create default users
-    admin_user = User(
-        user_id="admin",
-        name="Admin User",
-        email="admin@example.com",
-        hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",  # "password"
-        role_id=admin_role.id,
-        tenant_id=default_tenant.id
-    )
-    
-    regular_user = User(
-        user_id="user",
-        name="Regular User",
-        email="user@example.com",
-        hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",  # "password"
-        role_id=user_role.id,
-        tenant_id=acme_tenant.id
-    )
-    
-    msp_user = User(
-        user_id="msp",
-        name="MSP User",
-        email="msp@example.com",
-        hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",  # "password"
-        role_id=msp_role.id,
-        tenant_id=default_tenant.id
-    )
-    
-    db.add_all([admin_user, regular_user, msp_user])
-    db.commit()
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
-    from app.db.session import SessionLocal
-    
-    db = SessionLocal()
-    init_db(db)
-    db.close()
+    logger.info("Initializing database")
+    init_db()
 
