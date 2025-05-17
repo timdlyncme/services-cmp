@@ -1,4 +1,3 @@
-
 export type UserRole = "user" | "admin" | "msp";
 
 export interface Tenant {
@@ -16,6 +15,11 @@ export interface CloudAccount {
   tenantId: string;
 }
 
+export interface Permission {
+  name: string;
+  description?: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -23,6 +27,7 @@ export interface User {
   role: UserRole;
   tenantId: string;
   avatar?: string;
+  permissions?: Permission[];
 }
 
 // Badge variants for consistency
