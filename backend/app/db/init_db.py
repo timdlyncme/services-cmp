@@ -475,7 +475,14 @@ def init_db() -> None:
         
         for deployment_data in mock_deployments:
             tenant = db.query(Tenant).filter(Tenant.tenant_id == deployment_data["tenantId"]).first()
+            if not tenant:
+                logger.warning(f"Tenant with ID {deployment_data['tenantId']} not found, skipping deployment {deployment_data['id']}")
+                continue
+                
             template = templates.get(deployment_data["templateId"])
+            if not template:
+                logger.warning(f"Template with ID {deployment_data['templateId']} not found, skipping deployment {deployment_data['id']}")
+                continue
             
             # Find environment by name and tenant
             environment = db.query(Environment).filter(
@@ -483,29 +490,44 @@ def init_db() -> None:
                 Environment.tenant_id == tenant.id
             ).first()
             
+            if not environment:
+                logger.warning(f"Environment with name {deployment_data['environment']} for tenant {deployment_data['tenantId']} not found, skipping deployment {deployment_data['id']}")
+                continue
+            
             # Find a cloud account for this tenant with the right provider
             cloud_account = db.query(CloudAccount).filter(
                 CloudAccount.provider == deployment_data["provider"],
                 CloudAccount.tenant_id == tenant.id
             ).first()
             
-            if tenant and template and environment and cloud_account:
-                created_at = datetime.fromisoformat(deployment_data["createdAt"].replace("Z", "+00:00"))
-                updated_at = datetime.fromisoformat(deployment_data["updatedAt"].replace("Z", "+00:00"))
-                
-                deployment = Deployment(
-                    deployment_id=deployment_data["id"],
-                    name=deployment_data["name"],
-                    status=deployment_data["status"],
-                    created_at=created_at,
-                    updated_at=updated_at,
-                    template=template,
-                    environment=environment,
-                    cloud_account=cloud_account,
-                    tenant=tenant,
-                    created_by=acme_admin if tenant.tenant_id == "tenant-1" else startup_admin
-                )
-                db.add(deployment)
+            if not cloud_account:
+                logger.warning(f"Cloud account with provider {deployment_data['provider']} for tenant {deployment_data['tenantId']} not found, skipping deployment {deployment_data['id']}")
+                continue
+            
+            created_at = datetime.fromisoformat(deployment_data["createdAt"].replace("Z", "+00:00"))
+            updated_at = datetime.fromisoformat(deployment_data["updatedAt"].replace("Z", "+00:00"))
+            
+            # Find the appropriate user for the tenant
+            if tenant.tenant_id == "tenant-1":
+                created_by = acme_admin
+            elif tenant.tenant_id == "tenant-2":
+                created_by = startup_admin
+            else:
+                created_by = admin_user
+            
+            deployment = Deployment(
+                deployment_id=deployment_data["id"],
+                name=deployment_data["name"],
+                status=deployment_data["status"],
+                created_at=created_at,
+                updated_at=updated_at,
+                template=template,
+                environment=environment,
+                cloud_account=cloud_account,
+                tenant=tenant,
+                created_by=created_by
+            )
+            db.add(deployment)
         
         # Create integration configs from mock data
         logger.info("Creating integration configs from mock data")
@@ -570,20 +592,23 @@ def init_db() -> None:
         
         for integration_data in mock_integration_configs:
             tenant = db.query(Tenant).filter(Tenant.tenant_id == integration_data["tenantId"]).first()
-            if tenant:
-                last_checked = datetime.fromisoformat(integration_data["lastChecked"].replace("Z", "+00:00"))
+            if not tenant:
+                logger.warning(f"Tenant with ID {integration_data['tenantId']} not found, skipping integration {integration_data['id']}")
+                continue
                 
-                integration = IntegrationConfig(
-                    integration_id=integration_data["id"],
-                    name=integration_data["name"],
-                    type=integration_data["type"],
-                    provider=integration_data["provider"],
-                    status=integration_data["status"],
-                    last_checked=last_checked,
-                    settings=integration_data["settings"],
-                    tenant=tenant
-                )
-                db.add(integration)
+            last_checked = datetime.fromisoformat(integration_data["lastChecked"].replace("Z", "+00:00"))
+            
+            integration = IntegrationConfig(
+                integration_id=integration_data["id"],
+                name=integration_data["name"],
+                type=integration_data["type"],
+                provider=integration_data["provider"],
+                status=integration_data["status"],
+                last_checked=last_checked,
+                settings=integration_data["settings"],
+                tenant=tenant
+            )
+            db.add(integration)
         
         db.commit()
         logger.info("Database initialized with mock data")
