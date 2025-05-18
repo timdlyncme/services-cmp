@@ -50,6 +50,7 @@ class Permission(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
+    description = Column(String, nullable=True)
     
     # Relationships
     roles = relationship(
@@ -65,7 +66,7 @@ class Tenant(Base):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(String, unique=True, index=True)
     name = Column(String)
+    description = Column(String, nullable=True)
     
     # Relationships
     users = relationship("User", back_populates="tenant")
-

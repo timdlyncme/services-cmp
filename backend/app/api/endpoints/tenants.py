@@ -1,6 +1,6 @@
 from typing import Any, List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 
 from app.api.endpoints.auth import get_current_user
@@ -19,6 +19,12 @@ def get_tenants(
     """
     Get all tenants
     """
+    # Add CORS headers
+    response = Response()
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    
     # Check if user has permission to view tenants
     has_permission = any(p.name == "view:tenants" for p in current_user.role.permissions)
     if not has_permission:
@@ -42,3 +48,15 @@ def get_tenants(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving tenants: {str(e)}"
         )
+
+
+@router.options("/")
+def options_tenants():
+    """
+    Handle preflight requests for tenants
+    """
+    response = Response(status_code=200)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    return response

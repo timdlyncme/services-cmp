@@ -27,16 +27,16 @@ def init_db() -> None:
         # Create permissions
         logger.info("Creating permissions")
         permissions = {
-            "view:tenants": db.merge(Permission(name="view:tenants")),
-            "create:tenants": db.merge(Permission(name="create:tenants")),
-            "update:tenants": db.merge(Permission(name="update:tenants")),
-            "delete:tenants": db.merge(Permission(name="delete:tenants")),
-            "view:permissions": db.merge(Permission(name="view:permissions")),
-            "create:permissions": db.merge(Permission(name="create:permissions")),
-            "update:permissions": db.merge(Permission(name="update:permissions")),
-            "delete:permissions": db.merge(Permission(name="delete:permissions")),
-            "use:nexus_ai": db.merge(Permission(name="use:nexus_ai")),
-            "manage:nexus_ai": db.merge(Permission(name="manage:nexus_ai")),
+            "view:tenants": db.merge(Permission(name="view:tenants", description="View tenants")),
+            "create:tenants": db.merge(Permission(name="create:tenants", description="Create tenants")),
+            "update:tenants": db.merge(Permission(name="update:tenants", description="Update tenants")),
+            "delete:tenants": db.merge(Permission(name="delete:tenants", description="Delete tenants")),
+            "view:permissions": db.merge(Permission(name="view:permissions", description="View permissions")),
+            "create:permissions": db.merge(Permission(name="create:permissions", description="Create permissions")),
+            "update:permissions": db.merge(Permission(name="update:permissions", description="Update permissions")),
+            "delete:permissions": db.merge(Permission(name="delete:permissions", description="Delete permissions")),
+            "use:nexus_ai": db.merge(Permission(name="use:nexus_ai", description="Use NexusAI")),
+            "manage:nexus_ai": db.merge(Permission(name="manage:nexus_ai", description="Manage NexusAI")),
         }
         
         # Create roles
@@ -56,7 +56,8 @@ def init_db() -> None:
         logger.info("Creating tenants")
         default_tenant = Tenant(
             tenant_id="default",
-            name="Default Tenant"
+            name="Default Tenant",
+            description="Default tenant for all users"
         )
         db.add(default_tenant)
         
@@ -97,4 +98,3 @@ def init_db() -> None:
 if __name__ == "__main__":
     logger.info("Initializing database")
     init_db()
-
