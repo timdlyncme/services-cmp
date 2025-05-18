@@ -73,17 +73,7 @@ export class AuthService {
     try {
       console.log('Attempting login for:', email);
       
-      // FastAPI uses form data for OAuth2 login
-      const formData = new URLSearchParams();
-      formData.append('username', email);
-      formData.append('password', password);
-      
-      const response = await api.post('/auth/login', formData, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json'
-        }
-      });
+      const response = await api.post('/auth/login', { email, password });
       
       console.log('Login successful');
       return response.data;
@@ -93,7 +83,7 @@ export class AuthService {
         if (error.code === 'ERR_NETWORK') {
           throw new Error('Cannot connect to authentication server. Please make sure the server is running.');
         } else if (error.response) {
-          throw new Error(error.response.data.detail || 'Authentication failed');
+          throw new Error(error.response.data.error || 'Authentication failed');
         }
       }
       throw error;

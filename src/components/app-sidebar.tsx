@@ -101,7 +101,7 @@ const SidebarSection = ({ title, collapsed, children }: SidebarSectionProps) => 
 
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, currentTenant } = useAuth();
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
 
   useEffect(() => {
@@ -173,7 +173,7 @@ export function AppSidebar() {
         <div className="mt-auto">
           <SidebarSeparator />
           <div className="p-2">
-            {!collapsed && <TenantSwitcher />}
+            {!collapsed && currentTenant && <TenantSwitcher />}
           </div>
           <SidebarFooter className="p-2">
             <button

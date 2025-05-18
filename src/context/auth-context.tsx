@@ -110,7 +110,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const tenant = userTenants.find(t => 
                 savedTenantId ? t.id === savedTenantId : t.id === authUser.tenantId
               );
-              setCurrentTenant(tenant || userTenants[0]);
+              
+              if (tenant) {
+                setCurrentTenant(tenant);
+                localStorage.setItem("currentTenantId", tenant.id);
+              } else {
+                // If no matching tenant found, use the first one
+                setCurrentTenant(userTenants[0]);
+                localStorage.setItem("currentTenantId", userTenants[0].id);
+              }
             } else {
               console.warn("No tenants found for user, using default tenant");
               // Create a default tenant if none exists
@@ -122,6 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               };
               setTenants([defaultTenant]);
               setCurrentTenant(defaultTenant);
+              localStorage.setItem("currentTenantId", defaultTenant.id);
             }
           } else {
             // Token is invalid, clear localStorage

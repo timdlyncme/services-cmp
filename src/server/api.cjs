@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
@@ -49,7 +50,7 @@ const authenticateToken = (req, res, next) => {
   
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'Forbidden', details: 'Invalid or expired token' });
     }
     req.user = user;
     next();
@@ -110,7 +111,8 @@ app.post('/api/auth/login', async (req, res) => {
       { 
         userId: user.user_id, 
         email: user.email, 
-        role: user.role 
+        role: user.role,
+        tenantId: user.tenant_id
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -251,19 +253,29 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 // Get user tenants
 app.get('/api/auth/tenants', authenticateToken, async (req, res) => {
   try {
-    const { userId } = req.user;
-    console.log('Get tenants request for user ID:', userId);
+    const { userId, role } = req.user;
+    console.log('Get tenants request for user ID:', userId, 'with role:', role);
     
-    // For regular users, return only their tenant
+    let tenantsResult;
+    
     // For MSP users, return all tenants
-    const tenantsResult = await pool.query(
-      `SELECT t.id, t.tenant_id, t.name, t.description, t.created_at
-       FROM tenants t
-       WHERE t.id = (SELECT tenant_id FROM users WHERE user_id = $1)
-       OR (SELECT role_id FROM users WHERE user_id = $1) = (SELECT id FROM roles WHERE name = 'msp')
-       ORDER BY t.name`,
-      [userId]
-    );
+    // For admin and regular users, return only their tenant
+    if (role === 'msp') {
+      tenantsResult = await pool.query(
+        `SELECT t.id, t.tenant_id, t.name, t.description, t.created_at
+         FROM tenants t
+         ORDER BY t.name`
+      );
+    } else {
+      tenantsResult = await pool.query(
+        `SELECT t.id, t.tenant_id, t.name, t.description, t.created_at
+         FROM tenants t
+         JOIN users u ON t.id = u.tenant_id
+         WHERE u.user_id = $1
+         ORDER BY t.name`,
+        [userId]
+      );
+    }
     
     const tenants = tenantsResult.rows.map(row => ({
       id: row.tenant_id,
@@ -272,7 +284,7 @@ app.get('/api/auth/tenants', authenticateToken, async (req, res) => {
       createdAt: row.created_at
     }));
     
-    console.log('Tenants retrieved successfully for user ID:', userId);
+    console.log('Tenants retrieved successfully for user ID:', userId, 'Count:', tenants.length);
     res.json(tenants);
   } catch (error) {
     console.error('Get user tenants error:', error);
@@ -283,28 +295,17 @@ app.get('/api/auth/tenants', authenticateToken, async (req, res) => {
 // Check permission
 app.get('/api/auth/permission/:name', authenticateToken, async (req, res) => {
   try {
-    const { userId } = req.user;
+    const { userId, role } = req.user;
     const { name } = req.params;
-    console.log(`Permission check for user ID: ${userId}, permission: ${name}`);
+    console.log(`Permission check for user ID: ${userId}, role: ${role}, permission: ${name}`);
     
-    // First check if user is admin or msp, they have all permissions
-    const userRoleResult = await pool.query(
-      `SELECT r.name as role
-       FROM users u
-       JOIN roles r ON u.role_id = r.id
-       WHERE u.user_id = $1`,
-      [userId]
-    );
-    
-    if (userRoleResult.rows.length > 0) {
-      const userRole = userRoleResult.rows[0].role;
-      if (userRole === 'admin' || userRole === 'msp') {
-        console.log(`User ${userId} has role ${userRole}, granting permission: ${name}`);
-        return res.json({ hasPermission: true });
-      }
+    // Admin and MSP roles have all permissions
+    if (role === 'admin' || role === 'msp') {
+      console.log(`User ${userId} has role ${role}, automatically granting permission: ${name}`);
+      return res.json({ hasPermission: true });
     }
     
-    // Check specific permission
+    // For regular users, check specific permission
     const result = await pool.query(
       `SELECT COUNT(*) as count
        FROM permissions p
@@ -331,43 +332,47 @@ app.get('/api/auth/permission/:name', authenticateToken, async (req, res) => {
 // Get deployments
 app.get('/api/deployments', authenticateToken, async (req, res) => {
   try {
-    const { userId, role } = req.user;
+    const { userId, role, tenantId: userTenantId } = req.user;
     const { tenantId } = req.query;
-    console.log(`Get deployments request for user ID: ${userId}, tenant ID: ${tenantId}`);
+    console.log(`Get deployments request for user ID: ${userId}, role: ${role}, tenant ID: ${tenantId}`);
     
     // Check if user has access to the tenant
     let hasAccess = false;
     
-    if (role === 'admin' || role === 'msp') {
+    // MSP users have access to all tenants
+    if (role === 'msp') {
       hasAccess = true;
-    } else {
-      const tenantAccessResult = await pool.query(
-        `SELECT COUNT(*) as count
-         FROM tenants t
-         JOIN users u ON t.id = u.tenant_id
-         WHERE t.tenant_id = $1
-         AND u.user_id = $2`,
-        [tenantId, userId]
-      );
-      
-      hasAccess = parseInt(tenantAccessResult.rows[0].count) > 0;
+    } 
+    // Admin users have access to their own tenant
+    else if (role === 'admin' && userTenantId === tenantId) {
+      hasAccess = true;
+    }
+    // Regular users have access to their own tenant
+    else if (userTenantId === tenantId) {
+      hasAccess = true;
     }
     
     if (!hasAccess) {
       console.log(`User ${userId} does not have access to tenant ${tenantId}`);
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'Forbidden', details: 'You do not have access to this tenant' });
     }
     
     // Get deployments from database
     // For now, we'll use mock data since the deployments table might not exist yet
-    const mockDataPath = path.join(__dirname, '..', 'data', 'mock-data.ts');
-    const { mockDeployments } = require(mockDataPath);
-    
-    // Filter deployments by tenant ID
-    const deployments = mockDeployments.filter(d => d.tenantId === tenantId);
-    
-    console.log(`Deployments retrieved successfully for tenant ID: ${tenantId}`);
-    res.json(deployments);
+    try {
+      const mockData = require('./mock-data');
+      
+      // Filter deployments by tenant ID
+      const deployments = mockData.mockDeployments.filter(d => d.tenantId === tenantId);
+      
+      console.log(`Deployments retrieved successfully for tenant ID: ${tenantId}, count: ${deployments.length}`);
+      res.json(deployments);
+    } catch (mockError) {
+      console.error('Error loading mock deployments:', mockError);
+      
+      // Fallback to empty array
+      res.json([]);
+    }
   } catch (error) {
     console.error('Get deployments error:', error);
     res.status(500).json({ error: 'Internal server error', details: error.message });
@@ -377,43 +382,47 @@ app.get('/api/deployments', authenticateToken, async (req, res) => {
 // Get cloud accounts
 app.get('/api/cloud-accounts', authenticateToken, async (req, res) => {
   try {
-    const { userId, role } = req.user;
+    const { userId, role, tenantId: userTenantId } = req.user;
     const { tenantId } = req.query;
-    console.log(`Get cloud accounts request for user ID: ${userId}, tenant ID: ${tenantId}`);
+    console.log(`Get cloud accounts request for user ID: ${userId}, role: ${role}, tenant ID: ${tenantId}`);
     
     // Check if user has access to the tenant
     let hasAccess = false;
     
-    if (role === 'admin' || role === 'msp') {
+    // MSP users have access to all tenants
+    if (role === 'msp') {
       hasAccess = true;
-    } else {
-      const tenantAccessResult = await pool.query(
-        `SELECT COUNT(*) as count
-         FROM tenants t
-         JOIN users u ON t.id = u.tenant_id
-         WHERE t.tenant_id = $1
-         AND u.user_id = $2`,
-        [tenantId, userId]
-      );
-      
-      hasAccess = parseInt(tenantAccessResult.rows[0].count) > 0;
+    } 
+    // Admin users have access to their own tenant
+    else if (role === 'admin' && userTenantId === tenantId) {
+      hasAccess = true;
+    }
+    // Regular users have access to their own tenant
+    else if (userTenantId === tenantId) {
+      hasAccess = true;
     }
     
     if (!hasAccess) {
       console.log(`User ${userId} does not have access to tenant ${tenantId}`);
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'Forbidden', details: 'You do not have access to this tenant' });
     }
     
     // Get cloud accounts from database
     // For now, we'll use mock data since the cloud_accounts table might not exist yet
-    const mockDataPath = path.join(__dirname, '..', 'data', 'mock-data.ts');
-    const { mockCloudAccounts } = require(mockDataPath);
-    
-    // Filter cloud accounts by tenant ID
-    const cloudAccounts = mockCloudAccounts.filter(ca => ca.tenantId === tenantId);
-    
-    console.log(`Cloud accounts retrieved successfully for tenant ID: ${tenantId}`);
-    res.json(cloudAccounts);
+    try {
+      const mockData = require('./mock-data');
+      
+      // Filter cloud accounts by tenant ID
+      const cloudAccounts = mockData.mockCloudAccounts.filter(ca => ca.tenantId === tenantId);
+      
+      console.log(`Cloud accounts retrieved successfully for tenant ID: ${tenantId}, count: ${cloudAccounts.length}`);
+      res.json(cloudAccounts);
+    } catch (mockError) {
+      console.error('Error loading mock cloud accounts:', mockError);
+      
+      // Fallback to empty array
+      res.json([]);
+    }
   } catch (error) {
     console.error('Get cloud accounts error:', error);
     res.status(500).json({ error: 'Internal server error', details: error.message });
@@ -423,43 +432,47 @@ app.get('/api/cloud-accounts', authenticateToken, async (req, res) => {
 // Get templates
 app.get('/api/templates', authenticateToken, async (req, res) => {
   try {
-    const { userId, role } = req.user;
+    const { userId, role, tenantId: userTenantId } = req.user;
     const { tenantId } = req.query;
-    console.log(`Get templates request for user ID: ${userId}, tenant ID: ${tenantId}`);
+    console.log(`Get templates request for user ID: ${userId}, role: ${role}, tenant ID: ${tenantId}`);
     
     // Check if user has access to the tenant
     let hasAccess = false;
     
-    if (role === 'admin' || role === 'msp') {
+    // MSP users have access to all tenants
+    if (role === 'msp') {
       hasAccess = true;
-    } else {
-      const tenantAccessResult = await pool.query(
-        `SELECT COUNT(*) as count
-         FROM tenants t
-         JOIN users u ON t.id = u.tenant_id
-         WHERE t.tenant_id = $1
-         AND u.user_id = $2`,
-        [tenantId, userId]
-      );
-      
-      hasAccess = parseInt(tenantAccessResult.rows[0].count) > 0;
+    } 
+    // Admin users have access to their own tenant
+    else if (role === 'admin' && userTenantId === tenantId) {
+      hasAccess = true;
+    }
+    // Regular users have access to their own tenant
+    else if (userTenantId === tenantId) {
+      hasAccess = true;
     }
     
     if (!hasAccess) {
       console.log(`User ${userId} does not have access to tenant ${tenantId}`);
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'Forbidden', details: 'You do not have access to this tenant' });
     }
     
     // Get templates from database
     // For now, we'll use mock data since the templates table might not exist yet
-    const mockDataPath = path.join(__dirname, '..', 'data', 'mock-data.ts');
-    const { mockTemplates } = require(mockDataPath);
-    
-    // Filter templates by tenant ID
-    const templates = mockTemplates.filter(t => t.tenantId === tenantId);
-    
-    console.log(`Templates retrieved successfully for tenant ID: ${tenantId}`);
-    res.json(templates);
+    try {
+      const mockData = require('./mock-data');
+      
+      // Filter templates by tenant ID
+      const templates = mockData.mockTemplates.filter(t => t.tenantId === tenantId);
+      
+      console.log(`Templates retrieved successfully for tenant ID: ${tenantId}, count: ${templates.length}`);
+      res.json(templates);
+    } catch (mockError) {
+      console.error('Error loading mock templates:', mockError);
+      
+      // Fallback to empty array
+      res.json([]);
+    }
   } catch (error) {
     console.error('Get templates error:', error);
     res.status(500).json({ error: 'Internal server error', details: error.message });
@@ -469,31 +482,29 @@ app.get('/api/templates', authenticateToken, async (req, res) => {
 // Get environments
 app.get('/api/environments', authenticateToken, async (req, res) => {
   try {
-    const { userId, role } = req.user;
+    const { userId, role, tenantId: userTenantId } = req.user;
     const { tenantId } = req.query;
-    console.log(`Get environments request for user ID: ${userId}, tenant ID: ${tenantId}`);
+    console.log(`Get environments request for user ID: ${userId}, role: ${role}, tenant ID: ${tenantId}`);
     
     // Check if user has access to the tenant
     let hasAccess = false;
     
-    if (role === 'admin' || role === 'msp') {
+    // MSP users have access to all tenants
+    if (role === 'msp') {
       hasAccess = true;
-    } else {
-      const tenantAccessResult = await pool.query(
-        `SELECT COUNT(*) as count
-         FROM tenants t
-         JOIN users u ON t.id = u.tenant_id
-         WHERE t.tenant_id = $1
-         AND u.user_id = $2`,
-        [tenantId, userId]
-      );
-      
-      hasAccess = parseInt(tenantAccessResult.rows[0].count) > 0;
+    } 
+    // Admin users have access to their own tenant
+    else if (role === 'admin' && userTenantId === tenantId) {
+      hasAccess = true;
+    }
+    // Regular users have access to their own tenant
+    else if (userTenantId === tenantId) {
+      hasAccess = true;
     }
     
     if (!hasAccess) {
       console.log(`User ${userId} does not have access to tenant ${tenantId}`);
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'Forbidden', details: 'You do not have access to this tenant' });
     }
     
     // For now, return a mock list of environments
@@ -503,7 +514,7 @@ app.get('/api/environments', authenticateToken, async (req, res) => {
       { id: 'env-3', name: 'Production', description: 'Production environment', tenantId },
     ];
     
-    console.log(`Environments retrieved successfully for tenant ID: ${tenantId}`);
+    console.log(`Environments retrieved successfully for tenant ID: ${tenantId}, count: ${environments.length}`);
     res.json(environments);
   } catch (error) {
     console.error('Get environments error:', error);
