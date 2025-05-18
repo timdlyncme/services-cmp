@@ -91,10 +91,11 @@ const SidebarSection = ({ title, collapsed, children }: SidebarSectionProps) => 
 
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, logout } = useAuth();
 
   const toggleCollapse = () => setCollapsed(!collapsed);
 
+  // Check if user has admin or msp role
   const isAdmin = user?.role === "admin" || user?.role === "msp";
   const isMSP = user?.role === "msp";
 
@@ -160,16 +161,25 @@ export function AppSidebar() {
             {!collapsed && <TenantSwitcher />}
           </div>
           <SidebarFooter className="p-2">
-            <button
-              onClick={toggleCollapse}
-              className="w-full flex items-center justify-center p-2 rounded-md hover:bg-accent"
-            >
-              {collapsed ? (
-                <ChevronRight className="h-5 w-5" />
-              ) : (
-                <ChevronLeft className="h-5 w-5" />
-              )}
-            </button>
+            <div className="flex flex-col space-y-2">
+              <button
+                onClick={logout}
+                className="w-full flex items-center justify-center p-2 rounded-md hover:bg-accent text-muted-foreground hover:text-accent-foreground"
+              >
+                <LogOut className="h-5 w-5" />
+                {!collapsed && <span className="ml-2">Logout</span>}
+              </button>
+              <button
+                onClick={toggleCollapse}
+                className="w-full flex items-center justify-center p-2 rounded-md hover:bg-accent"
+              >
+                {collapsed ? (
+                  <ChevronRight className="h-5 w-5" />
+                ) : (
+                  <ChevronLeft className="h-5 w-5" />
+                )}
+              </button>
+            </div>
           </SidebarFooter>
         </div>
       </div>

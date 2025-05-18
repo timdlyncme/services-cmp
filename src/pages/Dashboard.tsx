@@ -25,10 +25,10 @@ interface CloudProviderDistribution {
 }
 
 const Dashboard = () => {
-  const { currentTenant } = useAuth();
+  const { currentTenant, user } = useAuth();
   const navigate = useNavigate();
   const [accounts, setAccounts] = useState<CloudAccount[]>([]);
-  const [deployments, setDeployments] = useState(mockDeployments);
+  const [deployments, setDeployments] = useState([]);
   const [providerStats, setProviderStats] = useState<ProviderStats[]>([]);
   const [statusStats, setStatusStats] = useState<StatusStats[]>([]);
   const [providerDistribution, setProviderDistribution] = useState<CloudProviderDistribution[]>([]);
@@ -106,6 +106,11 @@ const Dashboard = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        {user && (
+          <div className="text-sm text-muted-foreground">
+            Welcome, {user.name} ({user.role})
+          </div>
+        )}
       </div>
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -176,25 +181,31 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent className="px-2">
             <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={providerDistribution}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                >
-                  <XAxis dataKey="name" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="deployments" name="Deployments">
-                    {providerDistribution.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={providerColors[entry.name]} 
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {providerDistribution.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={providerDistribution}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                  >
+                    <XAxis dataKey="name" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="deployments" name="Deployments">
+                      {providerDistribution.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={providerColors[entry.name]} 
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-muted-foreground">No deployment data available</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -208,28 +219,34 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent className="px-2">
             <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusStats}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={5}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {statusStats.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={statusColors[entry.name]} 
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              {statusStats.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusStats}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={5}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {statusStats.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={statusColors[entry.name]} 
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-muted-foreground">No status data available</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -271,7 +288,7 @@ const Dashboard = () => {
             </div>
           </CardContent>
           <CardFooter>
-            <Button variant="outline" className="w-full" onClick={() => navigate('/settings')}>
+            <Button variant="outline" className="w-full" onClick={() => navigate('/cloud-accounts')}>
               Manage Cloud Accounts
             </Button>
           </CardFooter>

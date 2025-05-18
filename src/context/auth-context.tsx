@@ -38,6 +38,44 @@ const mockTenants: Tenant[] = [
   },
 ];
 
+// Mock permissions based on user role
+const getRolePermissions = (role: UserRole): Permission[] => {
+  const basePermissions: Permission[] = [
+    { name: "view:dashboard" },
+    { name: "view:catalog" },
+    { name: "view:deployments" },
+  ];
+
+  const adminPermissions: Permission[] = [
+    ...basePermissions,
+    { name: "view:cloud-accounts" },
+    { name: "view:environments" },
+    { name: "view:templates" },
+    { name: "view:users" },
+    { name: "view:settings" },
+    { name: "manage:users" },
+    { name: "manage:templates" },
+  ];
+
+  const mspPermissions: Permission[] = [
+    ...adminPermissions,
+    { name: "view:tenants" },
+    { name: "manage:tenants" },
+    { name: "manage:templates" },
+    { name: "use:nexus-ai" },
+  ];
+
+  switch (role) {
+    case "admin":
+      return adminPermissions;
+    case "msp":
+      return mspPermissions;
+    case "user":
+    default:
+      return basePermissions;
+  }
+};
+
 const mockUsers: User[] = [
   {
     id: "user-1",
@@ -102,17 +140,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const authUser = await authService.verifyToken(token);
           
           if (authUser) {
+            // Ensure user has permissions based on role
+            if (!authUser.permissions) {
+              authUser.permissions = getRolePermissions(authUser.role);
+            }
+            
             setUser(authUser);
             
             // Get user's tenants
             const userTenants = await authService.getUserTenants(authUser.id);
-            setTenants(userTenants);
+            setTenants(userTenants.length > 0 ? userTenants : mockTenants);
             
             // Set current tenant
             const savedTenantId = localStorage.getItem("currentTenantId");
             const tenant = userTenants.find(t => 
               savedTenantId ? t.id === savedTenantId : t.id === authUser.tenantId
-            );
+            ) || mockTenants.find(t => t.id === authUser.tenantId);
+            
             setCurrentTenant(tenant || null);
           } else {
             // Token is invalid, clear localStorage
@@ -148,15 +192,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Store token in localStorage
       localStorage.setItem("token", token);
       
+      // For demo purposes, if no permissions are returned from the API,
+      // assign permissions based on the user's role
+      if (!authUser.permissions) {
+        authUser.permissions = getRolePermissions(authUser.role);
+      }
+      
       // Set user in state
       setUser(authUser);
       
       // Get user's tenants
       const userTenants = await authService.getUserTenants(authUser.id);
-      setTenants(userTenants);
+      
+      // If no tenants are returned from the API, use mock tenants
+      const availableTenants = userTenants.length > 0 ? userTenants : mockTenants;
+      setTenants(availableTenants);
       
       // Set current tenant to user's default tenant
-      const defaultTenant = userTenants.find(t => t.id === authUser.tenantId) || null;
+      const defaultTenant = availableTenants.find(t => t.id === authUser.tenantId) || availableTenants[0];
       setCurrentTenant(defaultTenant);
       
       if (defaultTenant) {

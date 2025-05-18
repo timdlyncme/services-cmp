@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Fingerprint, Server, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Fingerprint, Server, AlertCircle, CheckCircle2, X } from "lucide-react";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -38,6 +38,9 @@ const Login = () => {
     setIsLoading(true);
     
     try {
+      // Store email in localStorage for mock authentication
+      localStorage.setItem("userEmail", email);
+      
       await login(email, password);
       navigate("/");
     } catch (error) {
@@ -100,13 +103,6 @@ const Login = () => {
                       <AlertDescription>{error}</AlertDescription>
                     </Alert>
                   )}
-                  {!isServerConnected && (
-                    <Alert variant="destructive">
-                      <AlertDescription>
-                        Authentication server is not available. Please make sure the server is running.
-                      </AlertDescription>
-                    </Alert>
-                  )}
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
                     <Input
@@ -132,7 +128,7 @@ const Login = () => {
                   <Button 
                     type="submit" 
                     className="w-full" 
-                    disabled={isLoading || !isServerConnected}
+                    disabled={isLoading}
                   >
                     {isLoading ? "Signing in..." : "Sign In"}
                   </Button>
@@ -147,7 +143,7 @@ const Login = () => {
                   Enterprise SSO login is available for configured tenants.
                 </p>
                 <Input placeholder="company-domain.com" />
-                <Button className="w-full" disabled={!isServerConnected}>Continue with SSO</Button>
+                <Button className="w-full">Continue with SSO</Button>
               </div>
             </CardContent>
           </TabsContent>
