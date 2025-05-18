@@ -26,9 +26,6 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
-# Add custom CORS middleware
-app.add_middleware(CORSMiddlewareWithOptions)
-
 # Set up CORS
 app.add_middleware(
     CORSMiddleware,
@@ -36,7 +33,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],  # Allow all methods
     allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all headers
 )
+
+# Add custom CORS middleware for handling OPTIONS requests
+app.add_middleware(CORSMiddlewareWithOptions)
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
@@ -50,4 +51,3 @@ def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-

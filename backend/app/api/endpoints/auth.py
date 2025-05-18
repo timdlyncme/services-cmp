@@ -53,12 +53,6 @@ def login_for_access_token(
     """
     OAuth2 compatible token login, get an access token for future requests
     """
-    # Add CORS headers
-    response = Response()
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(

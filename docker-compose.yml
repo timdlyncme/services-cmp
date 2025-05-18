@@ -27,12 +27,13 @@ services:
       - POSTGRES_USER=cmpuser
       - POSTGRES_PASSWORD=cmppassword
       - POSTGRES_DB=cmpdb
+      - BACKEND_CORS_ORIGINS=["*"]
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     volumes:
       - ./backend:/app
     restart: always
 
 volumes:
   postgres_data:
-

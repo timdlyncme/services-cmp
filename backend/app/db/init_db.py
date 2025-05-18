@@ -2,6 +2,7 @@ import logging
 from sqlalchemy.orm import Session
 import uuid
 from datetime import datetime, timedelta
+import time
 
 from app.core.security import get_password_hash
 from app.db.session import Base, engine, SessionLocal
@@ -16,6 +17,27 @@ def init_db() -> None:
     """
     Initialize the database with some data
     """
+    # Wait for database to be ready
+    max_retries = 10
+    retry_interval = 3
+    
+    for i in range(max_retries):
+        try:
+            # Try to connect to the database
+            db = SessionLocal()
+            db.execute("SELECT 1")
+            db.close()
+            logger.info("Database connection successful")
+            break
+        except Exception as e:
+            logger.warning(f"Database connection attempt {i+1}/{max_retries} failed: {e}")
+            if i < max_retries - 1:
+                logger.info(f"Retrying in {retry_interval} seconds...")
+                time.sleep(retry_interval)
+            else:
+                logger.error("Failed to connect to database after multiple attempts")
+                raise
+    
     db = SessionLocal()
     
     try:

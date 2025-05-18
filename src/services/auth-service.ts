@@ -10,7 +10,8 @@ const api = axios.create({
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  withCredentials: false // Disable sending cookies for cross-domain requests
 });
 
 export interface AuthUser extends User {
@@ -32,7 +33,8 @@ export class AuthService {
       
       const response = await api.post('/auth/login', formData, {
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json'
         }
       });
       
