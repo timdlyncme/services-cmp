@@ -352,7 +352,7 @@ def update_template(
         )
 
 
-@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{template_id}")
 def delete_template(
     template_id: str,
     current_user: User = Depends(get_current_user),
@@ -435,4 +435,3 @@ def options_template_by_id():
     response.headers["Access-Control-Allow-Methods"] = "GET, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
-
