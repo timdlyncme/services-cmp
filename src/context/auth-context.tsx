@@ -22,44 +22,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Initialize auth service
 const authService = new AuthService();
 
-// Mock data for demo purposes
-const mockTenants: Tenant[] = [
-  {
-    id: "tenant-1",
-    name: "Acme Corp",
-    description: "Main corporate tenant",
-    createdAt: "2023-01-15T12:00:00Z",
-  },
-  {
-    id: "tenant-2",
-    name: "Dev Team",
-    description: "Development team workspace",
-    createdAt: "2023-02-20T09:30:00Z",
-  },
-];
-
-const mockUsers: User[] = [
-  {
-    id: "user-1",
-    name: "Admin User",
-    email: "admin@example.com",
-    role: "admin",
-    tenantId: "tenant-1",
-  },
-  {
-    id: "user-2",
-    name: "Regular User",
-    email: "user@example.com",
-    role: "user",
-    tenantId: "tenant-1",
-  },
-  {
-    id: "user-3",
-    name: "MSP User",
-    email: "msp@example.com",
-    role: "msp",
-    tenantId: "tenant-2",
-  },
+// Default permissions for development
+const defaultPermissions: Permission[] = [
+  { name: "view:dashboard", description: "View dashboard" },
+  { name: "view:deployments", description: "View deployments" },
+  { name: "view:catalog", description: "View template catalog" },
+  { name: "view:cloud-accounts", description: "View cloud accounts" },
+  { name: "view:environments", description: "View environments" },
+  { name: "view:templates", description: "View templates" },
+  { name: "view:users", description: "View users and groups" },
+  { name: "view:settings", description: "View settings" },
+  { name: "view:tenants", description: "View tenants" },
+  { name: "manage:templates", description: "Manage templates" },
+  { name: "use:nexus-ai", description: "Use NexusAI" }
 ];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -102,18 +77,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const authUser = await authService.verifyToken(token);
           
           if (authUser) {
+            // Ensure user has permissions array
+            if (!authUser.permissions || authUser.permissions.length === 0) {
+              console.warn("User has no permissions, adding default permissions for development");
+              authUser.permissions = defaultPermissions;
+            }
+            
             setUser(authUser);
             
             // Get user's tenants
             const userTenants = await authService.getUserTenants(authUser.id);
-            setTenants(userTenants);
             
-            // Set current tenant
-            const savedTenantId = localStorage.getItem("currentTenantId");
-            const tenant = userTenants.find(t => 
-              savedTenantId ? t.id === savedTenantId : t.id === authUser.tenantId
-            );
-            setCurrentTenant(tenant || null);
+            if (userTenants && userTenants.length > 0) {
+              setTenants(userTenants);
+              
+              // Set current tenant
+              const savedTenantId = localStorage.getItem("currentTenantId");
+              const tenant = userTenants.find(t => 
+                savedTenantId ? t.id === savedTenantId : t.id === authUser.tenantId
+              );
+              setCurrentTenant(tenant || userTenants[0]);
+            } else {
+              console.warn("No tenants found for user, using default tenant");
+              // Create a default tenant if none exists
+              const defaultTenant = {
+                id: authUser.tenantId || "default-tenant",
+                name: "Default Tenant",
+                description: "Default tenant for development",
+                createdAt: new Date().toISOString()
+              };
+              setTenants([defaultTenant]);
+              setCurrentTenant(defaultTenant);
+            }
           } else {
             // Token is invalid, clear localStorage
             localStorage.removeItem("token");
@@ -145,6 +140,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Authenticate user
       const { user: authUser, token } = await authService.login(email, password);
       
+      // Ensure user has permissions array
+      if (!authUser.permissions || authUser.permissions.length === 0) {
+        console.warn("User has no permissions, adding default permissions for development");
+        authUser.permissions = defaultPermissions;
+      }
+      
       // Store token in localStorage
       localStorage.setItem("token", token);
       
@@ -153,13 +154,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Get user's tenants
       const userTenants = await authService.getUserTenants(authUser.id);
-      setTenants(userTenants);
       
-      // Set current tenant to user's default tenant
-      const defaultTenant = userTenants.find(t => t.id === authUser.tenantId) || null;
-      setCurrentTenant(defaultTenant);
-      
-      if (defaultTenant) {
+      if (userTenants && userTenants.length > 0) {
+        setTenants(userTenants);
+        
+        // Set current tenant to user's default tenant
+        const defaultTenant = userTenants.find(t => t.id === authUser.tenantId) || userTenants[0];
+        setCurrentTenant(defaultTenant);
+        
+        if (defaultTenant) {
+          localStorage.setItem("currentTenantId", defaultTenant.id);
+        }
+      } else {
+        console.warn("No tenants found for user, using default tenant");
+        // Create a default tenant if none exists
+        const defaultTenant = {
+          id: authUser.tenantId || "default-tenant",
+          name: "Default Tenant",
+          description: "Default tenant for development",
+          createdAt: new Date().toISOString()
+        };
+        setTenants([defaultTenant]);
+        setCurrentTenant(defaultTenant);
         localStorage.setItem("currentTenantId", defaultTenant.id);
       }
       
@@ -198,10 +214,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const hasPermission = (permission: string): boolean => {
-    if (!user || !user.permissions) return false;
+    if (!user) return false;
+    
+    // For development, if user has no permissions, grant all permissions
+    if (!user.permissions || user.permissions.length === 0) {
+      console.warn(`No permissions found for user, granting permission: ${permission}`);
+      return true;
+    }
     
     // Check if the user has the specific permission
-    return user.permissions.some(p => p.name === permission);
+    const hasSpecificPermission = user.permissions.some(p => p.name === permission);
+    
+    if (hasSpecificPermission) {
+      return true;
+    }
+    
+    // If user is admin or msp, grant all permissions
+    if (user.role === 'admin' || user.role === 'msp') {
+      return true;
+    }
+    
+    return false;
   };
 
   return (
