@@ -199,6 +199,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const hasPermission = (permission: string): boolean => {
     if (!user || !user.permissions) return false;
+    
+    // Check if the user has the specific permission
     return user.permissions.some(p => p.name === permission);
   };
 

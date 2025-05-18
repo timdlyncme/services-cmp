@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, NavLink } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { cn } from "@/lib/utils";
@@ -74,24 +74,44 @@ const NavItem = ({ to, icon: Icon, label, collapsed, permission }: NavItemProps)
   );
 };
 
-const SidebarSection = ({ title, collapsed, children }: SidebarSectionProps) => (
-  <div className="py-2">
-    {!collapsed && (
-      <div className="px-4 py-2">
-        <h3 className="text-xs font-semibold text-muted-foreground tracking-tight">
-          {title}
-        </h3>
+const SidebarSection = ({ title, collapsed, children }: SidebarSectionProps) => {
+  // Filter out null children (from NavItems that don't have permission)
+  const validChildren = React.Children.toArray(children).filter(child => child !== null);
+  
+  // If there are no valid children, don't render the section
+  if (validChildren.length === 0) {
+    return null;
+  }
+  
+  return (
+    <div className="py-2">
+      {!collapsed && (
+        <div className="px-4 py-2">
+          <h3 className="text-xs font-semibold text-muted-foreground tracking-tight">
+            {title}
+          </h3>
+        </div>
+      )}
+      <div className="space-y-1 px-2">
+        {validChildren}
       </div>
-    )}
-    <div className="space-y-1 px-2">
-      {children}
     </div>
-  </div>
-);
+  );
+};
 
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const { user, hasPermission } = useAuth();
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
+
+  useEffect(() => {
+    // Update permissions when user changes
+    if (user && user.permissions) {
+      setUserPermissions(user.permissions.map(p => p.name));
+    } else {
+      setUserPermissions([]);
+    }
+  }, [user]);
 
   const toggleCollapse = () => setCollapsed(!collapsed);
 
