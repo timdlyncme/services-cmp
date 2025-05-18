@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
@@ -8,8 +7,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
-import { mockDeployments } from "@/data/mock-data";
 import { Search, ArrowUpDown, AlertCircle, RefreshCw, Database } from "lucide-react";
+import axios from "axios";
+import { toast } from "sonner";
+
+// Import types but not the mock data
+import { CloudDeployment } from "@/types/cloud";
 
 interface DeploymentFilters {
   status: string;
@@ -18,11 +21,15 @@ interface DeploymentFilters {
   search: string;
 }
 
+const API_URL = 'http://localhost:8000/api';
+
 const Deployments = () => {
   const navigate = useNavigate();
-  const { currentTenant } = useAuth();
-  const [deployments, setDeployments] = useState<any[]>([]);
-  const [filteredDeployments, setFilteredDeployments] = useState<any[]>([]);
+  const { currentTenant, user } = useAuth();
+  const [deployments, setDeployments] = useState<CloudDeployment[]>([]);
+  const [filteredDeployments, setFilteredDeployments] = useState<CloudDeployment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<DeploymentFilters>({
     status: "all",
     provider: "all",
@@ -30,13 +37,63 @@ const Deployments = () => {
     search: ""
   });
 
+  const fetchDeployments = async () => {
+    if (!currentTenant) return;
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found");
+      }
+      
+      // Try to fetch from API first
+      try {
+        const response = await axios.get(`${API_URL}/deployments`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          params: {
+            tenantId: currentTenant.id
+          }
+        });
+        
+        setDeployments(response.data);
+        setFilteredDeployments(response.data);
+        setIsLoading(false);
+      } catch (apiError) {
+        console.warn("Failed to fetch deployments from API, using mock data:", apiError);
+        
+        // Fallback to mock data for development
+        // In production, this would be removed
+        import("@/data/mock-data").then(({ mockDeployments }) => {
+          const tenantDeployments = mockDeployments.filter(
+            deployment => deployment.tenantId === currentTenant.id
+          );
+          setDeployments(tenantDeployments);
+          setFilteredDeployments(tenantDeployments);
+          setIsLoading(false);
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching deployments:", error);
+      setError("Failed to load deployments. Please try again.");
+      setIsLoading(false);
+      
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to load deployments");
+      }
+    }
+  };
+
   useEffect(() => {
-    // In a real app, this would be an API call
-    const tenantDeployments = mockDeployments.filter(
-      deployment => deployment.tenantId === currentTenant?.id
-    );
-    setDeployments(tenantDeployments);
-    setFilteredDeployments(tenantDeployments);
+    if (currentTenant) {
+      fetchDeployments();
+    }
   }, [currentTenant]);
 
   useEffect(() => {
@@ -67,6 +124,11 @@ const Deployments = () => {
 
   const handleRowClick = (deploymentId: string) => {
     navigate(`/deployments/${deploymentId}`);
+  };
+
+  const handleRefresh = () => {
+    fetchDeployments();
+    toast.success("Refreshing deployments...");
   };
 
   const getStatusBadge = (status: string) => {
@@ -107,7 +169,7 @@ const Deployments = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
@@ -174,7 +236,21 @@ const Deployments = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {filteredDeployments.length > 0 ? (
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-10">
+              <RefreshCw className="h-10 w-10 text-muted-foreground mb-2 animate-spin" />
+              <h3 className="text-lg font-medium">Loading deployments...</h3>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-10">
+              <AlertCircle className="h-10 w-10 text-destructive mb-2" />
+              <h3 className="text-lg font-medium">Error loading deployments</h3>
+              <p className="text-muted-foreground">{error}</p>
+              <Button variant="outline" className="mt-4" onClick={fetchDeployments}>
+                Try Again
+              </Button>
+            </div>
+          ) : filteredDeployments.length > 0 ? (
             <div className="border rounded-md">
               <Table>
                 <TableHeader>
