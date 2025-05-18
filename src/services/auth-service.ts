@@ -34,6 +34,59 @@ const mockTenants: Tenant[] = [
   },
 ];
 
+// Define standard permissions for each role
+const standardPermissions = {
+  user: [
+    'view:dashboard',
+    'view:catalog',
+    'deploy:template',
+    'view:deployments',
+    'view:templates',
+    'view:environments',
+    'view:cloud-accounts',
+    'view:settings',
+    'use:nexus-ai'
+  ],
+  admin: [
+    'view:dashboard',
+    'view:catalog',
+    'deploy:template',
+    'view:deployments',
+    'manage:deployments',
+    'view:templates',
+    'manage:templates',
+    'view:environments',
+    'manage:environments',
+    'view:cloud-accounts',
+    'manage:cloud-accounts',
+    'view:users',
+    'manage:users',
+    'view:settings',
+    'manage:settings',
+    'use:nexus-ai'
+  ],
+  msp: [
+    'view:dashboard',
+    'view:catalog',
+    'deploy:template',
+    'view:deployments',
+    'manage:deployments',
+    'view:templates',
+    'manage:templates',
+    'view:environments',
+    'manage:environments',
+    'view:cloud-accounts',
+    'manage:cloud-accounts',
+    'view:users',
+    'manage:users',
+    'view:settings',
+    'manage:settings',
+    'view:tenants',
+    'manage:tenants',
+    'use:nexus-ai'
+  ]
+};
+
 export class AuthService {
   /**
    * Authenticate a user with email and password
@@ -56,6 +109,13 @@ export class AuthService {
         });
         
         console.log('Login successful');
+        
+        // Ensure user has permissions
+        if (!response.data.user.permissions || response.data.user.permissions.length === 0) {
+          // If no permissions are returned, add standard permissions based on role
+          response.data.user.permissions = this.getStandardPermissions(response.data.user.role);
+        }
+        
         return response.data;
       } catch (error) {
         console.error('API login failed, using mock data:', error);
@@ -92,10 +152,13 @@ export class AuthService {
           // Create a mock token
           const token = `mock-token-${Date.now()}`;
           
+          // Add standard permissions based on role
+          const permissions = this.getStandardPermissions(user.role);
+          
           return {
             user: {
               ...user,
-              permissions: [] // Permissions will be assigned in auth-context
+              permissions
             },
             token
           };
@@ -141,6 +204,12 @@ export class AuthService {
           response.data.name = response.data.email || 'User';
         }
         
+        // Ensure user has permissions
+        if (!response.data.permissions || response.data.permissions.length === 0) {
+          // If no permissions are returned, add standard permissions based on role
+          response.data.permissions = this.getStandardPermissions(response.data.role);
+        }
+        
         return response.data;
       } catch (error) {
         console.error('API token verification failed, using mock data:', error);
@@ -181,9 +250,12 @@ export class AuthService {
             : mockUsers[0];
           
           if (user) {
+            // Add standard permissions based on role
+            const permissions = this.getStandardPermissions(user.role);
+            
             return {
               ...user,
-              permissions: [] // Permissions will be assigned in auth-context
+              permissions
             };
           }
         }
@@ -278,5 +350,13 @@ export class AuthService {
       console.error('Health check error:', error);
       return false;
     }
+  }
+  
+  /**
+   * Get standard permissions for a role
+   */
+  private getStandardPermissions(role: UserRole): Permission[] {
+    const permissionNames = standardPermissions[role] || [];
+    return permissionNames.map(name => ({ name }));
   }
 }

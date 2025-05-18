@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, NavLink } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { cn } from "@/lib/utils";
@@ -48,9 +48,17 @@ interface SidebarSectionProps {
 
 const NavItem = ({ to, icon: Icon, label, collapsed, permission }: NavItemProps) => {
   const { hasPermission } = useAuth();
+  const [hasAccess, setHasAccess] = useState(true);
+  
+  useEffect(() => {
+    // Check if user has permission to see this item
+    if (permission) {
+      setHasAccess(hasPermission(permission));
+    }
+  }, [permission, hasPermission]);
   
   // If permission is required and user doesn't have it, don't render the item
-  if (permission && !hasPermission(permission)) {
+  if (permission && !hasAccess) {
     return null;
   }
   
@@ -92,12 +100,40 @@ const SidebarSection = ({ title, collapsed, children }: SidebarSectionProps) => 
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const { user, hasPermission, logout } = useAuth();
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
 
   const toggleCollapse = () => setCollapsed(!collapsed);
 
   // Check if user has admin or msp role
   const isAdmin = user?.role === "admin" || user?.role === "msp";
   const isMSP = user?.role === "msp";
+  
+  useEffect(() => {
+    // Pre-check all permissions to avoid re-renders
+    if (user) {
+      const allPermissions = [
+        'view:dashboard',
+        'view:catalog',
+        'view:deployments',
+        'view:cloud-accounts',
+        'view:environments',
+        'view:templates',
+        'view:users',
+        'view:settings',
+        'view:tenants',
+        'manage:templates',
+        'use:nexus-ai'
+      ];
+      
+      const permissionMap: Record<string, boolean> = {};
+      
+      allPermissions.forEach(permission => {
+        permissionMap[permission] = hasPermission(permission);
+      });
+      
+      setPermissions(permissionMap);
+    }
+  }, [user, hasPermission]);
 
   return (
     <Sidebar
@@ -123,9 +159,15 @@ export function AppSidebar() {
         <SidebarContent>
           {/* Core Services Section */}
           <SidebarSection title="Core Services" collapsed={collapsed}>
-            <NavItem to="/" icon={Activity} label="Dashboard" collapsed={collapsed} permission="view:dashboard" />
-            <NavItem to="/catalog" icon={FileCode} label="Template Catalog" collapsed={collapsed} permission="view:catalog" />
-            <NavItem to="/deployments" icon={Database} label="Deployments" collapsed={collapsed} permission="view:deployments" />
+            {permissions['view:dashboard'] && (
+              <NavItem to="/" icon={Activity} label="Dashboard" collapsed={collapsed} />
+            )}
+            {permissions['view:catalog'] && (
+              <NavItem to="/catalog" icon={FileCode} label="Template Catalog" collapsed={collapsed} />
+            )}
+            {permissions['view:deployments'] && (
+              <NavItem to="/deployments" icon={Database} label="Deployments" collapsed={collapsed} />
+            )}
           </SidebarSection>
 
           {/* Admin Settings Section - visible to admin and msp roles */}
@@ -133,11 +175,21 @@ export function AppSidebar() {
             <>
               <SidebarSeparator />
               <SidebarSection title="Tenant Settings" collapsed={collapsed}>
-                <NavItem to="/cloud-accounts" icon={CloudCog} label="Cloud Accounts" collapsed={collapsed} permission="view:cloud-accounts" />
-                <NavItem to="/environments" icon={Server} label="Environments" collapsed={collapsed} permission="view:environments" />
-                <NavItem to="/template-management" icon={NotebookText} label="Template Management" collapsed={collapsed} permission="view:templates" />
-                <NavItem to="/users-and-groups" icon={Shield} label="Users & Groups" collapsed={collapsed} permission="view:users" />
-                <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} permission="view:settings" />
+                {permissions['view:cloud-accounts'] && (
+                  <NavItem to="/cloud-accounts" icon={CloudCog} label="Cloud Accounts" collapsed={collapsed} />
+                )}
+                {permissions['view:environments'] && (
+                  <NavItem to="/environments" icon={Server} label="Environments" collapsed={collapsed} />
+                )}
+                {permissions['view:templates'] && (
+                  <NavItem to="/template-management" icon={NotebookText} label="Template Management" collapsed={collapsed} />
+                )}
+                {permissions['view:users'] && (
+                  <NavItem to="/users-and-groups" icon={Shield} label="Users & Groups" collapsed={collapsed} />
+                )}
+                {permissions['view:settings'] && (
+                  <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} />
+                )}
               </SidebarSection>
             </>
           )}
@@ -147,9 +199,15 @@ export function AppSidebar() {
             <>
               <SidebarSeparator />
               <SidebarSection title="MSP Management" collapsed={collapsed}>
-                <NavItem to="/tenants" icon={Users} label="Tenants" collapsed={collapsed} permission="view:tenants" />
-                <NavItem to="/msp-template-foundry" icon={Pickaxe} label="Template Foundry" collapsed={collapsed} permission="manage:templates" />
-                <NavItem to="/nexus-ai" icon={Brain} label="NexusAI" collapsed={collapsed} permission="use:nexus-ai" />
+                {permissions['view:tenants'] && (
+                  <NavItem to="/tenants" icon={Users} label="Tenants" collapsed={collapsed} />
+                )}
+                {permissions['manage:templates'] && (
+                  <NavItem to="/msp-template-foundry" icon={Pickaxe} label="Template Foundry" collapsed={collapsed} />
+                )}
+                {permissions['use:nexus-ai'] && (
+                  <NavItem to="/nexus-ai" icon={Brain} label="NexusAI" collapsed={collapsed} />
+                )}
               </SidebarSection>
             </>
           )}

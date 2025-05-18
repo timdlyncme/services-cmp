@@ -140,11 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const authUser = await authService.verifyToken(token);
           
           if (authUser) {
-            // Ensure user has permissions based on role
-            if (!authUser.permissions) {
-              authUser.permissions = getRolePermissions(authUser.role);
-            }
-            
+            // Set user in state
             setUser(authUser);
             
             // Get user's tenants
@@ -192,12 +188,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Store token in localStorage
       localStorage.setItem("token", token);
       
-      // For demo purposes, if no permissions are returned from the API,
-      // assign permissions based on the user's role
-      if (!authUser.permissions) {
-        authUser.permissions = getRolePermissions(authUser.role);
-      }
-      
       // Set user in state
       setUser(authUser);
       
@@ -238,6 +228,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentTenant(null);
     localStorage.removeItem("token");
     localStorage.removeItem("currentTenantId");
+    localStorage.removeItem("userEmail");
     toast.info("You have been logged out");
   };
 

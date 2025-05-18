@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { mockCloudAccounts, mockDeployments } from "@/data/mock-data";
 import { CloudProvider, DeploymentStatus } from "@/types/cloud";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
 import { CloudAccount } from "@/types/auth";
 import { Activity, Database } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { dataService } from "@/services/data-service";
 
 interface ProviderStats {
   name: CloudProvider;
@@ -32,6 +32,7 @@ const Dashboard = () => {
   const [providerStats, setProviderStats] = useState<ProviderStats[]>([]);
   const [statusStats, setStatusStats] = useState<StatusStats[]>([]);
   const [providerDistribution, setProviderDistribution] = useState<CloudProviderDistribution[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Colors for the charts
   const providerColors = {
@@ -49,58 +50,77 @@ const Dashboard = () => {
   };
   
   useEffect(() => {
-    if (currentTenant) {
-      // Filter accounts and deployments by tenant
-      const tenantAccounts = mockCloudAccounts.filter(
-        account => account.tenantId === currentTenant.id
-      );
-      setAccounts(tenantAccounts);
-      
-      const tenantDeployments = mockDeployments.filter(
-        deployment => deployment.tenantId === currentTenant.id
-      );
-      setDeployments(tenantDeployments);
-      
-      // Calculate provider stats
-      const providers = tenantAccounts.reduce<Record<CloudProvider, number>>((acc, account) => {
-        acc[account.provider] = (acc[account.provider] || 0) + 1;
-        return acc;
-      }, {} as Record<CloudProvider, number>);
-      
-      setProviderStats(
-        Object.entries(providers).map(([name, value]) => ({
-          name: name as CloudProvider,
-          value
-        }))
-      );
-      
-      // Calculate status stats
-      const statuses = tenantDeployments.reduce<Record<DeploymentStatus, number>>((acc, deployment) => {
-        acc[deployment.status] = (acc[deployment.status] || 0) + 1;
-        return acc;
-      }, {} as Record<DeploymentStatus, number>);
-      
-      setStatusStats(
-        Object.entries(statuses).map(([name, value]) => ({
-          name: name as DeploymentStatus,
-          value
-        }))
-      );
-      
-      // Calculate provider distribution for deployments
-      const distribution = tenantDeployments.reduce<Record<CloudProvider, number>>((acc, deployment) => {
-        acc[deployment.provider] = (acc[deployment.provider] || 0) + 1;
-        return acc;
-      }, {} as Record<CloudProvider, number>);
-      
-      setProviderDistribution(
-        Object.entries(distribution).map(([name, deployments]) => ({
-          name: name as CloudProvider,
-          deployments
-        }))
-      );
-    }
+    const fetchData = async () => {
+      if (currentTenant) {
+        setIsLoading(true);
+        try {
+          // Fetch cloud accounts
+          const tenantAccounts = await dataService.getCloudAccounts(currentTenant.id);
+          setAccounts(tenantAccounts);
+          
+          // Fetch deployments
+          const tenantDeployments = await dataService.getDeployments(currentTenant.id);
+          setDeployments(tenantDeployments);
+          
+          // Calculate provider stats
+          const providers = tenantAccounts.reduce<Record<CloudProvider, number>>((acc, account) => {
+            acc[account.provider] = (acc[account.provider] || 0) + 1;
+            return acc;
+          }, {} as Record<CloudProvider, number>);
+          
+          setProviderStats(
+            Object.entries(providers).map(([name, value]) => ({
+              name: name as CloudProvider,
+              value
+            }))
+          );
+          
+          // Calculate status stats
+          const statuses = tenantDeployments.reduce<Record<DeploymentStatus, number>>((acc, deployment) => {
+            acc[deployment.status] = (acc[deployment.status] || 0) + 1;
+            return acc;
+          }, {} as Record<DeploymentStatus, number>);
+          
+          setStatusStats(
+            Object.entries(statuses).map(([name, value]) => ({
+              name: name as DeploymentStatus,
+              value
+            }))
+          );
+          
+          // Calculate provider distribution for deployments
+          const distribution = tenantDeployments.reduce<Record<CloudProvider, number>>((acc, deployment) => {
+            acc[deployment.provider] = (acc[deployment.provider] || 0) + 1;
+            return acc;
+          }, {} as Record<CloudProvider, number>);
+          
+          setProviderDistribution(
+            Object.entries(distribution).map(([name, deployments]) => ({
+              name: name as CloudProvider,
+              deployments
+            }))
+          );
+        } catch (error) {
+          console.error("Error fetching dashboard data:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    
+    fetchData();
   }, [currentTenant]);
+  
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+          <p className="text-sm text-muted-foreground">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="space-y-6">
