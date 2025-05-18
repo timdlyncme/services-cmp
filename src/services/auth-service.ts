@@ -94,7 +94,7 @@ export class AuthService {
         return [];
       }
 
-      const response = await api.get('/auth/tenants', {
+      const response = await api.get('/tenants', {
         headers: {
           Authorization: `Bearer ${token}`
         }
