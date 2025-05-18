@@ -2,7 +2,7 @@ import axios from 'axios';
 import { User, Tenant, UserRole, Permission } from '@/types/auth';
 
 // API base URL
-const API_URL = 'http://localhost:3001/api';
+const API_URL = 'http://localhost:8000/api';
 
 // Create axios instance with default config
 const api = axios.create({
@@ -24,7 +24,18 @@ export class AuthService {
   async login(email: string, password: string): Promise<{ user: AuthUser; token: string }> {
     try {
       console.log('Attempting login for:', email);
-      const response = await api.post('/auth/login', { email, password });
+      
+      // FastAPI uses form data for OAuth2 login
+      const formData = new URLSearchParams();
+      formData.append('username', email);
+      formData.append('password', password);
+      
+      const response = await api.post('/auth/login', formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+      
       console.log('Login successful');
       return response.data;
     } catch (error) {
@@ -33,7 +44,7 @@ export class AuthService {
         if (error.code === 'ERR_NETWORK') {
           throw new Error('Cannot connect to authentication server. Please make sure the server is running.');
         } else if (error.response) {
-          throw new Error(error.response.data.error || 'Authentication failed');
+          throw new Error(error.response.data.detail || 'Authentication failed');
         }
       }
       throw error;
@@ -45,11 +56,25 @@ export class AuthService {
    */
   async verifyToken(token: string): Promise<AuthUser | null> {
     try {
-      const response = await api.get('/auth/verify', {
+      // First verify the token
+      await api.get('/auth/verify', {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
+      
+      // Then get the user data
+      const response = await api.get('/auth/me', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      // Add default name if not provided
+      if (!response.data.name) {
+        response.data.name = response.data.email || 'User';
+      }
+      
       return response.data;
     } catch (error) {
       console.error('Token verification error:', error);
@@ -67,7 +92,7 @@ export class AuthService {
         return [];
       }
 
-      const response = await api.get('/auth/tenants', {
+      const response = await api.get('/tenants', {
         headers: {
           Authorization: `Bearer ${token}`
         }

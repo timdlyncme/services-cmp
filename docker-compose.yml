@@ -1,19 +1,37 @@
-version: '3.8'
+version: '3'
 
 services:
-  postgres:
-    image: postgres:14
-    container_name: cmp-postgres
-    restart: always
+  db:
+    image: postgres:15
     environment:
-      POSTGRES_USER: cmpuser
-      POSTGRES_PASSWORD: cmppassword
-      POSTGRES_DB: cmpdb
+      - POSTGRES_USER=cmpuser
+      - POSTGRES_PASSWORD=cmppassword
+      - POSTGRES_DB=cmpdb
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cmpuser -d cmpdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_SERVER=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=cmpuser
+      - POSTGRES_PASSWORD=cmppassword
+      - POSTGRES_DB=cmpdb
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+    restart: always
 
 volumes:
   postgres_data:
