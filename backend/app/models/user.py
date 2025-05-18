@@ -28,6 +28,8 @@ class User(Base):
     
     tenant_id = Column(Integer, ForeignKey("tenants.id"))
     tenant = relationship("Tenant", back_populates="users")
+    
+    deployments = relationship("Deployment", back_populates="created_by")
 
 
 class Role(Base):
@@ -35,6 +37,7 @@ class Role(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
+    description = Column(String, nullable=True)
     
     # Relationships
     users = relationship("User", back_populates="role")
@@ -70,3 +73,7 @@ class Tenant(Base):
     
     # Relationships
     users = relationship("User", back_populates="tenant")
+    cloud_accounts = relationship("CloudAccount", back_populates="tenant")
+    environments = relationship("Environment", back_populates="tenant")
+    templates = relationship("Template", back_populates="tenant")
+    deployments = relationship("Deployment", back_populates="tenant")
