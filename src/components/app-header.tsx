@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/context/auth-context";
@@ -18,7 +17,10 @@ export function AppHeader() {
 
   if (!user) return null;
   
-  const initials = user.name
+  // Safely handle user.name - use email or default if name is not available
+  const userName = user.name || user.email || "User";
+  
+  const initials = userName
     .split(" ")
     .map((n) => n[0])
     .join("")
@@ -39,7 +41,7 @@ export function AppHeader() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user.avatar} alt={user.name} />
+                  <AvatarImage src={user.avatar} alt={userName} />
                   <AvatarFallback>{initials}</AvatarFallback>
                 </Avatar>
               </Button>
@@ -47,7 +49,7 @@ export function AppHeader() {
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{user.name}</p>
+                  <p className="text-sm font-medium leading-none">{userName}</p>
                   <p className="text-xs leading-none text-muted-foreground">
                     {user.email}
                   </p>

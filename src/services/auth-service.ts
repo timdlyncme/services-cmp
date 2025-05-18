@@ -56,11 +56,25 @@ export class AuthService {
    */
   async verifyToken(token: string): Promise<AuthUser | null> {
     try {
-      const response = await api.get('/auth/verify', {
+      // First verify the token
+      await api.get('/auth/verify', {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
+      
+      // Then get the user data
+      const response = await api.get('/auth/me', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      // Add default name if not provided
+      if (!response.data.name) {
+        response.data.name = response.data.email || 'User';
+      }
+      
       return response.data;
     } catch (error) {
       console.error('Token verification error:', error);
