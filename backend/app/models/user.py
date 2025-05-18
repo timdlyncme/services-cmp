@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Table
 from sqlalchemy.orm import relationship
 
-from app.db.session import Base
+from app.models.base_models import Base
 
 
 # Association table for many-to-many relationship between roles and permissions
@@ -29,6 +29,7 @@ class User(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"))
     tenant = relationship("Tenant", back_populates="users")
     
+    # Use string reference to avoid circular import
     deployments = relationship("Deployment", back_populates="created_by")
 
 
@@ -73,6 +74,8 @@ class Tenant(Base):
     
     # Relationships
     users = relationship("User", back_populates="tenant")
+    
+    # Use string references to avoid circular imports
     cloud_accounts = relationship("CloudAccount", back_populates="tenant")
     environments = relationship("Environment", back_populates="tenant")
     templates = relationship("Template", back_populates="tenant")
