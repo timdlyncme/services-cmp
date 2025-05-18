@@ -6,11 +6,12 @@ from sqlalchemy.orm import Session
 from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import Tenant, User
+from app.schemas.tenant import TenantResponse
 
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("/", response_model=List[TenantResponse])
 def get_tenants(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -26,6 +27,18 @@ def get_tenants(
             detail="Not enough permissions"
         )
     
-    tenants = db.query(Tenant).all()
-    return tenants
-
+    try:
+        tenants = db.query(Tenant).all()
+        return [
+            TenantResponse(
+                id=tenant.id,
+                tenant_id=tenant.tenant_id,
+                name=tenant.name,
+                description=tenant.description
+            ) for tenant in tenants
+        ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving tenants: {str(e)}"
+        )

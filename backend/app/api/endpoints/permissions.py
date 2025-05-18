@@ -6,11 +6,12 @@ from sqlalchemy.orm import Session
 from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import Permission, User
+from app.schemas.permission import PermissionResponse
 
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("/", response_model=List[PermissionResponse])
 def get_permissions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -26,6 +27,17 @@ def get_permissions(
             detail="Not enough permissions"
         )
     
-    permissions = db.query(Permission).all()
-    return permissions
-
+    try:
+        permissions = db.query(Permission).all()
+        return [
+            PermissionResponse(
+                id=permission.id,
+                name=permission.name,
+                description=permission.description
+            ) for permission in permissions
+        ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving permissions: {str(e)}"
+        )

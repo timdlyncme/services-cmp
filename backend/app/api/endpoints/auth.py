@@ -116,3 +116,10 @@ def read_users_me(current_user: User = Depends(get_current_user)) -> Any:
     )
     
     return user_schema
+
+@router.get("/verify")
+def verify_token(current_user: User = Depends(get_current_user)) -> Any:
+    """
+    Verify if the token is valid
+    """
+    return {"valid": True}
