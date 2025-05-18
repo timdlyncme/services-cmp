@@ -16,9 +16,8 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
-# Create a startup script
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
+# Make the entrypoint script executable
+RUN chmod +x /app/entrypoint.sh
 
-CMD ["/start.sh"]
+CMD ["/app/entrypoint.sh"]
 
