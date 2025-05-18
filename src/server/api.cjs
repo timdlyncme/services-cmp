@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const path = require('path');
 const fs = require('fs');
+const swaggerUi = require('swagger-ui-express');
 require('dotenv').config();
 
 const app = express();
@@ -13,8 +14,9 @@ const port = process.env.API_PORT || 8000; // Changed to 8000 to match the clien
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:8080'],
-  credentials: true
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 
@@ -528,38 +530,9 @@ app.get('/api/health', (req, res) => {
 });
 
 // Swagger UI for API documentation
+app.use('/api/docs', swaggerUi.serve);
 app.get('/api/docs', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>API Documentation</title>
-      <meta charset="utf-8"/>
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <link rel="stylesheet" type="text/css" href="//unpkg.com/swagger-ui-dist@3/swagger-ui.css" />
-    </head>
-    <body>
-      <div id="swagger-ui"></div>
-      <script src="//unpkg.com/swagger-ui-dist@3/swagger-ui-bundle.js"></script>
-      <script>
-        const ui = SwaggerUIBundle({
-          url: "/api/swagger.json",
-          dom_id: '#swagger-ui',
-          presets: [
-            SwaggerUIBundle.presets.apis,
-            SwaggerUIBundle.SwaggerUIStandalonePreset
-          ],
-          layout: "BaseLayout"
-        })
-      </script>
-    </body>
-    </html>
-  `);
-});
-
-// Swagger JSON definition
-app.get('/api/swagger.json', (req, res) => {
-  res.json({
+  const swaggerDocument = {
     openapi: '3.0.0',
     info: {
       title: 'Cloud Management Platform API',
@@ -652,6 +625,38 @@ app.get('/api/swagger.json', (req, res) => {
                     type: 'array',
                     items: {
                       type: 'object'
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/auth/permission/{name}': {
+        get: {
+          summary: 'Check permission',
+          description: 'Check if the user has a specific permission',
+          parameters: [
+            {
+              name: 'name',
+              in: 'path',
+              required: true,
+              schema: {
+                type: 'string'
+              },
+              description: 'Permission name to check'
+            }
+          ],
+          responses: {
+            '200': {
+              description: 'Permission check result',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      hasPermission: { type: 'boolean' }
                     }
                   }
                 }
@@ -807,44 +812,13 @@ app.get('/api/swagger.json', (req, res) => {
         }
       }
     }
-  });
+  };
+  
+  return swaggerUi.setup(swaggerDocument)(req, res);
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ 
-    error: 'Internal server error', 
-    message: err.message,
-    stack: process.env.NODE_ENV === 'production' ? undefined : err.stack
-  });
-});
-
-// Start the server
-const server = app.listen(port, () => {
+// Start server
+app.listen(port, () => {
   console.log(`API server running on port ${port}`);
 });
 
-// Handle server errors
-server.on('error', (error) => {
-  if (error.code === 'EADDRINUSE') {
-    console.error(`Port ${port} is already in use. Please use a different port.`);
-  } else {
-    console.error('Server error:', error);
-  }
-  process.exit(1);
-});
-
-// Handle process termination
-process.on('SIGINT', () => {
-  console.log('Shutting down server...');
-  server.close(() => {
-    console.log('Server shut down');
-    pool.end(() => {
-      console.log('Database connection pool closed');
-      process.exit(0);
-    });
-  });
-});
-
-module.exports = app;
