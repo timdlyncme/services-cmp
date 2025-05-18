@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, Tenant, UserRole, Permission } from "@/types/auth";
 import { AuthService } from "@/services/auth-service";
+import { toast } from "sonner";
 
 interface AuthContextType {
   user: User | null;
@@ -8,10 +9,12 @@ interface AuthContextType {
   currentTenant: Tenant | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isServerConnected: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   switchTenant: (tenantId: string) => void;
   hasPermission: (permission: string) => boolean;
+  checkServerConnection: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -64,11 +67,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isServerConnected, setIsServerConnected] = useState(false);
+
+  const checkServerConnection = async (): Promise<boolean> => {
+    try {
+      const isConnected = await authService.checkHealth();
+      setIsServerConnected(isConnected);
+      return isConnected;
+    } catch (error) {
+      console.error("Server connection check failed:", error);
+      setIsServerConnected(false);
+      return false;
+    }
+  };
 
   useEffect(() => {
-    // Check for existing session
-    const checkAuth = async () => {
+    // Check server connection and existing session
+    const initAuth = async () => {
       try {
+        // First check if the server is running
+        const isConnected = await checkServerConnection();
+        
+        if (!isConnected) {
+          console.error("Authentication server is not available");
+          setIsLoading(false);
+          return;
+        }
+
         // Check for token in localStorage
         const token = localStorage.getItem("token");
         
@@ -96,19 +121,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } catch (error) {
-        console.error("Auth check failed:", error);
+        console.error("Auth initialization failed:", error);
       } finally {
         setIsLoading(false);
       }
     };
     
-    checkAuth();
+    initAuth();
   }, []);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     
     try {
+      // Check server connection first
+      const isConnected = await checkServerConnection();
+      
+      if (!isConnected) {
+        toast.error("Authentication server is not available. Please try again later.");
+        throw new Error("Authentication server is not available");
+      }
+      
       // Authenticate user
       const { user: authUser, token } = await authService.login(email, password);
       
@@ -129,8 +162,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (defaultTenant) {
         localStorage.setItem("currentTenantId", defaultTenant.id);
       }
+      
+      toast.success(`Welcome, ${authUser.name}!`);
     } catch (error) {
       console.error("Login failed:", error);
+      
+      // Show user-friendly error message
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Login failed. Please try again.");
+      }
+      
       throw error;
     } finally {
       setIsLoading(false);
@@ -142,6 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentTenant(null);
     localStorage.removeItem("token");
     localStorage.removeItem("currentTenantId");
+    toast.info("You have been logged out");
   };
 
   const switchTenant = (tenantId: string) => {
@@ -149,6 +193,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (tenant) {
       setCurrentTenant(tenant);
       localStorage.setItem("currentTenantId", tenantId);
+      toast.success(`Switched to ${tenant.name}`);
     }
   };
 
@@ -165,10 +210,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentTenant,
         isAuthenticated: !!user,
         isLoading,
+        isServerConnected,
         login,
         logout,
         switchTenant,
         hasPermission,
+        checkServerConnection,
       }}
     >
       {children}
