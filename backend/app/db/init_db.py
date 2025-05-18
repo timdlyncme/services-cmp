@@ -6,7 +6,8 @@ import time
 from sqlalchemy import text
 
 from app.core.security import get_password_hash
-from app.db.session import Base, engine, SessionLocal
+from app.db.session import engine, SessionLocal
+from app.models.base_models import Base
 from app.models.user import User, Role, Permission, Tenant
 from app.models.deployment import Deployment, CloudAccount, Environment, Template
 

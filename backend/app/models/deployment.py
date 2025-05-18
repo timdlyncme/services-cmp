@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, DateTime, T
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
-from app.db.session import Base
+from app.models.base_models import Base
 
 
 class CloudAccount(Base):
@@ -80,4 +80,3 @@ class Deployment(Base):
     
     created_by_id = Column(Integer, ForeignKey("users.id"))
     created_by = relationship("User", back_populates="deployments")
-
