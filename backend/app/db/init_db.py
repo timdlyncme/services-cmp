@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 import uuid
 from datetime import datetime, timedelta
 import time
+import json
 from sqlalchemy import text
 
 from app.core.security import get_password_hash
@@ -10,6 +11,7 @@ from app.db.session import engine, SessionLocal
 from app.models.base_models import Base
 from app.models.user import User, Role, Permission, Tenant
 from app.models.deployment import Deployment, CloudAccount, Environment, Template
+from app.models.integration import IntegrationConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -147,14 +149,14 @@ def init_db() -> None:
         db.add(default_tenant)
         
         acme_tenant = Tenant(
-            tenant_id="acme",
+            tenant_id="tenant-1",
             name="Acme Corporation",
             description="Enterprise customer with multiple cloud accounts"
         )
         db.add(acme_tenant)
         
         startup_tenant = Tenant(
-            tenant_id="startup",
+            tenant_id="tenant-2",
             name="Tech Startup",
             description="Small tech startup with limited cloud resources"
         )
@@ -222,297 +224,369 @@ def init_db() -> None:
         )
         db.add(startup_admin)
         
-        # Create cloud accounts
-        logger.info("Creating cloud accounts")
+        # Create cloud accounts from mock data
+        logger.info("Creating cloud accounts from mock data")
         
-        # Default tenant cloud accounts
-        default_azure = CloudAccount(
-            account_id=str(uuid.uuid4()),
-            name="Default Azure Account",
-            provider="azure",
-            status="connected",
-            tenant=default_tenant
-        )
-        db.add(default_azure)
+        # Mock cloud accounts data
+        mock_cloud_accounts = [
+            {
+                "id": "account-1",
+                "name": "Production Azure",
+                "provider": "azure",
+                "status": "connected",
+                "tenantId": "tenant-1",
+            },
+            {
+                "id": "account-2",
+                "name": "Development AWS",
+                "provider": "aws",
+                "status": "connected",
+                "tenantId": "tenant-1",
+            },
+            {
+                "id": "account-3",
+                "name": "GCP Research",
+                "provider": "gcp",
+                "status": "warning",
+                "tenantId": "tenant-1",
+            },
+            {
+                "id": "account-4",
+                "name": "Dev Team Azure",
+                "provider": "azure",
+                "status": "connected",
+                "tenantId": "tenant-2",
+            },
+        ]
         
-        default_aws = CloudAccount(
-            account_id=str(uuid.uuid4()),
-            name="Default AWS Account",
-            provider="aws",
-            status="connected",
-            tenant=default_tenant
-        )
-        db.add(default_aws)
-        
-        # Acme tenant cloud accounts
-        acme_azure_prod = CloudAccount(
-            account_id=str(uuid.uuid4()),
-            name="Acme Azure Production",
-            provider="azure",
-            status="connected",
-            tenant=acme_tenant
-        )
-        db.add(acme_azure_prod)
-        
-        acme_azure_dev = CloudAccount(
-            account_id=str(uuid.uuid4()),
-            name="Acme Azure Development",
-            provider="azure",
-            status="connected",
-            tenant=acme_tenant
-        )
-        db.add(acme_azure_dev)
-        
-        acme_aws = CloudAccount(
-            account_id=str(uuid.uuid4()),
-            name="Acme AWS Account",
-            provider="aws",
-            status="warning",
-            tenant=acme_tenant
-        )
-        db.add(acme_aws)
-        
-        acme_gcp = CloudAccount(
-            account_id=str(uuid.uuid4()),
-            name="Acme GCP Account",
-            provider="gcp",
-            status="error",
-            tenant=acme_tenant
-        )
-        db.add(acme_gcp)
-        
-        # Startup tenant cloud accounts
-        startup_azure = CloudAccount(
-            account_id=str(uuid.uuid4()),
-            name="Startup Azure Account",
-            provider="azure",
-            status="connected",
-            tenant=startup_tenant
-        )
-        db.add(startup_azure)
+        cloud_accounts = {}
+        for account_data in mock_cloud_accounts:
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == account_data["tenantId"]).first()
+            if tenant:
+                account = CloudAccount(
+                    account_id=account_data["id"],
+                    name=account_data["name"],
+                    provider=account_data["provider"],
+                    status=account_data["status"],
+                    tenant=tenant
+                )
+                db.add(account)
+                cloud_accounts[account_data["id"]] = account
         
         # Create environments
         logger.info("Creating environments")
         
-        # Default tenant environments
-        default_prod = Environment(
-            environment_id=str(uuid.uuid4()),
-            name="Production",
-            description="Production environment",
-            tenant=default_tenant
-        )
-        db.add(default_prod)
+        # Mock environments data
+        mock_environments = [
+            {
+                "id": "env-1",
+                "name": "Production",
+                "description": "Main production environment with strict security policies",
+                "tenantId": "tenant-1"
+            },
+            {
+                "id": "env-2",
+                "name": "Development",
+                "description": "Development environment for testing new features",
+                "tenantId": "tenant-1"
+            },
+            {
+                "id": "env-3",
+                "name": "Testing",
+                "description": "QA testing environment",
+                "tenantId": "tenant-1"
+            },
+            {
+                "id": "env-4",
+                "name": "Production",
+                "description": "Production environment",
+                "tenantId": "tenant-2"
+            },
+            {
+                "id": "env-5",
+                "name": "Development",
+                "description": "Development environment",
+                "tenantId": "tenant-2"
+            }
+        ]
         
-        default_dev = Environment(
-            environment_id=str(uuid.uuid4()),
-            name="Development",
-            description="Development environment",
-            tenant=default_tenant
-        )
-        db.add(default_dev)
+        environments = {}
+        for env_data in mock_environments:
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == env_data["tenantId"]).first()
+            if tenant:
+                environment = Environment(
+                    environment_id=env_data["id"],
+                    name=env_data["name"],
+                    description=env_data["description"],
+                    tenant=tenant
+                )
+                db.add(environment)
+                environments[env_data["id"]] = environment
         
-        # Acme tenant environments
-        acme_prod = Environment(
-            environment_id=str(uuid.uuid4()),
-            name="Production",
-            description="Production environment",
-            tenant=acme_tenant
-        )
-        db.add(acme_prod)
+        # Create templates from mock data
+        logger.info("Creating templates from mock data")
         
-        acme_staging = Environment(
-            environment_id=str(uuid.uuid4()),
-            name="Staging",
-            description="Staging environment",
-            tenant=acme_tenant
-        )
-        db.add(acme_staging)
+        # Mock templates data
+        mock_templates = [
+            {
+                "id": "template-1",
+                "name": "Basic Web Application",
+                "description": "Deploys a simple web application with supporting infrastructure",
+                "type": "terraform",
+                "provider": "azure",
+                "categories": ["web", "basic"],
+                "tenantId": "tenant-1",
+            },
+            {
+                "id": "template-2",
+                "name": "Containerized Microservices",
+                "description": "Kubernetes cluster for microservices deployment",
+                "type": "terraform",
+                "provider": "aws",
+                "categories": ["kubernetes", "microservices", "containers"],
+                "tenantId": "tenant-1",
+            },
+            {
+                "id": "template-3",
+                "name": "Google Cloud Storage with CDN",
+                "description": "Static website hosting with CDN",
+                "type": "terraform",
+                "provider": "gcp",
+                "categories": ["storage", "cdn", "static-site"],
+                "tenantId": "tenant-1",
+            },
+            {
+                "id": "template-4",
+                "name": "Virtual Machine Scale Set",
+                "description": "Autoscaling VMs for high availability",
+                "type": "arm",
+                "provider": "azure",
+                "categories": ["virtual-machines", "autoscaling", "high-availability"],
+                "tenantId": "tenant-1",
+            },
+            {
+                "id": "template-5",
+                "name": "S3 Static Website",
+                "description": "Simple S3 bucket configured for website hosting",
+                "type": "cloudformation",
+                "provider": "aws",
+                "categories": ["storage", "static-site", "web"],
+                "tenantId": "tenant-1",
+            },
+            {
+                "id": "template-6",
+                "name": "Cloud SQL Database",
+                "description": "Managed PostgreSQL database on GCP",
+                "type": "terraform",
+                "provider": "gcp",
+                "categories": ["database", "postgresql"],
+                "tenantId": "tenant-2",
+            }
+        ]
         
-        acme_dev = Environment(
-            environment_id=str(uuid.uuid4()),
-            name="Development",
-            description="Development environment",
-            tenant=acme_tenant
-        )
-        db.add(acme_dev)
+        templates = {}
+        for template_data in mock_templates:
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == template_data["tenantId"]).first()
+            if tenant:
+                template = Template(
+                    template_id=template_data["id"],
+                    name=template_data["name"],
+                    description=template_data["description"],
+                    category=",".join(template_data["categories"]),
+                    provider=template_data["provider"],
+                    is_public=False,
+                    tenant=tenant
+                )
+                db.add(template)
+                templates[template_data["id"]] = template
         
-        acme_test = Environment(
-            environment_id=str(uuid.uuid4()),
-            name="Testing",
-            description="Testing environment",
-            tenant=acme_tenant
-        )
-        db.add(acme_test)
+        # Create deployments from mock data
+        logger.info("Creating deployments from mock data")
         
-        # Startup tenant environments
-        startup_prod = Environment(
-            environment_id=str(uuid.uuid4()),
-            name="Production",
-            description="Production environment",
-            tenant=startup_tenant
-        )
-        db.add(startup_prod)
+        # Mock deployments data
+        mock_deployments = [
+            {
+                "id": "deployment-1",
+                "name": "Production Web App",
+                "templateId": "template-1",
+                "provider": "azure",
+                "status": "running",
+                "environment": "Production",
+                "createdAt": "2023-05-10T08:30:00Z",
+                "updatedAt": "2023-05-10T09:15:00Z",
+                "tenantId": "tenant-1"
+            },
+            {
+                "id": "deployment-2",
+                "name": "Dev Microservices",
+                "templateId": "template-2",
+                "provider": "aws",
+                "status": "running",
+                "environment": "Development",
+                "createdAt": "2023-05-15T11:20:00Z",
+                "updatedAt": "2023-05-15T12:45:00Z",
+                "tenantId": "tenant-1"
+            },
+            {
+                "id": "deployment-3",
+                "name": "Marketing Website",
+                "templateId": "template-3",
+                "provider": "gcp",
+                "status": "running",
+                "environment": "Production",
+                "createdAt": "2023-06-01T09:00:00Z",
+                "updatedAt": "2023-06-01T09:45:00Z",
+                "tenantId": "tenant-1"
+            },
+            {
+                "id": "deployment-4",
+                "name": "API Backend VMs",
+                "templateId": "template-4",
+                "provider": "azure",
+                "status": "failed",
+                "environment": "Testing",
+                "createdAt": "2023-06-10T14:10:00Z",
+                "updatedAt": "2023-06-10T14:55:00Z",
+                "tenantId": "tenant-1"
+            },
+            {
+                "id": "deployment-5",
+                "name": "Documentation Site",
+                "templateId": "template-5",
+                "provider": "aws",
+                "status": "pending",
+                "environment": "Production",
+                "createdAt": "2023-06-15T10:30:00Z",
+                "updatedAt": "2023-06-15T10:40:00Z",
+                "tenantId": "tenant-1"
+            },
+            {
+                "id": "deployment-6",
+                "name": "Analytics Database",
+                "templateId": "template-6",
+                "provider": "gcp",
+                "status": "stopped",
+                "environment": "Development",
+                "createdAt": "2023-05-25T13:45:00Z",
+                "updatedAt": "2023-06-14T09:20:00Z",
+                "tenantId": "tenant-2"
+            }
+        ]
         
-        startup_dev = Environment(
-            environment_id=str(uuid.uuid4()),
-            name="Development",
-            description="Development environment",
-            tenant=startup_tenant
-        )
-        db.add(startup_dev)
+        for deployment_data in mock_deployments:
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == deployment_data["tenantId"]).first()
+            template = templates.get(deployment_data["templateId"])
+            
+            # Find environment by name and tenant
+            environment = db.query(Environment).filter(
+                Environment.name == deployment_data["environment"],
+                Environment.tenant_id == tenant.id
+            ).first()
+            
+            # Find a cloud account for this tenant with the right provider
+            cloud_account = db.query(CloudAccount).filter(
+                CloudAccount.provider == deployment_data["provider"],
+                CloudAccount.tenant_id == tenant.id
+            ).first()
+            
+            if tenant and template and environment and cloud_account:
+                created_at = datetime.fromisoformat(deployment_data["createdAt"].replace("Z", "+00:00"))
+                updated_at = datetime.fromisoformat(deployment_data["updatedAt"].replace("Z", "+00:00"))
+                
+                deployment = Deployment(
+                    deployment_id=deployment_data["id"],
+                    name=deployment_data["name"],
+                    status=deployment_data["status"],
+                    created_at=created_at,
+                    updated_at=updated_at,
+                    template=template,
+                    environment=environment,
+                    cloud_account=cloud_account,
+                    tenant=tenant,
+                    created_by=acme_admin if tenant.tenant_id == "tenant-1" else startup_admin
+                )
+                db.add(deployment)
         
-        # Create templates
-        logger.info("Creating templates")
+        # Create integration configs from mock data
+        logger.info("Creating integration configs from mock data")
         
-        # Common templates available to all tenants
-        web_app_template = Template(
-            template_id=str(uuid.uuid4()),
-            name="Web Application",
-            description="Basic web application with database",
-            category="Web",
-            provider="azure",
-            is_public=True
-        )
-        db.add(web_app_template)
+        # Mock integration configs data
+        mock_integration_configs = [
+            {
+                "id": "integration-1",
+                "name": "Azure Cloud",
+                "type": "cloud",
+                "provider": "azure",
+                "status": "connected",
+                "lastChecked": "2023-06-20T15:30:00Z",
+                "tenantId": "tenant-1",
+                "settings": {
+                    "clientId": "azure-client-id",
+                    "tenantId": "azure-tenant-id",
+                    "subscriptionId": "azure-subscription-id"
+                }
+            },
+            {
+                "id": "integration-2",
+                "name": "AWS Cloud",
+                "type": "cloud",
+                "provider": "aws",
+                "status": "connected",
+                "lastChecked": "2023-06-20T15:35:00Z",
+                "tenantId": "tenant-1",
+                "settings": {
+                    "accessKey": "aws-access-key",
+                    "region": "us-west-2"
+                }
+            },
+            {
+                "id": "integration-3",
+                "name": "Google Cloud",
+                "type": "cloud",
+                "provider": "gcp",
+                "status": "warning",
+                "lastChecked": "2023-06-20T15:40:00Z",
+                "tenantId": "tenant-1",
+                "settings": {
+                    "projectId": "gcp-project-id",
+                    "keyFilePath": "/path/to/key.json"
+                }
+            },
+            {
+                "id": "integration-4",
+                "name": "Azure OpenAI",
+                "type": "ai",
+                "provider": "openai",
+                "status": "connected",
+                "lastChecked": "2023-06-20T15:45:00Z",
+                "tenantId": "tenant-1",
+                "settings": {
+                    "endpoint": "https://openai.azure.com",
+                    "apiKey": "openai-api-key",
+                    "deploymentName": "gpt4"
+                }
+            }
+        ]
         
-        data_analytics_template = Template(
-            template_id=str(uuid.uuid4()),
-            name="Data Analytics Platform",
-            description="Data lake and analytics platform",
-            category="Data",
-            provider="azure",
-            is_public=True
-        )
-        db.add(data_analytics_template)
-        
-        kubernetes_template = Template(
-            template_id=str(uuid.uuid4()),
-            name="Kubernetes Cluster",
-            description="Managed Kubernetes cluster",
-            category="Container",
-            provider="azure",
-            is_public=True
-        )
-        db.add(kubernetes_template)
-        
-        # Tenant-specific templates
-        acme_custom_template = Template(
-            template_id=str(uuid.uuid4()),
-            name="Acme Custom App",
-            description="Custom application for Acme Corp",
-            category="Custom",
-            provider="azure",
-            is_public=False,
-            tenant=acme_tenant
-        )
-        db.add(acme_custom_template)
-        
-        # Create deployments
-        logger.info("Creating deployments")
-        
-        # Default tenant deployments
-        default_deployment1 = Deployment(
-            deployment_id=str(uuid.uuid4()),
-            name="Web App Production",
-            status="succeeded",
-            created_at=datetime.utcnow() - timedelta(days=10),
-            updated_at=datetime.utcnow() - timedelta(days=10),
-            template=web_app_template,
-            environment=default_prod,
-            cloud_account=default_azure,
-            tenant=default_tenant,
-            created_by=admin_user
-        )
-        db.add(default_deployment1)
-        
-        default_deployment2 = Deployment(
-            deployment_id=str(uuid.uuid4()),
-            name="Data Analytics Dev",
-            status="running",
-            created_at=datetime.utcnow() - timedelta(hours=2),
-            updated_at=datetime.utcnow() - timedelta(hours=2),
-            template=data_analytics_template,
-            environment=default_dev,
-            cloud_account=default_azure,
-            tenant=default_tenant,
-            created_by=admin_user
-        )
-        db.add(default_deployment2)
-        
-        # Acme tenant deployments
-        acme_deployment1 = Deployment(
-            deployment_id=str(uuid.uuid4()),
-            name="Web Application Cluster",
-            status="succeeded",
-            created_at=datetime.utcnow() - timedelta(days=30),
-            updated_at=datetime.utcnow() - timedelta(days=15),
-            template=web_app_template,
-            environment=acme_prod,
-            cloud_account=acme_azure_prod,
-            tenant=acme_tenant,
-            created_by=acme_admin
-        )
-        db.add(acme_deployment1)
-        
-        acme_deployment2 = Deployment(
-            deployment_id=str(uuid.uuid4()),
-            name="Data Platform",
-            status="succeeded",
-            created_at=datetime.utcnow() - timedelta(days=20),
-            updated_at=datetime.utcnow() - timedelta(days=20),
-            template=data_analytics_template,
-            environment=acme_prod,
-            cloud_account=acme_azure_prod,
-            tenant=acme_tenant,
-            created_by=acme_admin
-        )
-        db.add(acme_deployment2)
-        
-        acme_deployment3 = Deployment(
-            deployment_id=str(uuid.uuid4()),
-            name="Dev Kubernetes",
-            status="failed",
-            created_at=datetime.utcnow() - timedelta(days=5),
-            updated_at=datetime.utcnow() - timedelta(days=5),
-            template=kubernetes_template,
-            environment=acme_dev,
-            cloud_account=acme_azure_dev,
-            tenant=acme_tenant,
-            created_by=acme_user
-        )
-        db.add(acme_deployment3)
-        
-        acme_deployment4 = Deployment(
-            deployment_id=str(uuid.uuid4()),
-            name="Custom Application",
-            status="running",
-            created_at=datetime.utcnow() - timedelta(hours=6),
-            updated_at=datetime.utcnow() - timedelta(hours=6),
-            template=acme_custom_template,
-            environment=acme_staging,
-            cloud_account=acme_azure_dev,
-            tenant=acme_tenant,
-            created_by=acme_admin
-        )
-        db.add(acme_deployment4)
-        
-        # Startup tenant deployments
-        startup_deployment1 = Deployment(
-            deployment_id=str(uuid.uuid4()),
-            name="Web Application",
-            status="succeeded",
-            created_at=datetime.utcnow() - timedelta(days=15),
-            updated_at=datetime.utcnow() - timedelta(days=15),
-            template=web_app_template,
-            environment=startup_prod,
-            cloud_account=startup_azure,
-            tenant=startup_tenant,
-            created_by=startup_admin
-        )
-        db.add(startup_deployment1)
+        for integration_data in mock_integration_configs:
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == integration_data["tenantId"]).first()
+            if tenant:
+                last_checked = datetime.fromisoformat(integration_data["lastChecked"].replace("Z", "+00:00"))
+                
+                integration = IntegrationConfig(
+                    integration_id=integration_data["id"],
+                    name=integration_data["name"],
+                    type=integration_data["type"],
+                    provider=integration_data["provider"],
+                    status=integration_data["status"],
+                    last_checked=last_checked,
+                    settings=integration_data["settings"],
+                    tenant=tenant
+                )
+                db.add(integration)
         
         db.commit()
-        logger.info("Database initialized")
+        logger.info("Database initialized with mock data")
     
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
