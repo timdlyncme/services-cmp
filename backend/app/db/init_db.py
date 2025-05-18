@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 import uuid
 from datetime import datetime, timedelta
 import time
+from sqlalchemy import text
 
 from app.core.security import get_password_hash
 from app.db.session import Base, engine, SessionLocal
@@ -25,7 +26,7 @@ def init_db() -> None:
         try:
             # Try to connect to the database
             db = SessionLocal()
-            db.execute("SELECT 1")
+            db.execute(text("SELECT 1"))  # Use SQLAlchemy text() function
             db.close()
             logger.info("Database connection successful")
             break
