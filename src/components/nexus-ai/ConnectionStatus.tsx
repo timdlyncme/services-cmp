@@ -7,7 +7,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { NexusAIService, ConnectionStatus as Status } from '@/services/nexus-ai-service';
+import { useAzureOpenAI } from '@/contexts/AzureOpenAIContext';
 import { CheckCircle, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface ConnectionStatusProps {
@@ -15,40 +15,33 @@ interface ConnectionStatusProps {
 }
 
 export function ConnectionStatus({ onRefresh }: ConnectionStatusProps) {
-  const [status, setStatus] = useState<Status | null>(null);
-  const [loading, setLoading] = useState(false);
-  const nexusAIService = new NexusAIService();
+  const { 
+    isConfigured, 
+    isConnected, 
+    connectionStatus, 
+    testConnection, 
+    addLog 
+  } = useAzureOpenAI();
 
-  useEffect(() => {
-    checkStatus();
-  }, []);
-
-  const checkStatus = async () => {
-    try {
-      setLoading(true);
-      const status = await nexusAIService.checkStatus();
-      setStatus(status);
-      if (onRefresh) {
-        onRefresh();
-      }
-    } catch (error) {
-      console.error('Failed to check status:', error);
-    } finally {
-      setLoading(false);
+  const handleRefresh = async () => {
+    addLog('Refreshing connection status', 'info');
+    await testConnection();
+    if (onRefresh) {
+      onRefresh();
     }
   };
 
   const getStatusBadge = () => {
-    if (!status) {
+    if (!isConfigured) {
       return (
         <Badge variant="outline" className="ml-2">
           <AlertCircle className="h-4 w-4 mr-1" />
-          Unknown
+          Not Configured
         </Badge>
       );
     }
 
-    switch (status.status) {
+    switch (connectionStatus) {
       case 'connected':
         return (
           <Badge variant="success" className="ml-2">
@@ -56,18 +49,11 @@ export function ConnectionStatus({ onRefresh }: ConnectionStatusProps) {
             Connected
           </Badge>
         );
-      case 'not_configured':
+      case 'connecting':
         return (
           <Badge variant="outline" className="ml-2">
-            <AlertCircle className="h-4 w-4 mr-1" />
-            Not Configured
-          </Badge>
-        );
-      case 'deployment_not_found':
-        return (
-          <Badge variant="warning" className="ml-2">
-            <AlertCircle className="h-4 w-4 mr-1" />
-            Deployment Not Found
+            <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+            Connecting
           </Badge>
         );
       case 'error':
@@ -81,7 +67,7 @@ export function ConnectionStatus({ onRefresh }: ConnectionStatusProps) {
         return (
           <Badge variant="outline" className="ml-2">
             <AlertCircle className="h-4 w-4 mr-1" />
-            Unknown
+            Disconnected
           </Badge>
         );
     }
@@ -98,19 +84,26 @@ export function ConnectionStatus({ onRefresh }: ConnectionStatusProps) {
                 variant="ghost"
                 size="icon"
                 className="ml-1"
-                onClick={checkStatus}
-                disabled={loading}
+                onClick={handleRefresh}
+                disabled={connectionStatus === 'connecting'}
               >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 ${connectionStatus === 'connecting' ? 'animate-spin' : ''}`} />
               </Button>
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            <p>{status?.message || 'Check connection status'}</p>
+            <p>
+              {!isConfigured 
+                ? 'Azure OpenAI is not configured. Click Configure to set it up.' 
+                : connectionStatus === 'connected'
+                  ? 'Connected to Azure OpenAI'
+                  : connectionStatus === 'connecting'
+                    ? 'Connecting to Azure OpenAI...'
+                    : 'Failed to connect to Azure OpenAI. Check your configuration.'}
+            </p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
     </div>
   );
 }
-

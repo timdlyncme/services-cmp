@@ -8,13 +8,8 @@ import { ConnectionStatus } from '@/components/nexus-ai/ConnectionStatus';
 import { DebugLogs } from '@/components/nexus-ai/DebugLogs';
 import { ChatMessage as ChatMessageComponent } from '@/components/nexus-ai/ChatMessage';
 import { NexusAIService, ChatMessage } from '@/services/nexus-ai-service';
+import { useAzureOpenAI } from '@/contexts/AzureOpenAIContext';
 import { Send } from 'lucide-react';
-
-interface LogEntry {
-  timestamp: string;
-  level: 'info' | 'error' | 'warning';
-  message: string;
-}
 
 export default function NexusAI() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -29,22 +24,31 @@ export default function NexusAI() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const nexusAIService = new NexusAIService();
+  const { 
+    isConfigured, 
+    isConnected, 
+    connectionStatus, 
+    testConnection, 
+    logs, 
+    addLog 
+  } = useAzureOpenAI();
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    // Check connection status on component mount
+    if (isConfigured && !isConnected) {
+      testConnection();
+    }
+  }, [isConfigured, isConnected, testConnection]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const addLog = (level: 'info' | 'error' | 'warning', message: string) => {
-    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    setLogs((prevLogs) => [...prevLogs, { timestamp, level, message }]);
   };
 
   const handleSend = async () => {
@@ -60,19 +64,19 @@ export default function NexusAI() {
     setLoading(true);
 
     try {
-      addLog('info', `Sending message: ${input}`);
+      addLog(`Sending message: ${input}`, 'info');
       
       const response = await nexusAIService.chat({
         messages: [...messages, userMessage]
       });
       
-      addLog('info', `Received response: ${response.message.content.substring(0, 50)}...`);
-      addLog('info', `Tokens used: ${response.usage.total_tokens}`);
+      addLog(`Received response: ${response.message.content.substring(0, 50)}...`, 'info');
+      addLog(`Tokens used: ${response.usage.total_tokens}`, 'info');
       
       setMessages((prevMessages) => [...prevMessages, response.message]);
     } catch (error) {
       console.error('Chat error:', error);
-      addLog('error', `Error: ${error instanceof Error ? error.message : String(error)}`);
+      addLog(`Error: ${error instanceof Error ? error.message : String(error)}`, 'error');
       
       toast({
         title: 'Error',
@@ -100,22 +104,20 @@ export default function NexusAI() {
     }
   };
 
-  const handleRefresh = () => {
-    addLog('info', 'Connection status refreshed');
-  };
-
-  const handleConfigUpdate = () => {
-    addLog('info', 'Configuration updated');
-  };
-
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between p-4 border-b">
         <h1 className="text-2xl font-bold">NexusAI</h1>
         <div className="flex items-center space-x-2">
-          <ConnectionStatus onRefresh={handleRefresh} />
-          <ConfigDialog onConfigUpdate={handleConfigUpdate} />
-          <DebugLogs logs={logs} />
+          <ConnectionStatus />
+          <ConfigDialog />
+          <DebugLogs logs={logs.map(log => ({
+            timestamp: new Date(log.timestamp).toLocaleTimeString(),
+            level: log.level === 'success' || log.level === 'request' || log.level === 'response' 
+              ? 'info' 
+              : (log.level as 'info' | 'error' | 'warning'),
+            message: log.message
+          }))} />
         </div>
       </div>
       
@@ -137,10 +139,13 @@ export default function NexusAI() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={loading}
+            disabled={loading || !isConnected}
             className="flex-1"
           />
-          <Button onClick={handleSend} disabled={loading || !input.trim()}>
+          <Button 
+            onClick={handleSend} 
+            disabled={loading || !input.trim() || !isConnected}
+          >
             {loading ? (
               <span className="animate-spin">⏳</span>
             ) : (
@@ -148,6 +153,16 @@ export default function NexusAI() {
             )}
           </Button>
         </div>
+        {!isConfigured && (
+          <p className="text-sm text-muted-foreground mt-2">
+            Please configure Azure OpenAI settings to start chatting.
+          </p>
+        )}
+        {isConfigured && !isConnected && (
+          <p className="text-sm text-muted-foreground mt-2">
+            Connecting to Azure OpenAI...
+          </p>
+        )}
       </div>
     </div>
   );

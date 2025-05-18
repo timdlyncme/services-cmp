@@ -12,65 +12,84 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { NexusAIService, AzureOpenAIConfig } from '@/services/nexus-ai-service';
+import { useAzureOpenAI } from '@/contexts/AzureOpenAIContext';
+import { Settings } from 'lucide-react';
 
 interface ConfigDialogProps {
-  onConfigUpdate: () => void;
+  onConfigUpdate?: () => void;
 }
 
 export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [config, setConfig] = useState<AzureOpenAIConfig>({
-    api_key: '',
-    endpoint: '',
-    deployment_name: '',
-    api_version: '2023-05-15',
-  });
   const { toast } = useToast();
-  const nexusAIService = new NexusAIService();
+  const { 
+    config, 
+    updateConfig, 
+    testConnection, 
+    connectionStatus, 
+    addLog 
+  } = useAzureOpenAI();
+  
+  const [formValues, setFormValues] = useState({
+    apiKey: '',
+    endpoint: '',
+    deploymentName: '',
+    apiVersion: '2023-05-15',
+  });
+  
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (open) {
-      loadConfig();
-    }
-  }, [open]);
-
-  const loadConfig = async () => {
-    try {
-      setLoading(true);
-      const config = await nexusAIService.getConfig();
-      setConfig(config);
-    } catch (error) {
-      console.error('Failed to load config:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load configuration',
-        variant: 'destructive',
+      // Load current config values into form
+      setFormValues({
+        apiKey: config.apiKey || '',
+        endpoint: config.endpoint || '',
+        deploymentName: config.deploymentName || '',
+        apiVersion: config.apiVersion || '2023-05-15',
       });
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [open, config]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setConfig((prev) => ({ ...prev, [name]: value }));
+    setFormValues((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setLoading(true);
-      await nexusAIService.updateConfig(config);
-      toast({
-        title: 'Success',
-        description: 'Configuration updated successfully',
+      
+      // Update the configuration
+      updateConfig({
+        apiKey: formValues.apiKey,
+        endpoint: formValues.endpoint,
+        deploymentName: formValues.deploymentName,
+        apiVersion: formValues.apiVersion,
       });
-      onConfigUpdate();
-      setOpen(false);
+      
+      addLog('Configuration updated', 'success');
+      
+      // Test the connection
+      const success = await testConnection();
+      
+      if (success) {
+        toast({
+          title: 'Success',
+          description: 'Configuration updated and connection tested successfully',
+        });
+        
+        if (onConfigUpdate) {
+          onConfigUpdate();
+        }
+        
+        setOpen(false);
+      }
     } catch (error) {
       console.error('Failed to update config:', error);
+      addLog(`Failed to update configuration: ${error instanceof Error ? error.message : String(error)}`, 'error');
+      
       toast({
         title: 'Error',
         description: 'Failed to update configuration',
@@ -84,7 +103,10 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline">Configure</Button>
+        <Button variant="outline">
+          <Settings className="h-4 w-4 mr-2" />
+          Configure
+        </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
@@ -96,13 +118,13 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="api_key" className="text-right">
+              <Label htmlFor="apiKey" className="text-right">
                 API Key
               </Label>
               <Input
-                id="api_key"
-                name="api_key"
-                value={config.api_key}
+                id="apiKey"
+                name="apiKey"
+                value={formValues.apiKey}
                 onChange={handleChange}
                 className="col-span-3"
                 required
@@ -116,7 +138,7 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
               <Input
                 id="endpoint"
                 name="endpoint"
-                value={config.endpoint}
+                value={formValues.endpoint}
                 onChange={handleChange}
                 className="col-span-3"
                 required
@@ -124,13 +146,13 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="deployment_name" className="text-right">
+              <Label htmlFor="deploymentName" className="text-right">
                 Deployment
               </Label>
               <Input
-                id="deployment_name"
-                name="deployment_name"
-                value={config.deployment_name}
+                id="deploymentName"
+                name="deploymentName"
+                value={formValues.deploymentName}
                 onChange={handleChange}
                 className="col-span-3"
                 required
@@ -138,13 +160,13 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="api_version" className="text-right">
+              <Label htmlFor="apiVersion" className="text-right">
                 API Version
               </Label>
               <Input
-                id="api_version"
-                name="api_version"
-                value={config.api_version}
+                id="apiVersion"
+                name="apiVersion"
+                value={formValues.apiVersion}
                 onChange={handleChange}
                 className="col-span-3"
                 required
@@ -153,8 +175,8 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Saving...' : 'Save changes'}
+            <Button type="submit" disabled={loading || connectionStatus === 'connecting'}>
+              {loading || connectionStatus === 'connecting' ? 'Saving...' : 'Save changes'}
             </Button>
           </DialogFooter>
         </form>
@@ -162,4 +184,3 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
     </Dialog>
   );
 }
-
