@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation, NavLink } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { cn } from "@/lib/utils";
