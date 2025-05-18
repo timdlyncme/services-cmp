@@ -139,6 +139,10 @@ def init_db() -> None:
         msp_role.permissions = list(permissions.values())
         db.add(msp_role)
         
+        # Commit roles to the database so they have IDs
+        db.commit()
+        logger.info("Roles created and committed to database")
+        
         # Create tenants
         logger.info("Creating tenants")
         default_tenant = Tenant(
@@ -161,6 +165,10 @@ def init_db() -> None:
             description="Small tech startup with limited cloud resources"
         )
         db.add(startup_tenant)
+        
+        # Commit tenants to the database so they have IDs
+        db.commit()
+        logger.info("Tenants created and committed to database")
         
         # Create users
         logger.info("Creating users")
@@ -224,6 +232,10 @@ def init_db() -> None:
         )
         db.add(startup_admin)
         
+        # Commit users to the database so they have IDs
+        db.commit()
+        logger.info("Users created and committed to database")
+        
         # Create cloud accounts from mock data
         logger.info("Creating cloud accounts from mock data")
         
@@ -272,6 +284,10 @@ def init_db() -> None:
                 )
                 db.add(account)
                 cloud_accounts[account_data["id"]] = account
+        
+        # Commit cloud accounts to the database so they have IDs
+        db.commit()
+        logger.info("Cloud accounts created and committed to database")
         
         # Create environments
         logger.info("Creating environments")
@@ -322,6 +338,10 @@ def init_db() -> None:
                 )
                 db.add(environment)
                 environments[env_data["id"]] = environment
+        
+        # Commit environments to the database so they have IDs
+        db.commit()
+        logger.info("Environments created and committed to database")
         
         # Create templates from mock data
         logger.info("Creating templates from mock data")
@@ -400,8 +420,16 @@ def init_db() -> None:
                 db.add(template)
                 templates[template_data["id"]] = template
         
+        # Commit templates to the database so they have IDs
+        db.commit()
+        logger.info("Templates created and committed to database")
+        
         # Create deployments from mock data
         logger.info("Creating deployments from mock data")
+        
+        # Debug: List all tenants in the database
+        tenants = db.query(Tenant).all()
+        logger.info(f"Available tenants: {[t.tenant_id for t in tenants]}")
         
         # Mock deployments data
         mock_deployments = [
@@ -529,8 +557,16 @@ def init_db() -> None:
             )
             db.add(deployment)
         
+        # Commit deployments to the database so they have IDs
+        db.commit()
+        logger.info("Deployments created and committed to database")
+        
         # Create integration configs from mock data
         logger.info("Creating integration configs from mock data")
+        
+        # Debug: List all tenants in the database again
+        tenants = db.query(Tenant).all()
+        logger.info(f"Available tenants for integrations: {[t.tenant_id for t in tenants]}")
         
         # Mock integration configs data
         mock_integration_configs = [
@@ -610,7 +646,9 @@ def init_db() -> None:
             )
             db.add(integration)
         
+        # Final commit for all remaining entities
         db.commit()
+        logger.info("Integration configs created and committed to database")
         logger.info("Database initialized with mock data")
     
     except Exception as e:
