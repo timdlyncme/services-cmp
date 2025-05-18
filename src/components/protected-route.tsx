@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/auth-context';
+import { toast } from 'sonner';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -14,7 +15,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requiredPermission
 }) => {
-  const { isAuthenticated, isLoading, hasPermission } = useAuth();
+  const { isAuthenticated, isLoading, hasPermission, user } = useAuth();
   const location = useLocation();
   
   // Show loading state
@@ -28,12 +29,21 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
   
   // Check permission if required
-  if (requiredPermission && !hasPermission(requiredPermission)) {
-    return <Navigate to="/" replace />;
+  if (requiredPermission) {
+    const hasRequiredPermission = hasPermission(requiredPermission);
+    
+    if (!hasRequiredPermission) {
+      // Show toast notification for permission denied
+      useEffect(() => {
+        toast.error(`Access denied: You don't have the required permission (${requiredPermission})`);
+      }, []);
+      
+      // Redirect to dashboard
+      return <Navigate to="/" replace />;
+    }
   }
   
   return <>{children}</>;
 };
 
 export default ProtectedRoute;
-

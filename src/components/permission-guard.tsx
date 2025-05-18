@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ShieldAlert } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface PermissionGuardProps {
   permission: string;
   children: React.ReactNode;
   fallback?: React.ReactNode;
+  showToast?: boolean;
 }
 
 /**
@@ -15,11 +17,20 @@ interface PermissionGuardProps {
 export const PermissionGuard: React.FC<PermissionGuardProps> = ({
   permission,
   children,
-  fallback
+  fallback,
+  showToast = false
 }) => {
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
+  const userHasPermission = hasPermission(permission);
   
-  if (hasPermission(permission)) {
+  // Show toast notification for permission denied if requested
+  useEffect(() => {
+    if (showToast && !userHasPermission && user) {
+      toast.error(`Access denied: You don't have the required permission (${permission})`);
+    }
+  }, [showToast, userHasPermission, permission, user]);
+  
+  if (userHasPermission) {
     return <>{children}</>;
   }
   
@@ -32,6 +43,7 @@ export const PermissionGuard: React.FC<PermissionGuardProps> = ({
           <AlertTitle>Access Denied</AlertTitle>
           <AlertDescription>
             You don't have permission to access this feature.
+            Required permission: {permission}
           </AlertDescription>
         </Alert>
       )}
@@ -40,4 +52,3 @@ export const PermissionGuard: React.FC<PermissionGuardProps> = ({
 };
 
 export default PermissionGuard;
-
