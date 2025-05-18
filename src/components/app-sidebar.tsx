@@ -115,7 +115,7 @@ export function AppSidebar() {
 
   const toggleCollapse = () => setCollapsed(!collapsed);
 
-  const isAdmin = user?.role === "admin" || user?.role === "msp";
+  const isAdmin = user?.role === "admin";
   const isMSP = user?.role === "msp";
 
   return (
@@ -140,26 +140,22 @@ export function AppSidebar() {
       </SidebarHeader>
       <div className="flex flex-col h-full">
         <SidebarContent>
-          {/* Core Services Section */}
+          {/* Core Services Section - visible to all users */}
           <SidebarSection title="Core Services" collapsed={collapsed}>
             <NavItem to="/" icon={Activity} label="Dashboard" collapsed={collapsed} permission="view:dashboard" />
             <NavItem to="/catalog" icon={FileCode} label="Template Catalog" collapsed={collapsed} permission="view:catalog" />
             <NavItem to="/deployments" icon={Database} label="Deployments" collapsed={collapsed} permission="view:deployments" />
           </SidebarSection>
 
-          {/* Admin Settings Section - visible to admin and msp roles */}
-          {isAdmin && (
-            <>
-              <SidebarSeparator />
-              <SidebarSection title="Tenant Settings" collapsed={collapsed}>
-                <NavItem to="/cloud-accounts" icon={CloudCog} label="Cloud Accounts" collapsed={collapsed} permission="view:cloud-accounts" />
-                <NavItem to="/environments" icon={Server} label="Environments" collapsed={collapsed} permission="view:environments" />
-                <NavItem to="/template-management" icon={NotebookText} label="Template Management" collapsed={collapsed} permission="view:templates" />
-                <NavItem to="/users-and-groups" icon={Shield} label="Users & Groups" collapsed={collapsed} permission="view:users" />
-                <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} permission="view:settings" />
-              </SidebarSection>
-            </>
-          )}
+          {/* Tenant Settings Section - visible based on permissions */}
+          <SidebarSeparator />
+          <SidebarSection title="Tenant Settings" collapsed={collapsed}>
+            <NavItem to="/cloud-accounts" icon={CloudCog} label="Cloud Accounts" collapsed={collapsed} permission="view:cloud-accounts" />
+            <NavItem to="/environments" icon={Server} label="Environments" collapsed={collapsed} permission="view:environments" />
+            <NavItem to="/template-management" icon={NotebookText} label="Template Management" collapsed={collapsed} permission="view:templates" />
+            <NavItem to="/users-and-groups" icon={Shield} label="Users & Groups" collapsed={collapsed} permission="view:users" />
+            <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} permission="view:settings" />
+          </SidebarSection>
 
           {/* MSP Management Section - visible only to msp role */}
           {isMSP && (

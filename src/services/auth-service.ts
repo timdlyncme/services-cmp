@@ -14,6 +14,53 @@ const api = axios.create({
   withCredentials: false // Disable sending cookies for cross-domain requests
 });
 
+// Add request interceptor to add token to all requests
+api.interceptors.request.use(
+  (config) => {
+    // Don't add token for login request
+    if (config.url === '/auth/login') {
+      return config;
+    }
+    
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor to handle errors
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    console.error('API error:', error);
+    
+    // Handle specific error cases
+    if (error.code === 'ERR_NETWORK') {
+      console.error('Network error - API server may be down');
+    } else if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      console.error('API error response:', error.response.status, error.response.data);
+      
+      if (error.response.status === 401 && error.config.url !== '/auth/login') {
+        // Unauthorized - token may be invalid or expired
+        localStorage.removeItem('token');
+        localStorage.removeItem('currentTenantId');
+        window.location.href = '/login';
+      }
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
 export interface AuthUser extends User {
   permissions: Permission[];
 }
@@ -59,18 +106,10 @@ export class AuthService {
   async verifyToken(token: string): Promise<AuthUser | null> {
     try {
       // First verify the token
-      await api.get('/auth/verify', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      await api.get('/auth/verify');
       
       // Then get the user data
-      const response = await api.get('/auth/me', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await api.get('/auth/me');
       
       // Add default name if not provided
       if (!response.data.name) {
@@ -89,16 +128,7 @@ export class AuthService {
    */
   async getUserTenants(userId: string): Promise<Tenant[]> {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        return [];
-      }
-
-      const response = await api.get('/auth/tenants', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await api.get('/auth/tenants');
       return response.data;
     } catch (error) {
       console.error('Get user tenants error:', error);
@@ -111,16 +141,7 @@ export class AuthService {
    */
   async hasPermission(userId: string, permissionName: string): Promise<boolean> {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        return false;
-      }
-
-      const response = await api.get(`/auth/permission/${permissionName}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await api.get(`/auth/permission/${permissionName}`);
       return response.data.hasPermission;
     } catch (error) {
       console.error('Permission check error:', error);

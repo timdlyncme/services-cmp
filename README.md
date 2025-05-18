@@ -1,128 +1,173 @@
 # Cloud Management Platform
 
-A modern cloud management platform for managing cloud resources, templates, and deployments.
+A modern web application for managing cloud resources across multiple providers.
 
 ## Features
 
-- User authentication with PostgreSQL database
-- Role-based access control with permissions
-- Template management
-- Deployment tracking
+- User authentication and role-based access control
 - Multi-tenant support
-- NexusAI integration with Azure OpenAI
+- Dashboard with deployment statistics
+- Cloud resource management
+- Template catalog
+- Environment management
+- User and group management
 
-## Architecture
+## Tech Stack
 
-The application consists of two main components:
+- Frontend: React, TypeScript, Tailwind CSS, Shadcn UI
+- Backend: Node.js, Express
+- Database: PostgreSQL
+- Authentication: JWT
 
-1. **Frontend**: React/TypeScript application with Vite
-2. **Backend**: FastAPI application with PostgreSQL database
+## Prerequisites
 
-### Frontend
-
-- React with TypeScript
-- Vite for build and development
-- shadcn/ui for UI components
-- Tailwind CSS for styling
-- React Router for routing
-- React Query for data fetching
-
-### Backend
-
-- FastAPI for API endpoints
-- SQLAlchemy for database ORM
-- PostgreSQL for data storage
-- JWT for authentication
-- Pydantic for data validation
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 16+
-- Docker and Docker Compose
+- Node.js (v16+)
+- PostgreSQL (v14+)
 - npm or yarn
 
-### Setup
+## Setup
 
-1. Clone the repository:
+### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/yourusername/services-cmp.git
 cd services-cmp
 ```
 
-2. Install dependencies:
+### 2. Install dependencies
 
 ```bash
 npm install
+# or
+yarn install
 ```
 
-3. Start the services with Docker Compose:
+### 3. Set up the database
 
-```bash
-npm run docker:up
+Create a PostgreSQL database and user:
+
+```sql
+CREATE DATABASE cmpdb;
+CREATE USER cmpuser WITH ENCRYPTED PASSWORD 'cmppassword';
+GRANT ALL PRIVILEGES ON DATABASE cmpdb TO cmpuser;
 ```
 
-This will start:
-- PostgreSQL database
-- FastAPI backend
+### 4. Configure environment variables
 
-4. Start the frontend development server:
+Create a `.env` file in the root directory:
+
+```
+# API Server
+API_PORT=8000
+JWT_SECRET=your_jwt_secret_key_change_in_production
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=cmpuser
+DB_PASSWORD=cmppassword
+DB_NAME=cmpdb
+```
+
+### 5. Initialize the database
+
+Run the database initialization script:
 
 ```bash
+node src/server/init-db.js
+```
+
+This will create the necessary tables and insert sample data.
+
+### 6. Start the development server
+
+```bash
+# Start the API server
+npm run server
+# or
+yarn server
+
+# In a separate terminal, start the frontend
 npm run dev
+# or
+yarn dev
 ```
 
-5. Open your browser and navigate to `http://localhost:5173`
+## Usage
 
 ### Default Users
 
-The application comes with three default users:
+The initialization script creates the following users:
 
-- **Admin User**: admin@example.com / password
-- **Regular User**: user@example.com / password
-- **MSP User**: msp@example.com / password
+1. **Admin User**
+   - Email: admin@example.com
+   - Password: password
+   - Role: admin
+   - Tenant: Acme Corp
 
-## Database Schema
+2. **Regular User**
+   - Email: user@example.com
+   - Password: password
+   - Role: user
+   - Tenant: Acme Corp
 
-The application uses PostgreSQL with the following schema:
+3. **MSP User**
+   - Email: msp@example.com
+   - Password: password
+   - Role: msp
+   - Tenant: Dev Team
 
-- **tenants**: Stores tenant information
-- **roles**: Defines user roles (user, admin, msp)
-- **permissions**: Lists all available permissions
-- **role_permissions**: Maps roles to permissions
-- **users**: Stores user information including role and tenant
-- **user_permissions**: Maps custom permissions to users
+### Permissions
 
-## Authentication Flow
+The application uses role-based access control with the following permissions:
 
-1. User enters email and password
-2. The system verifies credentials against the database
-3. If valid, a JWT token is generated and stored in localStorage
-4. The token is used for subsequent API requests
-5. Permissions are checked for each protected route and UI element
+- **Core Permissions** (available to all users)
+  - view:dashboard
+  - view:deployments
+  - view:catalog
+
+- **Admin Permissions** (available to admin and msp roles)
+  - view:cloud-accounts
+  - view:environments
+  - view:templates
+  - view:users
+  - view:settings
+
+- **MSP Permissions** (available only to msp role)
+  - view:tenants
+  - manage:templates
+  - use:nexus-ai
 
 ## Development
 
-### Adding New Permissions
+### Project Structure
 
-1. Add the permission to the `permissions` table
-2. Assign the permission to roles in the `role_permissions` table
-3. Use the `hasPermission` function to check permissions in components
-4. Add the permission check to protected routes
+```
+services-cmp/
+├── public/              # Static assets
+├── src/
+│   ├── components/      # React components
+│   ├── context/         # React context providers
+│   ├── data/            # Mock data for development
+│   ├── hooks/           # Custom React hooks
+│   ├── lib/             # Utility functions
+│   ├── pages/           # Page components
+│   ├── server/          # API server
+│   ├── services/        # API services
+│   ├── styles/          # CSS styles
+│   ├── types/           # TypeScript type definitions
+│   ├── App.tsx          # Main application component
+│   └── main.tsx         # Application entry point
+├── .env                 # Environment variables
+├── package.json         # Project dependencies
+└── README.md            # Project documentation
+```
 
-### Adding New Roles
+### API Documentation
 
-1. Add the role to the `roles` table
-2. Assign permissions to the role in the `role_permissions` table
-3. Update the `UserRole` type in `src/types/auth.ts`
+The API documentation is available at http://localhost:8000/api/docs when the server is running.
 
-## NexusAI Integration
+## License
 
-The NexusAI feature integrates with Azure OpenAI to provide AI-powered assistance. Configuration options include:
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-- API Key
-- Endpoint URL
-- Deployment Name
-- Model Version

@@ -37,6 +37,13 @@ const defaultPermissions: Permission[] = [
   { name: "use:nexus-ai", description: "Use NexusAI" }
 ];
 
+// Core permissions that all users should have
+const corePermissions: Permission[] = [
+  { name: "view:dashboard", description: "View dashboard" },
+  { name: "view:deployments", description: "View deployments" },
+  { name: "view:catalog", description: "View template catalog" }
+];
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -79,8 +86,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (authUser) {
             // Ensure user has permissions array
             if (!authUser.permissions || authUser.permissions.length === 0) {
-              console.warn("User has no permissions, adding default permissions for development");
-              authUser.permissions = defaultPermissions;
+              console.warn("User has no permissions, adding default permissions based on role");
+              
+              // Assign permissions based on role
+              if (authUser.role === 'admin' || authUser.role === 'msp') {
+                authUser.permissions = defaultPermissions;
+              } else {
+                // Regular users get core permissions
+                authUser.permissions = corePermissions;
+              }
             }
             
             setUser(authUser);
@@ -142,8 +156,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Ensure user has permissions array
       if (!authUser.permissions || authUser.permissions.length === 0) {
-        console.warn("User has no permissions, adding default permissions for development");
-        authUser.permissions = defaultPermissions;
+        console.warn("User has no permissions, adding default permissions based on role");
+        
+        // Assign permissions based on role
+        if (authUser.role === 'admin' || authUser.role === 'msp') {
+          authUser.permissions = defaultPermissions;
+        } else {
+          // Regular users get core permissions
+          authUser.permissions = corePermissions;
+        }
       }
       
       // Store token in localStorage
@@ -216,25 +237,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
     
-    // For development, if user has no permissions, grant all permissions
-    if (!user.permissions || user.permissions.length === 0) {
-      console.warn(`No permissions found for user, granting permission: ${permission}`);
-      return true;
-    }
-    
-    // Check if the user has the specific permission
-    const hasSpecificPermission = user.permissions.some(p => p.name === permission);
-    
-    if (hasSpecificPermission) {
-      return true;
-    }
-    
     // If user is admin or msp, grant all permissions
     if (user.role === 'admin' || user.role === 'msp') {
       return true;
     }
     
-    return false;
+    // For regular users, check if they have the specific permission
+    // For development, if user has no permissions, grant core permissions
+    if (!user.permissions || user.permissions.length === 0) {
+      console.warn(`No permissions found for user, checking if it's a core permission: ${permission}`);
+      return corePermissions.some(p => p.name === permission);
+    }
+    
+    // Check if the user has the specific permission
+    return user.permissions.some(p => p.name === permission);
   };
 
   return (

@@ -4,10 +4,11 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
-const port = process.env.API_PORT || 3001;
+const port = process.env.API_PORT || 8000; // Changed to 8000 to match the client's expected port
 
 // Middleware
 app.use(cors({
@@ -286,6 +287,24 @@ app.get('/api/auth/permission/:name', authenticateToken, async (req, res) => {
     const { name } = req.params;
     console.log(`Permission check for user ID: ${userId}, permission: ${name}`);
     
+    // First check if user is admin or msp, they have all permissions
+    const userRoleResult = await pool.query(
+      `SELECT r.name as role
+       FROM users u
+       JOIN roles r ON u.role_id = r.id
+       WHERE u.user_id = $1`,
+      [userId]
+    );
+    
+    if (userRoleResult.rows.length > 0) {
+      const userRole = userRoleResult.rows[0].role;
+      if (userRole === 'admin' || userRole === 'msp') {
+        console.log(`User ${userId} has role ${userRole}, granting permission: ${name}`);
+        return res.json({ hasPermission: true });
+      }
+    }
+    
+    // Check specific permission
     const result = await pool.query(
       `SELECT COUNT(*) as count
        FROM permissions p
@@ -312,22 +331,27 @@ app.get('/api/auth/permission/:name', authenticateToken, async (req, res) => {
 // Get deployments
 app.get('/api/deployments', authenticateToken, async (req, res) => {
   try {
-    const { userId } = req.user;
+    const { userId, role } = req.user;
     const { tenantId } = req.query;
     console.log(`Get deployments request for user ID: ${userId}, tenant ID: ${tenantId}`);
     
     // Check if user has access to the tenant
-    const tenantAccessResult = await pool.query(
-      `SELECT COUNT(*) as count
-       FROM tenants t
-       JOIN users u ON t.id = u.tenant_id
-       WHERE t.tenant_id = $1
-       AND u.user_id = $2
-       OR (SELECT role_id FROM users WHERE user_id = $2) = (SELECT id FROM roles WHERE name = 'msp')`,
-      [tenantId, userId]
-    );
+    let hasAccess = false;
     
-    const hasAccess = parseInt(tenantAccessResult.rows[0].count) > 0;
+    if (role === 'admin' || role === 'msp') {
+      hasAccess = true;
+    } else {
+      const tenantAccessResult = await pool.query(
+        `SELECT COUNT(*) as count
+         FROM tenants t
+         JOIN users u ON t.id = u.tenant_id
+         WHERE t.tenant_id = $1
+         AND u.user_id = $2`,
+        [tenantId, userId]
+      );
+      
+      hasAccess = parseInt(tenantAccessResult.rows[0].count) > 0;
+    }
     
     if (!hasAccess) {
       console.log(`User ${userId} does not have access to tenant ${tenantId}`);
@@ -336,7 +360,8 @@ app.get('/api/deployments', authenticateToken, async (req, res) => {
     
     // Get deployments from database
     // For now, we'll use mock data since the deployments table might not exist yet
-    const { mockDeployments } = require('../data/mock-data');
+    const mockDataPath = path.join(__dirname, '..', 'data', 'mock-data.ts');
+    const { mockDeployments } = require(mockDataPath);
     
     // Filter deployments by tenant ID
     const deployments = mockDeployments.filter(d => d.tenantId === tenantId);
@@ -352,22 +377,27 @@ app.get('/api/deployments', authenticateToken, async (req, res) => {
 // Get cloud accounts
 app.get('/api/cloud-accounts', authenticateToken, async (req, res) => {
   try {
-    const { userId } = req.user;
+    const { userId, role } = req.user;
     const { tenantId } = req.query;
     console.log(`Get cloud accounts request for user ID: ${userId}, tenant ID: ${tenantId}`);
     
     // Check if user has access to the tenant
-    const tenantAccessResult = await pool.query(
-      `SELECT COUNT(*) as count
-       FROM tenants t
-       JOIN users u ON t.id = u.tenant_id
-       WHERE t.tenant_id = $1
-       AND u.user_id = $2
-       OR (SELECT role_id FROM users WHERE user_id = $2) = (SELECT id FROM roles WHERE name = 'msp')`,
-      [tenantId, userId]
-    );
+    let hasAccess = false;
     
-    const hasAccess = parseInt(tenantAccessResult.rows[0].count) > 0;
+    if (role === 'admin' || role === 'msp') {
+      hasAccess = true;
+    } else {
+      const tenantAccessResult = await pool.query(
+        `SELECT COUNT(*) as count
+         FROM tenants t
+         JOIN users u ON t.id = u.tenant_id
+         WHERE t.tenant_id = $1
+         AND u.user_id = $2`,
+        [tenantId, userId]
+      );
+      
+      hasAccess = parseInt(tenantAccessResult.rows[0].count) > 0;
+    }
     
     if (!hasAccess) {
       console.log(`User ${userId} does not have access to tenant ${tenantId}`);
@@ -376,7 +406,8 @@ app.get('/api/cloud-accounts', authenticateToken, async (req, res) => {
     
     // Get cloud accounts from database
     // For now, we'll use mock data since the cloud_accounts table might not exist yet
-    const { mockCloudAccounts } = require('../data/mock-data');
+    const mockDataPath = path.join(__dirname, '..', 'data', 'mock-data.ts');
+    const { mockCloudAccounts } = require(mockDataPath);
     
     // Filter cloud accounts by tenant ID
     const cloudAccounts = mockCloudAccounts.filter(ca => ca.tenantId === tenantId);
@@ -392,22 +423,27 @@ app.get('/api/cloud-accounts', authenticateToken, async (req, res) => {
 // Get templates
 app.get('/api/templates', authenticateToken, async (req, res) => {
   try {
-    const { userId } = req.user;
+    const { userId, role } = req.user;
     const { tenantId } = req.query;
     console.log(`Get templates request for user ID: ${userId}, tenant ID: ${tenantId}`);
     
     // Check if user has access to the tenant
-    const tenantAccessResult = await pool.query(
-      `SELECT COUNT(*) as count
-       FROM tenants t
-       JOIN users u ON t.id = u.tenant_id
-       WHERE t.tenant_id = $1
-       AND u.user_id = $2
-       OR (SELECT role_id FROM users WHERE user_id = $2) = (SELECT id FROM roles WHERE name = 'msp')`,
-      [tenantId, userId]
-    );
+    let hasAccess = false;
     
-    const hasAccess = parseInt(tenantAccessResult.rows[0].count) > 0;
+    if (role === 'admin' || role === 'msp') {
+      hasAccess = true;
+    } else {
+      const tenantAccessResult = await pool.query(
+        `SELECT COUNT(*) as count
+         FROM tenants t
+         JOIN users u ON t.id = u.tenant_id
+         WHERE t.tenant_id = $1
+         AND u.user_id = $2`,
+        [tenantId, userId]
+      );
+      
+      hasAccess = parseInt(tenantAccessResult.rows[0].count) > 0;
+    }
     
     if (!hasAccess) {
       console.log(`User ${userId} does not have access to tenant ${tenantId}`);
@@ -416,7 +452,8 @@ app.get('/api/templates', authenticateToken, async (req, res) => {
     
     // Get templates from database
     // For now, we'll use mock data since the templates table might not exist yet
-    const { mockTemplates } = require('../data/mock-data');
+    const mockDataPath = path.join(__dirname, '..', 'data', 'mock-data.ts');
+    const { mockTemplates } = require(mockDataPath);
     
     // Filter templates by tenant ID
     const templates = mockTemplates.filter(t => t.tenantId === tenantId);
@@ -429,9 +466,337 @@ app.get('/api/templates', authenticateToken, async (req, res) => {
   }
 });
 
+// Get environments
+app.get('/api/environments', authenticateToken, async (req, res) => {
+  try {
+    const { userId, role } = req.user;
+    const { tenantId } = req.query;
+    console.log(`Get environments request for user ID: ${userId}, tenant ID: ${tenantId}`);
+    
+    // Check if user has access to the tenant
+    let hasAccess = false;
+    
+    if (role === 'admin' || role === 'msp') {
+      hasAccess = true;
+    } else {
+      const tenantAccessResult = await pool.query(
+        `SELECT COUNT(*) as count
+         FROM tenants t
+         JOIN users u ON t.id = u.tenant_id
+         WHERE t.tenant_id = $1
+         AND u.user_id = $2`,
+        [tenantId, userId]
+      );
+      
+      hasAccess = parseInt(tenantAccessResult.rows[0].count) > 0;
+    }
+    
+    if (!hasAccess) {
+      console.log(`User ${userId} does not have access to tenant ${tenantId}`);
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    // For now, return a mock list of environments
+    const environments = [
+      { id: 'env-1', name: 'Development', description: 'Development environment', tenantId },
+      { id: 'env-2', name: 'Staging', description: 'Staging environment', tenantId },
+      { id: 'env-3', name: 'Production', description: 'Production environment', tenantId },
+    ];
+    
+    console.log(`Environments retrieved successfully for tenant ID: ${tenantId}`);
+    res.json(environments);
+  } catch (error) {
+    console.error('Get environments error:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Swagger UI for API documentation
+app.get('/api/docs', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>API Documentation</title>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <link rel="stylesheet" type="text/css" href="//unpkg.com/swagger-ui-dist@3/swagger-ui.css" />
+    </head>
+    <body>
+      <div id="swagger-ui"></div>
+      <script src="//unpkg.com/swagger-ui-dist@3/swagger-ui-bundle.js"></script>
+      <script>
+        const ui = SwaggerUIBundle({
+          url: "/api/swagger.json",
+          dom_id: '#swagger-ui',
+          presets: [
+            SwaggerUIBundle.presets.apis,
+            SwaggerUIBundle.SwaggerUIStandalonePreset
+          ],
+          layout: "BaseLayout"
+        })
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+// Swagger JSON definition
+app.get('/api/swagger.json', (req, res) => {
+  res.json({
+    openapi: '3.0.0',
+    info: {
+      title: 'Cloud Management Platform API',
+      version: '1.0.0',
+      description: 'API for the Cloud Management Platform'
+    },
+    paths: {
+      '/api/auth/login': {
+        post: {
+          summary: 'Login',
+          description: 'Authenticate a user with email and password',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    email: { type: 'string' },
+                    password: { type: 'string' }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            '200': {
+              description: 'Successful login',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      user: { type: 'object' },
+                      token: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/auth/verify': {
+        get: {
+          summary: 'Verify token',
+          description: 'Verify JWT token and return user data',
+          responses: {
+            '200': {
+              description: 'Token is valid',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object'
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/auth/me': {
+        get: {
+          summary: 'Get user data',
+          description: 'Get current user data',
+          responses: {
+            '200': {
+              description: 'User data',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object'
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/auth/tenants': {
+        get: {
+          summary: 'Get user tenants',
+          description: 'Get all tenants a user has access to',
+          responses: {
+            '200': {
+              description: 'List of tenants',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'array',
+                    items: {
+                      type: 'object'
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/deployments': {
+        get: {
+          summary: 'Get deployments',
+          description: 'Get all deployments for a tenant',
+          parameters: [
+            {
+              name: 'tenantId',
+              in: 'query',
+              required: true,
+              schema: {
+                type: 'string'
+              }
+            }
+          ],
+          responses: {
+            '200': {
+              description: 'List of deployments',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'array',
+                    items: {
+                      type: 'object'
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/cloud-accounts': {
+        get: {
+          summary: 'Get cloud accounts',
+          description: 'Get all cloud accounts for a tenant',
+          parameters: [
+            {
+              name: 'tenantId',
+              in: 'query',
+              required: true,
+              schema: {
+                type: 'string'
+              }
+            }
+          ],
+          responses: {
+            '200': {
+              description: 'List of cloud accounts',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'array',
+                    items: {
+                      type: 'object'
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/templates': {
+        get: {
+          summary: 'Get templates',
+          description: 'Get all templates for a tenant',
+          parameters: [
+            {
+              name: 'tenantId',
+              in: 'query',
+              required: true,
+              schema: {
+                type: 'string'
+              }
+            }
+          ],
+          responses: {
+            '200': {
+              description: 'List of templates',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'array',
+                    items: {
+                      type: 'object'
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/environments': {
+        get: {
+          summary: 'Get environments',
+          description: 'Get all environments for a tenant',
+          parameters: [
+            {
+              name: 'tenantId',
+              in: 'query',
+              required: true,
+              schema: {
+                type: 'string'
+              }
+            }
+          ],
+          responses: {
+            '200': {
+              description: 'List of environments',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'array',
+                    items: {
+                      type: 'object'
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/health': {
+        get: {
+          summary: 'Health check',
+          description: 'Check if the API server is running',
+          responses: {
+            '200': {
+              description: 'API server is running',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      status: { type: 'string' },
+                      timestamp: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  });
 });
 
 // Error handling middleware
