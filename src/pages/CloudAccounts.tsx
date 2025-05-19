@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Search, Cloud, Plus, Users, Tag, Shield, CheckCircle, AlertCircle, XCircle, Edit, Trash, RefreshCw } from "lucide-react";
-import { mockCloudAccounts } from "@/data/mock-data";
-import { CloudAccount } from "@/types/auth";
+import { CloudAccount } from "@/types/cloud";
+import { deploymentService } from "@/services/deployment-service";
 
 // Mock data for discovered cloud accounts
 const mockDiscoveredAccounts = [
@@ -55,116 +54,51 @@ const mockCreatedCloudAccounts = [
 ];
 
 const CloudAccounts = () => {
-  const { user } = useAuth();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
-  const [activeTab, setActiveTab] = useState("azure");
+  const { currentTenant } = useAuth();
+  const [activeTab, setActiveTab] = useState("connected");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [cloudAccounts, setCloudAccounts] = useState<CloudAccount[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
-  const [newCloudAccount, setNewCloudAccount] = useState({
-    name: "",
-    description: "",
-    cloudAccounts: [] as string[],
-    tags: {} as Record<string, string>
-  });
+  // State for the new account dialog
+  const [isNewAccountDialogOpen, setIsNewAccountDialogOpen] = useState(false);
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountProvider, setNewAccountProvider] = useState("azure");
+  const [selectedDiscoveredAccounts, setSelectedDiscoveredAccounts] = useState<string[]>([]);
   
-  const [cloudAccounts, setCloudAccounts] = useState(mockCreatedCloudAccounts);
-  const [tagKey, setTagKey] = useState("");
-  const [tagValue, setTagValue] = useState("");
-  
-  const filteredCloudAccounts = cloudAccounts.filter(account =>
-    account.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    account.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  
-  const filteredDiscoveredAccounts = mockDiscoveredAccounts.filter(account =>
-    account.provider === activeTab &&
-    (account.name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-  
-  const toggleAccountSelection = (accountId: string) => {
-    if (selectedAccounts.includes(accountId)) {
-      setSelectedAccounts(selectedAccounts.filter(id => id !== accountId));
-    } else {
-      setSelectedAccounts([...selectedAccounts, accountId]);
-    }
-  };
-  
-  const handleCreateCloudAccount = () => {
-    if (!newCloudAccount.name) {
-      toast.error("Cloud account name is required");
-      return;
-    }
-    
-    if (newCloudAccount.cloudAccounts.length === 0) {
-      toast.error("Please select at least one cloud account");
-      return;
-    }
-    
-    const createdAccount = {
-      id: `acc-${Date.now()}`,
-      name: newCloudAccount.name,
-      description: newCloudAccount.description,
-      cloudAccounts: newCloudAccount.cloudAccounts,
-      tags: newCloudAccount.tags,
-      createdAt: new Date().toISOString(),
-      status: "healthy"
+  // Fetch cloud accounts from API
+  useEffect(() => {
+    const fetchCloudAccounts = async () => {
+      if (!currentTenant) return;
+      
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const accounts = await deploymentService.getCloudAccounts(currentTenant.id);
+        setCloudAccounts(accounts);
+      } catch (error) {
+        console.error("Error fetching cloud accounts:", error);
+        setError("Failed to load cloud accounts. Please try again.");
+        
+        if (error instanceof Error) {
+          toast.error(error.message);
+        } else {
+          toast.error("Failed to load cloud accounts");
+        }
+      } finally {
+        setIsLoading(false);
+      }
     };
     
-    setCloudAccounts([...cloudAccounts, createdAccount]);
-    setIsCreating(false);
-    resetForm();
-    toast.success("Cloud account created successfully");
-  };
+    fetchCloudAccounts();
+  }, [currentTenant]);
   
-  const resetForm = () => {
-    setNewCloudAccount({
-      name: "",
-      description: "",
-      cloudAccounts: [],
-      tags: {}
-    });
-    setSelectedAccounts([]);
-    setTagKey("");
-    setTagValue("");
-  };
-  
-  const addTag = () => {
-    if (!tagKey.trim()) {
-      toast.error("Tag key is required");
-      return;
-    }
-    
-    setNewCloudAccount({
-      ...newCloudAccount,
-      tags: {
-        ...newCloudAccount.tags,
-        [tagKey]: tagValue
-      }
-    });
-    
-    setTagKey("");
-    setTagValue("");
-  };
-  
-  const removeTag = (key: string) => {
-    const updatedTags = { ...newCloudAccount.tags };
-    delete updatedTags[key];
-    
-    setNewCloudAccount({
-      ...newCloudAccount,
-      tags: updatedTags
-    });
-  };
-  
-  const handleDeleteAccount = (accountId: string) => {
-    setCloudAccounts(cloudAccounts.filter(account => account.id !== accountId));
-    toast.success("Cloud account deleted successfully");
-  };
-  
+  // Helper functions
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "healthy":
+      case "connected":
         return <CheckCircle className="h-4 w-4 text-green-500" />;
       case "warning":
         return <AlertCircle className="h-4 w-4 text-amber-500" />;
@@ -174,6 +108,36 @@ const CloudAccounts = () => {
         return null;
     }
   };
+  
+  const handleCreateCloudAccount = () => {
+    if (!newAccountName) {
+      toast.error("Cloud account name is required");
+      return;
+    }
+    
+    if (selectedDiscoveredAccounts.length === 0) {
+      toast.error("Please select at least one cloud account");
+      return;
+    }
+    
+    // In a real app, this would call the API to create the account
+    toast.success("Cloud account created successfully");
+    setIsNewAccountDialogOpen(false);
+    setNewAccountName("");
+    setNewAccountProvider("azure");
+    setSelectedDiscoveredAccounts([]);
+  };
+  
+  const handleDeleteAccount = (accountId: string) => {
+    // In a real app, this would call the API to delete the account
+    toast.success("Cloud account deleted successfully");
+  };
+  
+  // Filter cloud accounts based on search query
+  const filteredCloudAccounts = cloudAccounts.filter(account =>
+    account.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    account.provider.toLowerCase().includes(searchQuery.toLowerCase())
+  );
   
   return (
     <div className="space-y-6">
@@ -185,7 +149,7 @@ const CloudAccounts = () => {
           </p>
         </div>
         
-        <Dialog open={isCreating} onOpenChange={setIsCreating}>
+        <Dialog open={isNewAccountDialogOpen} onOpenChange={setIsNewAccountDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -206,8 +170,8 @@ const CloudAccounts = () => {
                   <label htmlFor="name" className="text-sm font-medium">Account Name</label>
                   <Input
                     id="name"
-                    value={newCloudAccount.name}
-                    onChange={(e) => setNewCloudAccount({ ...newCloudAccount, name: e.target.value })}
+                    value={newAccountName}
+                    onChange={(e) => setNewAccountName(e.target.value)}
                     placeholder="e.g., Production Infrastructure"
                   />
                 </div>
@@ -216,8 +180,8 @@ const CloudAccounts = () => {
                   <label htmlFor="description" className="text-sm font-medium">Description</label>
                   <Input
                     id="description"
-                    value={newCloudAccount.description}
-                    onChange={(e) => setNewCloudAccount({ ...newCloudAccount, description: e.target.value })}
+                    value={newAccountName}
+                    onChange={(e) => setNewAccountName(e.target.value)}
                     placeholder="Describe this cloud account"
                   />
                 </div>
@@ -243,13 +207,13 @@ const CloudAccounts = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredDiscoveredAccounts.length > 0 ? (
-                          filteredDiscoveredAccounts.map((account) => (
+                        {mockDiscoveredAccounts.length > 0 ? (
+                          mockDiscoveredAccounts.map((account) => (
                             <TableRow key={account.id}>
                               <TableCell>
                                 <Checkbox
-                                  checked={selectedAccounts.includes(account.id)}
-                                  onCheckedChange={() => toggleAccountSelection(account.id)}
+                                  checked={selectedDiscoveredAccounts.includes(account.id)}
+                                  onCheckedChange={() => setSelectedDiscoveredAccounts([...selectedDiscoveredAccounts, account.id])}
                                 />
                               </TableCell>
                               <TableCell className="font-medium">{account.name}</TableCell>
@@ -311,7 +275,7 @@ const CloudAccounts = () => {
             </div>
             
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreating(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setIsNewAccountDialogOpen(false)}>Cancel</Button>
               <Button onClick={handleCreateCloudAccount}>Create Account</Button>
             </DialogFooter>
           </DialogContent>
@@ -323,109 +287,80 @@ const CloudAccounts = () => {
         <Input
           placeholder="Search cloud accounts..."
           className="pl-8 mb-4"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
         />
       </div>
       
-      {filteredCloudAccounts.length > 0 ? (
-        <div className="grid gap-6">
-          {filteredCloudAccounts.map((account) => (
-            <Card key={account.id}>
-              <CardHeader className="pb-3 flex flex-row justify-between items-start">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <CardTitle>{account.name}</CardTitle>
-                    <Badge variant={account.status === "healthy" ? "secondary" : "outline"} className="flex items-center gap-1">
-                      {getStatusIcon(account.status)}
-                      <span className="capitalize">{account.status}</span>
-                    </Badge>
-                  </div>
-                  <CardDescription>{account.description}</CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="icon">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={() => handleDeleteAccount(account.id)}
-                  >
-                    <Trash className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-medium mb-2">Linked Cloud Resources</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {account.cloudAccounts.map((accountId) => {
-                      const discoveredAccount = mockDiscoveredAccounts.find(a => a.id === accountId);
-                      if (!discoveredAccount) return null;
-                      
-                      return (
-                        <Badge key={accountId} variant="outline" className="flex items-center gap-1">
-                          <Cloud className={
-                            discoveredAccount.provider === "azure" ? "h-3 w-3 text-blue-500" :
-                            discoveredAccount.provider === "aws" ? "h-3 w-3 text-amber-500" :
-                            "h-3 w-3 text-red-500"
-                          } />
-                          {discoveredAccount.name}
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                {Object.keys(account.tags).length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-medium mb-2">Tags</h3>
-                    <div className="flex flex-wrap gap-1">
-                      {Object.entries(account.tags).map(([key, value]) => (
-                        <Badge key={key} variant="secondary" className="text-xs">
-                          {key}: {value}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                <div className="flex justify-between items-center text-sm text-muted-foreground pt-2 border-t">
-                  <span>Created: {new Date(account.createdAt).toLocaleDateString()}</span>
-                  <Button size="sm" variant="ghost" className="flex items-center gap-1 h-8">
-                    <RefreshCw className="h-3 w-3" />
-                    Run Health Check
-                  </Button>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button variant="outline" size="sm" className="flex items-center gap-1">
-                  <Users className="h-4 w-4" />
-                  Manage Access
-                </Button>
-                <Button variant="outline" size="sm" className="flex items-center gap-1">
-                  <Shield className="h-4 w-4" />
-                  Security Settings
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12">
-          <Cloud className="h-12 w-12 mx-auto text-muted-foreground" />
-          <h2 className="mt-4 text-xl font-semibold">No Cloud Accounts Found</h2>
-          <p className="text-muted-foreground mt-2">
-            {searchTerm 
-              ? "No cloud accounts match your search criteria" 
-              : "Create your first cloud account to start organizing your resources"}
-          </p>
-          <Button className="mt-4" onClick={() => setIsCreating(true)}>
-            Create Cloud Account
-          </Button>
-        </div>
-      )}
+      <div className="mt-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-muted-foreground">Loading cloud accounts...</span>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center h-64">
+            <AlertCircle className="h-12 w-12 text-red-500" />
+            <h2 className="mt-4 text-xl font-semibold">Error Loading Cloud Accounts</h2>
+            <p className="text-muted-foreground mt-2">{error}</p>
+            <Button className="mt-4" onClick={() => window.location.reload()}>
+              Try Again
+            </Button>
+          </div>
+        ) : filteredCloudAccounts.length > 0 ? (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Provider</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredCloudAccounts.map((account) => (
+                  <TableRow key={account.id}>
+                    <TableCell className="font-medium">{account.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">
+                        {account.provider}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        {getStatusIcon(account.status)}
+                        <span className="ml-2 capitalize">{account.status}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteAccount(account.id)}>
+                        <Trash className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon">
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-64 border rounded-md p-8">
+            <Cloud className="h-12 w-12 mx-auto text-muted-foreground" />
+            <h2 className="mt-4 text-xl font-semibold">No Cloud Accounts Found</h2>
+            <p className="text-muted-foreground mt-2">
+              {searchQuery 
+                ? "No cloud accounts match your search criteria" 
+                : "Create your first cloud account to start organizing your resources"}
+            </p>
+            <Button className="mt-4" onClick={() => setIsNewAccountDialogOpen(true)}>
+              Create Cloud Account
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
