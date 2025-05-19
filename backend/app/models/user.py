@@ -80,3 +80,4 @@ class Tenant(Base):
     environments = relationship("Environment", back_populates="tenant")
     templates = relationship("Template", back_populates="tenant")
     deployments = relationship("Deployment", back_populates="tenant")
+    integration_configs = relationship("IntegrationConfig", back_populates="tenant")
