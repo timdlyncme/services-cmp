@@ -38,35 +38,48 @@ def get_cloud_accounts(
         )
     
     try:
-        query = db.query(CloudAccount)
+        query = db.query(CloudAccount).join(Tenant, CloudAccount.tenant_id == Tenant.id)
         
         # Filter by tenant
         if tenant_id:
+            # Check if tenant exists
             tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
             if not tenant:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Tenant with ID {tenant_id} not found"
                 )
-            query = query.filter(CloudAccount.tenant_id == tenant.id)
+            
+            # Check if user has access to this tenant
+            if tenant.id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to view cloud accounts for this tenant"
+                )
+            
+            query = query.filter(Tenant.tenant_id == tenant_id)
         else:
             # Default to current user's tenant
             query = query.filter(CloudAccount.tenant_id == current_user.tenant_id)
         
         cloud_accounts = query.all()
         
-        # Convert to frontend-compatible format
-        return [
-            CloudAccountFrontendResponse(
-                id=account.account_id,
-                name=account.name,
-                provider=account.provider,
-                status=account.status,
-                tenantId=current_user.tenant.tenant_id,
-                connectionDetails={}  # Would need to add a connection_details field
+        # Get tenant for each account
+        result = []
+        for account in cloud_accounts:
+            tenant = db.query(Tenant).filter(Tenant.id == account.tenant_id).first()
+            result.append(
+                CloudAccountFrontendResponse(
+                    id=account.account_id,
+                    name=account.name,
+                    provider=account.provider,
+                    status=account.status,
+                    tenantId=tenant.tenant_id if tenant else current_user.tenant.tenant_id,
+                    connectionDetails={}  # Would need to add a connection_details field
+                )
             )
-            for account in cloud_accounts
-        ]
+        
+        return result
     
     except Exception as e:
         raise HTTPException(
