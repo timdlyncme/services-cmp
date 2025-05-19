@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
@@ -9,8 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { mockDeployments, mockTemplates } from "@/data/mock-data";
 import { toast } from "sonner";
+import { deploymentService } from "@/services/deployment-service";
+import { CloudDeployment, CloudTemplate } from "@/types/cloud";
 import {
   Activity,
   AlertCircle,
@@ -40,8 +40,8 @@ import { Textarea } from "@/components/ui/textarea";
 const DeploymentDetails = () => {
   const { deploymentId } = useParams();
   const { currentTenant } = useAuth();
-  const [deployment, setDeployment] = useState<any>(null);
-  const [template, setTemplate] = useState<any>(null);
+  const [deployment, setDeployment] = useState<CloudDeployment | null>(null);
+  const [template, setTemplate] = useState<CloudTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<string[]>([]);
   const [chatMessage, setChatMessage] = useState("");
@@ -53,23 +53,34 @@ const DeploymentDetails = () => {
   useEffect(() => {
     const fetchDeployment = async () => {
       try {
-        // In a real app, this would be an API call
-        const foundDeployment = mockDeployments.find(d => d.id === deploymentId);
+        if (!deploymentId) return;
         
-        if (foundDeployment) {
-          setDeployment(foundDeployment);
+        // Fetch deployment from API
+        const deploymentData = await deploymentService.getDeployment(deploymentId);
+        
+        if (deploymentData) {
+          setDeployment(deploymentData);
           
-          // Find associated template
-          const associatedTemplate = mockTemplates.find(t => t.id === foundDeployment.templateId);
-          if (associatedTemplate) {
-            setTemplate(associatedTemplate);
-            
-            // In a real scenario, we would check for newer template versions
-            // For demo purposes, we'll simulate a newer version available
-            setNewTemplateVersionAvailable(Math.random() > 0.5);
+          // Fetch template data
+          if (deploymentData.templateId) {
+            try {
+              // In a real app, we would fetch the template from the API
+              const templates = await deploymentService.getTemplates(currentTenant?.id || "");
+              const associatedTemplate = templates.find(t => t.id === deploymentData.templateId);
+              
+              if (associatedTemplate) {
+                setTemplate(associatedTemplate);
+                
+                // In a real scenario, we would check for newer template versions
+                // For demo purposes, we'll simulate a newer version available
+                setNewTemplateVersionAvailable(Math.random() > 0.5);
+              }
+            } catch (error) {
+              console.error("Error fetching template:", error);
+            }
           }
           
-          // Generate some mock logs
+          // Generate some mock logs (in a real app, these would come from the API)
           const mockLogs = [
             "2023-04-01T10:00:00Z [INFO] Starting deployment...",
             "2023-04-01T10:00:05Z [INFO] Validating template...",
@@ -83,6 +94,7 @@ const DeploymentDetails = () => {
         }
       } catch (error) {
         console.error("Error fetching deployment:", error);
+        toast.error("Failed to load deployment details");
       } finally {
         setLoading(false);
       }
@@ -98,12 +110,12 @@ const DeploymentDetails = () => {
     
     if (action === "restart") {
       setDeployment({
-        ...deployment,
+        ...deployment!,
         status: "running"
       });
     } else if (action === "stop") {
       setDeployment({
-        ...deployment,
+        ...deployment!,
         status: "stopped"
       });
     } else if (action === "upgrade") {
@@ -136,7 +148,7 @@ const DeploymentDetails = () => {
       } else if (chatMessage.toLowerCase().includes("resource") || chatMessage.toLowerCase().includes("vm") || chatMessage.toLowerCase().includes("database")) {
         aiResponse = "This deployment contains several resources including virtual networks, storage accounts, and compute instances. You can see all resources in the Resources section of the Overview tab.";
       } else if (chatMessage.toLowerCase().includes("status")) {
-        aiResponse = `The current status of this deployment is "${deployment.status}". All resources are functioning normally.`;
+        aiResponse = `The current status of this deployment is "${deployment?.status}". All resources are functioning normally.`;
       } else if (chatMessage.toLowerCase().includes("template")) {
         aiResponse = `This deployment was created using the "${template?.name}" template, version ${template?.version}.` + 
           (newTemplateVersionAvailable ? " There is a newer version of this template available. You can upgrade to the latest version using the Upgrade button." : "");
@@ -248,23 +260,15 @@ const DeploymentDetails = () => {
                   <div>{deployment.environment}</div>
                   
                   <div className="font-medium">Region</div>
-                  <div>{deployment.region}</div>
+                  <div>{deployment.region || "Not specified"}</div>
                   
-                  <div className="font-medium">Cloud Provider</div>
-                  <div>
-                    <Badge className={
-                      deployment.provider === "azure" ? "bg-cloud-azure text-white" :
-                      deployment.provider === "aws" ? "bg-cloud-aws text-black" :
-                      "bg-cloud-gcp text-white"
-                    }>
-                      {deployment.provider.toUpperCase()}
-                    </Badge>
-                  </div>
+                  <div className="font-medium">Provider</div>
+                  <div>{deployment.provider}</div>
                   
-                  <div className="font-medium">Created By</div>
-                  <div>{deployment.createdBy}</div>
+                  <div className="font-medium">Template</div>
+                  <div>{deployment.templateName}</div>
                   
-                  <div className="font-medium">Creation Date</div>
+                  <div className="font-medium">Created</div>
                   <div>{new Date(deployment.createdAt).toLocaleString()}</div>
                   
                   <div className="font-medium">Last Updated</div>
@@ -275,109 +279,56 @@ const DeploymentDetails = () => {
             
             <Card>
               <CardHeader>
-                <CardTitle>Template Information</CardTitle>
-                {newTemplateVersionAvailable && (
-                  <CardDescription className="flex items-center mt-2 text-amber-500">
-                    <AlertCircle className="h-4 w-4 mr-1" />
-                    New template version available
-                  </CardDescription>
-                )}
+                <CardTitle>Resources</CardTitle>
+                <CardDescription>Resources provisioned by this deployment</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {template ? (
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="font-medium">Template Name</div>
-                    <div>{template.name}</div>
-                    
-                    <div className="font-medium">Template Type</div>
-                    <div>{template.type}</div>
-                    
-                    <div className="font-medium">Version</div>
-                    <div className="flex items-center">
-                      {template.version}
-                      {newTemplateVersionAvailable && (
-                        <Badge variant="outline" className="ml-2 text-xs">Outdated</Badge>
-                      )}
-                    </div>
-                    
-                    <div className="font-medium">Categories</div>
-                    <div className="flex flex-wrap gap-1">
-                      {template.categories.map(category => (
-                        <Badge key={category} variant="secondary" className="text-xs">
-                          {category}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground">Template not found</div>
-                )}
-              </CardContent>
-              {newTemplateVersionAvailable && (
-                <CardFooter>
-                  <Button 
-                    className="w-full" 
-                    variant="secondary"
-                    onClick={() => handleAction("upgrade")}
-                  >
-                    <GitCompare className="h-4 w-4 mr-2" />
-                    Upgrade to Latest Version
-                  </Button>
-                </CardFooter>
-              )}
-            </Card>
-          </div>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Resources</CardTitle>
-              <CardDescription>Resources provisioned by this deployment</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Details</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {deployment.resources && deployment.resources.length > 0 ? (
-                    deployment.resources.map((resource: any, index: number) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{resource.name}</TableCell>
-                        <TableCell>{resource.type}</TableCell>
-                        <TableCell>
-                          {resource.status === "deployed" ? (
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Details</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {deployment.resources && deployment.resources.length > 0 ? (
+                      deployment.resources.map((resource, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">
+                            {typeof resource === 'string' 
+                              ? resource.split(':')[1]?.trim() || resource 
+                              : resource.name || 'Unknown'}
+                          </TableCell>
+                          <TableCell>
+                            {typeof resource === 'string'
+                              ? resource.split(':')[0]?.trim() || 'Resource'
+                              : resource.type || 'Unknown'}
+                          </TableCell>
+                          <TableCell>
                             <div className="flex items-center">
                               <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
                               <span>Deployed</span>
                             </div>
-                          ) : (
-                            <div className="flex items-center">
-                              <AlertCircle className="h-4 w-4 text-amber-500 mr-1" />
-                              <span>{resource.status}</span>
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm">View Details</Button>
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="sm">View Details</Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground">
+                          No resources found
                         </TableCell>
                       </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">
-                        No resources found
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
           
           <Card>
             <CardHeader>
@@ -452,7 +403,7 @@ const DeploymentDetails = () => {
               {template ? (
                 <ScrollArea className="h-[400px] rounded-md border bg-muted">
                   <pre className="p-4 text-sm">
-                    <code>{template.codeSnippet || "No code available"}</code>
+                    <code>{template.code || "No code available"}</code>
                   </pre>
                 </ScrollArea>
               ) : (
@@ -481,10 +432,10 @@ const DeploymentDetails = () => {
                 </TableHeader>
                 <TableBody>
                   {deployment.parameters && Object.keys(deployment.parameters).length > 0 ? (
-                    Object.entries(deployment.parameters).map(([key, value]: [string, any], index) => (
+                    Object.entries(deployment.parameters).map(([key, value], index) => (
                       <TableRow key={index}>
                         <TableCell className="font-medium">{key}</TableCell>
-                        <TableCell>{typeof value === 'object' ? JSON.stringify(value) : value.toString()}</TableCell>
+                        <TableCell>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</TableCell>
                         <TableCell>{typeof value}</TableCell>
                       </TableRow>
                     ))
