@@ -146,21 +146,21 @@ def init_db() -> None:
         # Create tenants
         logger.info("Creating tenants")
         default_tenant = Tenant(
-            tenant_id="default",
-            name="Default Tenant",
-            description="Default tenant for all users"
+            tenant_id="tenant-1",
+            name="Solutions Development",
+            description="Solutions Development tenant"
         )
         db.add(default_tenant)
         
         acme_tenant = Tenant(
-            tenant_id="tenant-1",
+            tenant_id="tenant-2",
             name="Acme Corporation",
             description="Enterprise customer with multiple cloud accounts"
         )
         db.add(acme_tenant)
         
         startup_tenant = Tenant(
-            tenant_id="tenant-2",
+            tenant_id="tenant-3",
             name="Tech Startup",
             description="Small tech startup with limited cloud resources"
         )
@@ -188,7 +188,7 @@ def init_db() -> None:
             email="user@example.com",
             hashed_password=get_password_hash("user"),
             role=user_role,
-            tenant=default_tenant
+            tenant=acme_tenant
         )
         db.add(test_user)
         
@@ -260,15 +260,44 @@ def init_db() -> None:
                 "name": "GCP Research",
                 "provider": "gcp",
                 "status": "warning",
-                "tenantId": "tenant-1",
+                "tenantId": "tenant-2",
             },
             {
                 "id": "account-4",
                 "name": "Dev Team Azure",
                 "provider": "azure",
                 "status": "connected",
+                "tenantId": "tenant-3",
+            },
+            {
+                "id": "account-5",
+                "name": "GCP Production",
+                "provider": "gcp",
+                "status": "warning",
+                "tenantId": "tenant-1",
+            },
+            {
+                "id": "account-6",
+                "name": "Azure Dev",
+                "provider": "azure",
+                "status": "connected",
                 "tenantId": "tenant-2",
             },
+            {
+                "id": "account-7",
+                "name": "AWS Lab Account",
+                "provider": "aws",
+                "status": "connected",
+                "tenantId": "tenant-3",
+            },
+            {
+                "id": "account-8",
+                "name": "GCP Production",
+                "provider": "gcp",
+                "status": "warning",
+                "tenantId": "tenant-3",
+            },
+            
         ]
         
         cloud_accounts = {}
@@ -310,19 +339,19 @@ def init_db() -> None:
                 "id": "env-3",
                 "name": "Testing",
                 "description": "QA testing environment",
-                "tenantId": "tenant-1"
+                "tenantId": "tenant-2"
             },
             {
                 "id": "env-4",
                 "name": "Production",
                 "description": "Production environment",
-                "tenantId": "tenant-2"
+                "tenantId": "tenant-3"
             },
             {
                 "id": "env-5",
                 "name": "Development",
                 "description": "Development environment",
-                "tenantId": "tenant-2"
+                "tenantId": "tenant-3"
             }
         ]
         
@@ -407,7 +436,7 @@ def init_db() -> None:
                     "type": "arm",
                     "provider": "azure",
                     "categories": ["virtual-machines", "autoscaling", "high-availability"],
-                    "tenantId": "tenant-1",
+                    "tenantId": "tenant-2",
                 },
                 {
                     "id": "template-5",
@@ -416,7 +445,7 @@ def init_db() -> None:
                     "type": "cloudformation",
                     "provider": "aws",
                     "categories": ["storage", "static-site", "web"],
-                    "tenantId": "tenant-1",
+                    "tenantId": "tenant-2",
                 },
                 {
                     "id": "template-6",
@@ -425,79 +454,9 @@ def init_db() -> None:
                     "type": "terraform",
                     "provider": "gcp",
                     "categories": ["database", "postgresql"],
-                    "tenantId": "tenant-2",
+                    "tenantId": "tenant-3",
                 }
             ]
-        
-        # Mock deployments data
-        mock_deployments = [
-            {
-                "id": "deployment-1",
-                "name": "Production Web App",
-                "templateId": "template-1",
-                "provider": "azure",
-                "status": "running",
-                "environment": "Production",
-                "createdAt": "2023-05-10T08:30:00Z",
-                "updatedAt": "2023-05-10T09:15:00Z",
-                "tenantId": "tenant-1"
-            },
-            {
-                "id": "deployment-2",
-                "name": "Dev Microservices",
-                "templateId": "template-2",
-                "provider": "aws",
-                "status": "running",
-                "environment": "Development",
-                "createdAt": "2023-05-15T11:20:00Z",
-                "updatedAt": "2023-05-15T12:45:00Z",
-                "tenantId": "tenant-1"
-            },
-            {
-                "id": "deployment-3",
-                "name": "Marketing Website",
-                "templateId": "template-3",
-                "provider": "gcp",
-                "status": "running",
-                "environment": "Production",
-                "createdAt": "2023-06-01T09:00:00Z",
-                "updatedAt": "2023-06-01T09:45:00Z",
-                "tenantId": "tenant-1"
-            },
-            {
-                "id": "deployment-4",
-                "name": "API Backend VMs",
-                "templateId": "template-4",
-                "provider": "azure",
-                "status": "failed",
-                "environment": "Testing",
-                "createdAt": "2023-06-10T14:10:00Z",
-                "updatedAt": "2023-06-10T14:55:00Z",
-                "tenantId": "tenant-1"
-            },
-            {
-                "id": "deployment-5",
-                "name": "Documentation Site",
-                "templateId": "template-5",
-                "provider": "aws",
-                "status": "pending",
-                "environment": "Production",
-                "createdAt": "2023-06-15T10:30:00Z",
-                "updatedAt": "2023-06-15T10:40:00Z",
-                "tenantId": "tenant-1"
-            },
-            {
-                "id": "deployment-6",
-                "name": "Analytics Database",
-                "templateId": "template-6",
-                "provider": "gcp",
-                "status": "stopped",
-                "environment": "Development",
-                "createdAt": "2023-05-25T13:45:00Z",
-                "updatedAt": "2023-06-14T09:20:00Z",
-                "tenantId": "tenant-2"
-            }
-        ]
         
         templates = {}
         for template_data in mock_templates_data:
