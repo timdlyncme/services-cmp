@@ -27,7 +27,6 @@ import {
   SidebarFooter,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarSection as BaseSidebarSection,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { TenantSwitcher } from "@/components/tenant-switcher";
