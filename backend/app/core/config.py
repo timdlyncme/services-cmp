@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # Azure OpenAI Settings
     AZURE_OPENAI_API_KEY: Optional[str] = None
     AZURE_OPENAI_ENDPOINT: Optional[str] = None
-    AZURE_OPENAI_API_VERSION: str = None
+    AZURE_OPENAI_API_VERSION: str = "2025-01-01-preview"
     AZURE_OPENAI_DEPLOYMENT_NAME: Optional[str] = None
     
     # CORS Settings - Allow all origins for development
