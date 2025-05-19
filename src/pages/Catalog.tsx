@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Input } from "@/components/ui/input";
@@ -7,9 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CloudTemplate, CloudProvider, TemplateType } from "@/types/cloud";
-import { mockTemplates } from "@/data/mock-data";
 import { useNavigate } from "react-router-dom";
 import { Search, FileCode } from "lucide-react";
+import { deploymentService } from "@/services/deployment-service";
+import { toast } from "sonner";
 
 interface FilterOptions {
   provider: CloudProvider | "all";
@@ -18,10 +18,11 @@ interface FilterOptions {
 }
 
 const Catalog = () => {
-  const { currentTenant } = useAuth();
+  const { currentTenant, hasPermission } = useAuth();
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<CloudTemplate[]>([]);
   const [filteredTemplates, setFilteredTemplates] = useState<CloudTemplate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState<FilterOptions>({
     provider: "all",
     type: "all",
@@ -29,14 +30,31 @@ const Catalog = () => {
   });
 
   useEffect(() => {
-    if (currentTenant) {
-      const tenantTemplates = mockTemplates.filter(
-        template => template.tenantId === currentTenant.id
-      );
-      setTemplates(tenantTemplates);
-      setFilteredTemplates(tenantTemplates);
-    }
-  }, [currentTenant]);
+    const fetchTemplates = async () => {
+      if (!currentTenant) return;
+      
+      // Check if user has permission to view templates
+      if (!hasPermission("view:catalog")) {
+        toast.error("You don't have permission to view the template catalog");
+        return;
+      }
+      
+      setIsLoading(true);
+      try {
+        // Fetch templates from API
+        const templatesData = await deploymentService.getTemplates(currentTenant.id);
+        setTemplates(templatesData);
+        setFilteredTemplates(templatesData);
+      } catch (error) {
+        console.error("Failed to fetch templates:", error);
+        toast.error("Failed to load templates. Please try again later.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchTemplates();
+  }, [currentTenant, hasPermission]);
 
   useEffect(() => {
     let result = templates;
@@ -117,7 +135,12 @@ const Catalog = () => {
       </div>
       
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredTemplates.length > 0 ? (
+        {isLoading ? (
+          <div className="col-span-3 py-8 text-center">
+            <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
+            <h3 className="mt-4 text-lg font-medium">Loading templates...</h3>
+          </div>
+        ) : filteredTemplates.length > 0 ? (
           filteredTemplates.map(template => (
             <Card key={template.id} className="overflow-hidden">
               <CardHeader className="pb-0">
