@@ -66,6 +66,8 @@ const CloudAccounts = () => {
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountProvider, setNewAccountProvider] = useState("azure");
   const [selectedDiscoveredAccounts, setSelectedDiscoveredAccounts] = useState<string[]>([]);
+  const [tagKey, setTagKey] = useState("");
+  const [tagValue, setTagValue] = useState("");
   
   // Fetch cloud accounts from API
   useEffect(() => {
@@ -131,6 +133,22 @@ const CloudAccounts = () => {
   const handleDeleteAccount = (accountId: string) => {
     // In a real app, this would call the API to delete the account
     toast.success("Cloud account deleted successfully");
+  };
+  
+  // Tag management functions
+  const addTag = () => {
+    if (!tagKey.trim()) {
+      toast.error("Tag key is required");
+      return;
+    }
+    
+    toast.success(`Tag ${tagKey} added successfully`);
+    setTagKey("");
+    setTagValue("");
+  };
+  
+  const removeTag = (key: string) => {
+    toast.success(`Tag ${key} removed successfully`);
   };
   
   // Filter cloud accounts based on search query

@@ -30,7 +30,7 @@ export class DeploymentService {
           Authorization: `Bearer ${token}`
         },
         params: {
-          tenantId
+          tenant_id: tenantId
         }
       });
       return response.data;
@@ -77,7 +77,7 @@ export class DeploymentService {
           Authorization: `Bearer ${token}`
         },
         params: {
-          tenantId
+          tenant_id: tenantId
         }
       });
       return response.data;
@@ -102,7 +102,7 @@ export class DeploymentService {
           Authorization: `Bearer ${token}`
         },
         params: {
-          tenantId
+          tenant_id: tenantId
         }
       });
       return response.data;
@@ -115,4 +115,3 @@ export class DeploymentService {
 
 // Create a singleton instance
 export const deploymentService = new DeploymentService();
-
