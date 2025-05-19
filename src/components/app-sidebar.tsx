@@ -142,9 +142,11 @@ export function AppSidebar() {
         <SidebarContent>
           {/* Core Services Section */}
           <SidebarSection title="Core Services" collapsed={collapsed}>
-            <NavItem to="/" icon={Activity} label="Dashboard" collapsed={collapsed} permission="view:dashboard" />
-            <NavItem to="/catalog" icon={FileCode} label="Template Catalog" collapsed={collapsed} permission="view:catalog" />
-            <NavItem to="/deployments" icon={Database} label="Deployments" collapsed={collapsed} permission="view:deployments" />
+            <div className="list-none">
+              <NavItem to="/" icon={Activity} label="Dashboard" collapsed={collapsed} permission="view:dashboard" />
+              <NavItem to="/catalog" icon={FileCode} label="Template Catalog" collapsed={collapsed} permission="view:catalog" />
+              <NavItem to="/deployments" icon={Database} label="Deployments" collapsed={collapsed} permission="view:deployments" />
+              </div>
           </SidebarSection>
 
           {/* Admin Settings Section - visible to admin and msp roles */}
@@ -152,11 +154,13 @@ export function AppSidebar() {
             <>
               <SidebarSeparator />
               <SidebarSection title="Tenant Settings" collapsed={collapsed}>
-                <NavItem to="/cloud-accounts" icon={CloudCog} label="Cloud Accounts" collapsed={collapsed} permission="view:cloud-accounts" />
-                <NavItem to="/environments" icon={Server} label="Environments" collapsed={collapsed} permission="view:environments" />
-                <NavItem to="/template-management" icon={NotebookText} label="Template Management" collapsed={collapsed} permission="view:templates" />
-                <NavItem to="/users-and-groups" icon={Shield} label="Users & Groups" collapsed={collapsed} permission="view:users" />
-                <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} permission="view:settings" />
+                <div className="list-none">
+                  <NavItem to="/cloud-accounts" icon={CloudCog} label="Cloud Accounts" collapsed={collapsed} permission="view:cloud-accounts" />
+                  <NavItem to="/environments" icon={Server} label="Environments" collapsed={collapsed} permission="view:environments" />
+                  <NavItem to="/template-management" icon={NotebookText} label="Template Management" collapsed={collapsed} permission="view:templates" />
+                  <NavItem to="/users-and-groups" icon={Shield} label="Users & Groups" collapsed={collapsed} permission="view:users" />
+                  <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} permission="view:settings" />
+                </div>
               </SidebarSection>
             </>
           )}
@@ -166,9 +170,11 @@ export function AppSidebar() {
             <>
               <SidebarSeparator />
               <SidebarSection title="MSP Management" collapsed={collapsed}>
-                <NavItem to="/tenants" icon={Users} label="Tenants" collapsed={collapsed} permission="view:tenants" />
-                <NavItem to="/msp-template-foundry" icon={Pickaxe} label="Template Foundry" collapsed={collapsed} permission="manage:templates" />
-                <NavItem to="/nexus-ai" icon={Brain} label="NexusAI" collapsed={collapsed} permission="use:nexus-ai" />
+                <div className="list-none">
+                  <NavItem to="/tenants" icon={Users} label="Tenants" collapsed={collapsed} permission="view:tenants" />
+                  <NavItem to="/msp-template-foundry" icon={Pickaxe} label="Template Foundry" collapsed={collapsed} permission="manage:templates" />
+                  <NavItem to="/nexus-ai" icon={Brain} label="NexusAI" collapsed={collapsed} permission="use:nexus-ai" />
+                </div>
               </SidebarSection>
             </>
           )}
