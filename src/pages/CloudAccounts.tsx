@@ -68,6 +68,7 @@ const CloudAccounts = () => {
   const [selectedDiscoveredAccounts, setSelectedDiscoveredAccounts] = useState<string[]>([]);
   const [tagKey, setTagKey] = useState("");
   const [tagValue, setTagValue] = useState("");
+  const [accountTags, setAccountTags] = useState<Record<string, string>>({});
   
   // Fetch cloud accounts from API
   useEffect(() => {
@@ -128,6 +129,7 @@ const CloudAccounts = () => {
     setNewAccountName("");
     setNewAccountProvider("azure");
     setSelectedDiscoveredAccounts([]);
+    setAccountTags({});
   };
   
   const handleDeleteAccount = (accountId: string) => {
@@ -142,12 +144,21 @@ const CloudAccounts = () => {
       return;
     }
     
+    setAccountTags({
+      ...accountTags,
+      [tagKey]: tagValue
+    });
+    
     toast.success(`Tag ${tagKey} added successfully`);
     setTagKey("");
     setTagValue("");
   };
   
   const removeTag = (key: string) => {
+    const updatedTags = { ...accountTags };
+    delete updatedTags[key];
+    setAccountTags(updatedTags);
+    
     toast.success(`Tag ${key} removed successfully`);
   };
   
@@ -274,9 +285,9 @@ const CloudAccounts = () => {
                   <Button onClick={addTag} type="button" variant="secondary">Add Tag</Button>
                 </div>
                 
-                {Object.keys(newCloudAccount.tags).length > 0 && (
+                {Object.keys(accountTags).length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {Object.entries(newCloudAccount.tags).map(([key, value]) => (
+                    {Object.entries(accountTags).map(([key, value]) => (
                       <Badge key={key} variant="secondary" className="flex gap-1 items-center">
                         {key}: {value}
                         <button 
