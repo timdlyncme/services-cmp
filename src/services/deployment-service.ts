@@ -15,14 +15,17 @@ const api = axios.create({
 });
 
 // Helper function to ensure tenant ID is in the correct format
-const formatTenantId = (tenantId: string): string => {
+const formatTenantId = (tenantId: string | number): string => {
+  // Convert to string if it's not already
+  const tenantIdStr = String(tenantId);
+  
   // If the ID is already in the format "tenant-X", return it as is
-  if (tenantId.startsWith('tenant-')) {
-    return tenantId;
+  if (tenantIdStr.startsWith('tenant-')) {
+    return tenantIdStr;
   }
   
   // Otherwise, format it as "tenant-X"
-  return `tenant-${tenantId}`;
+  return `tenant-${tenantIdStr}`;
 };
 
 export class DeploymentService {
