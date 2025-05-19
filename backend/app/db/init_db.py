@@ -346,43 +346,29 @@ def init_db() -> None:
         # Create templates from mock data
         logger.info("Creating templates from mock data")
         
-        # Import mock data from frontend
+        # Import mock data from JSON file
         import json
         import os
         
         # Path to the mock data file
-        mock_data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 
-                                     "src", "data", "mock-data.ts")
+        mock_data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "mock-data.json")
         
         # Read the mock data file
         try:
             with open(mock_data_path, "r") as f:
-                mock_data_content = f.read()
+                mock_data = json.load(f)
                 
-            # Extract mockTemplates array
-            import re
-            templates_match = re.search(r'export const mockTemplates: CloudTemplate\[\] = (\[[\s\S]*?\]);', mock_data_content)
-            deployments_match = re.search(r'export const mockDeployments: CloudDeployment\[\] = (\[[\s\S]*?\]);', mock_data_content)
+            mock_templates_data = mock_data.get("templates", [])
+            mock_deployments_data = mock_data.get("deployments", [])
+            mock_integration_configs_data = mock_data.get("integrationConfigs", [])
             
-            if templates_match and deployments_match:
-                # Convert to valid JSON by replacing single quotes with double quotes
-                templates_json = templates_match.group(1).replace("'", '"')
-                deployments_json = deployments_match.group(1).replace("'", '"')
-                
-                # Parse the JSON
-                import json
-                mock_templates_data = json.loads(templates_json)
-                mock_deployments_data = json.loads(deployments_json)
-                
-                logger.info(f"Successfully parsed mock data: {len(mock_templates_data)} templates, {len(mock_deployments_data)} deployments")
-            else:
-                logger.warning("Could not extract mock data from file, using default mock data")
-                mock_templates_data = []
-                mock_deployments_data = []
+            logger.info(f"Successfully loaded mock data: {len(mock_templates_data)} templates, {len(mock_deployments_data)} deployments, {len(mock_integration_configs_data)} integration configs")
         except Exception as e:
             logger.error(f"Error reading mock data file: {str(e)}")
+            # Fallback to default mock data
             mock_templates_data = []
             mock_deployments_data = []
+            mock_integration_configs_data = []
         
         # Mock templates data (fallback if file reading fails)
         if not mock_templates_data:
@@ -614,88 +600,32 @@ def init_db() -> None:
         tenants = db.query(Tenant).all()
         logger.info(f"Available tenants for integrations: {[t.tenant_id for t in tenants]}")
         
-        # Mock integration configs data
-        mock_integration_configs = [
-            {
-                "id": "integration-1",
-                "name": "Azure Cloud",
-                "type": "cloud",
-                "provider": "azure",
-                "status": "connected",
-                "lastChecked": "2023-06-20T15:30:00Z",
-                "tenantId": "tenant-1",
-                "settings": {
-                    "clientId": "azure-client-id",
-                    "tenantId": "azure-tenant-id",
-                    "subscriptionId": "azure-subscription-id"
-                }
-            },
-            {
-                "id": "integration-2",
-                "name": "AWS Cloud",
-                "type": "cloud",
-                "provider": "aws",
-                "status": "connected",
-                "lastChecked": "2023-06-20T15:35:00Z",
-                "tenantId": "tenant-1",
-                "settings": {
-                    "accessKey": "aws-access-key",
-                    "region": "us-west-2"
-                }
-            },
-            {
-                "id": "integration-3",
-                "name": "Google Cloud",
-                "type": "cloud",
-                "provider": "gcp",
-                "status": "warning",
-                "lastChecked": "2023-06-20T15:40:00Z",
-                "tenantId": "tenant-1",
-                "settings": {
-                    "projectId": "gcp-project-id",
-                    "keyFilePath": "/path/to/key.json"
-                }
-            },
-            {
-                "id": "integration-4",
-                "name": "Azure OpenAI",
-                "type": "ai",
-                "provider": "openai",
-                "status": "connected",
-                "lastChecked": "2023-06-20T15:45:00Z",
-                "tenantId": "tenant-1",
-                "settings": {
-                    "endpoint": "https://openai.azure.com",
-                    "apiKey": "openai-api-key",
-                    "deploymentName": "gpt4"
-                }
-            }
-        ]
-        
-        for integration_data in mock_integration_configs:
-            tenant = db.query(Tenant).filter(Tenant.tenant_id == integration_data["tenantId"]).first()
+        # Use mock integration configs data from the JSON file
+        integration_configs = []
+        for config_data in mock_integration_configs_data:
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == config_data["tenantId"]).first()
             if not tenant:
-                logger.warning(f"Tenant with ID {integration_data['tenantId']} not found, skipping integration {integration_data['id']}")
+                logger.warning(f"Tenant {config_data['tenantId']} not found, skipping integration config {config_data['id']}")
                 continue
-                
-            last_checked = datetime.fromisoformat(integration_data["lastChecked"].replace("Z", "+00:00"))
             
-            integration = IntegrationConfig(
-                integration_id=integration_data["id"],
-                name=integration_data["name"],
-                type=integration_data["type"],
-                provider=integration_data["provider"],
-                status=integration_data["status"],
-                last_checked=last_checked,
-                settings=integration_data["settings"],
-                tenant=tenant
+            integration_config = IntegrationConfig(
+                integration_id=config_data["id"],
+                name=config_data["name"],
+                type=config_data["type"],
+                provider=config_data["provider"],
+                status=config_data["status"],
+                last_checked=datetime.fromisoformat(config_data.get("lastChecked", datetime.utcnow().isoformat()).replace("Z", "+00:00")),
+                settings=config_data.get("settings", {}),
+                tenant_id=tenant.id
             )
-            db.add(integration)
+            db.add(integration_config)
+            integration_configs.append(integration_config)
         
-        # Final commit for all remaining entities
         db.commit()
-        logger.info("Integration configs created and committed to database")
-        logger.info("Database initialized with mock data")
+        logger.info(f"Created {len(integration_configs)} integration configs")
+        
+        # Final success message
+        logger.info("Database successfully initialized with mock data")
     
     except Exception as e:
         logger.error(f"Error initializing database: {e}")

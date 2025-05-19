@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 // Import types but not the mock data
 import { CloudDeployment } from "@/types/cloud";
+import { deploymentService } from "@/services/deployment-service";
 
 interface DeploymentFilters {
   status: string;
