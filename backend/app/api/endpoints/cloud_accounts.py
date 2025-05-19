@@ -67,14 +67,31 @@ def get_cloud_accounts(
         # Get tenant for each account
         result = []
         for account in cloud_accounts:
+            # Get the tenant associated with this account
             tenant = db.query(Tenant).filter(Tenant.id == account.tenant_id).first()
+            
+            # Debug log to see what's happening
+            print(f"Account {account.account_id} has tenant_id {account.tenant_id}")
+            if tenant:
+                print(f"Found tenant with ID {tenant.id} and tenant_id {tenant.tenant_id}")
+            else:
+                print(f"No tenant found for tenant_id {account.tenant_id}")
+            
+            # Use the tenant_id from the tenant record, not the numeric ID
+            tenant_id_for_response = None
+            if tenant:
+                tenant_id_for_response = tenant.tenant_id
+            else:
+                # Fallback to current user's tenant if no tenant found
+                tenant_id_for_response = current_user.tenant.tenant_id
+            
             result.append(
                 CloudAccountFrontendResponse(
                     id=account.account_id,
                     name=account.name,
                     provider=account.provider,
                     status=account.status,
-                    tenantId=tenant.tenant_id if tenant else current_user.tenant.tenant_id,
+                    tenantId=tenant_id_for_response,
                     connectionDetails={}  # Would need to add a connection_details field
                 )
             )
@@ -106,6 +123,7 @@ def get_cloud_account(
         )
     
     try:
+        # Get the cloud account
         account = db.query(CloudAccount).filter(CloudAccount.account_id == account_id).first()
         
         if not account:
@@ -123,13 +141,24 @@ def get_cloud_account(
                     detail="Not authorized to access this cloud account"
                 )
         
+        # Get the tenant associated with this account
+        tenant = db.query(Tenant).filter(Tenant.id == account.tenant_id).first()
+        
+        # Use the tenant_id from the tenant record, not the numeric ID
+        tenant_id_for_response = None
+        if tenant:
+            tenant_id_for_response = tenant.tenant_id
+        else:
+            # Fallback to current user's tenant if no tenant found
+            tenant_id_for_response = current_user.tenant.tenant_id
+        
         # Convert to frontend-compatible format
         return CloudAccountFrontendResponse(
             id=account.account_id,
             name=account.name,
             provider=account.provider,
             status=account.status,
-            tenantId=current_user.tenant.tenant_id,
+            tenantId=tenant_id_for_response,
             connectionDetails={}  # Would need to add a connection_details field
         )
     
@@ -175,13 +204,16 @@ def create_cloud_account(
         db.commit()
         db.refresh(new_account)
         
+        # Get the tenant associated with this account
+        tenant = db.query(Tenant).filter(Tenant.id == new_account.tenant_id).first()
+        
         # Return frontend-compatible response
         return CloudAccountFrontendResponse(
             id=new_account.account_id,
             name=new_account.name,
             provider=new_account.provider,
             status=new_account.status,
-            tenantId=current_user.tenant.tenant_id,
+            tenantId=tenant.tenant_id if tenant else current_user.tenant.tenant_id,
             connectionDetails={}
         )
     
@@ -239,13 +271,16 @@ def update_cloud_account(
         db.commit()
         db.refresh(account)
         
+        # Get the tenant associated with this account
+        tenant = db.query(Tenant).filter(Tenant.id == account.tenant_id).first()
+        
         # Return frontend-compatible response
         return CloudAccountFrontendResponse(
             id=account.account_id,
             name=account.name,
             provider=account.provider,
             status=account.status,
-            tenantId=current_user.tenant.tenant_id,
+            tenantId=tenant.tenant_id if tenant else current_user.tenant.tenant_id,
             connectionDetails={}
         )
     
