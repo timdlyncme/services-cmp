@@ -49,34 +49,11 @@ const Deployments = () => {
         throw new Error("Authentication token not found");
       }
       
-      // Try to fetch from API first
-      try {
-        const response = await axios.get(`${API_URL}/deployments`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
-          params: {
-            tenantId: currentTenant.id
-          }
-        });
-        
-        setDeployments(response.data);
-        setFilteredDeployments(response.data);
-        setIsLoading(false);
-      } catch (apiError) {
-        console.warn("Failed to fetch deployments from API, using mock data:", apiError);
-        
-        // Fallback to mock data for development
-        // In production, this would be removed
-        import("@/data/mock-data").then(({ mockDeployments }) => {
-          const tenantDeployments = mockDeployments.filter(
-            deployment => deployment.tenantId === currentTenant.id
-          );
-          setDeployments(tenantDeployments);
-          setFilteredDeployments(tenantDeployments);
-          setIsLoading(false);
-        });
-      }
+      // Fetch deployments from API
+      const deployments = await deploymentService.getDeployments(currentTenant.id);
+      setDeployments(deployments);
+      setFilteredDeployments(deployments);
+      setIsLoading(false);
     } catch (error) {
       console.error("Error fetching deployments:", error);
       setError("Failed to load deployments. Please try again.");

@@ -55,6 +55,7 @@ class TemplateBase(BaseModel):
     category: str
     provider: str
     is_public: bool = False
+    code: Optional[str] = None
 
 
 class TemplateCreate(TemplateBase):
@@ -77,6 +78,9 @@ class TemplateResponse(TemplateBase):
 class DeploymentBase(BaseModel):
     name: str
     status: str
+    region: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    resources: Optional[List[str]] = None
 
 
 class DeploymentCreate(DeploymentBase):
@@ -115,9 +119,10 @@ class CloudDeploymentResponse(BaseModel):
     environment: str
     createdAt: str
     updatedAt: str
-    parameters: Dict[str, str] = {}
+    parameters: Dict[str, Any] = {}
     resources: List[str] = []
     tenantId: str
+    region: Optional[str] = None
 
     class Config:
         from_attributes = False
@@ -152,4 +157,3 @@ class CloudAccountFrontendResponse(BaseModel):
 
     class Config:
         from_attributes = False
-

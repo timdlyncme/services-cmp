@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, DateTime, Table
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, DateTime, Table, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -47,6 +47,7 @@ class Template(Base):
     category = Column(String)
     provider = Column(String)  # azure, aws, gcp
     is_public = Column(Boolean, default=False)
+    code = Column(String, nullable=True)  # Store the template code
     
     # Relationships - tenant is null for public templates
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True)
@@ -64,6 +65,9 @@ class Deployment(Base):
     status = Column(String)  # running, succeeded, failed, pending
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    parameters = Column(JSON, nullable=True)  # Store deployment parameters
+    resources = Column(JSON, nullable=True)  # Store deployment resources
+    region = Column(String, nullable=True)  # Store deployment region
     
     # Relationships
     template_id = Column(Integer, ForeignKey("templates.id"))

@@ -346,90 +346,102 @@ def init_db() -> None:
         # Create templates from mock data
         logger.info("Creating templates from mock data")
         
-        # Mock templates data
-        mock_templates = [
-            {
-                "id": "template-1",
-                "name": "Basic Web Application",
-                "description": "Deploys a simple web application with supporting infrastructure",
-                "type": "terraform",
-                "provider": "azure",
-                "categories": ["web", "basic"],
-                "tenantId": "tenant-1",
-            },
-            {
-                "id": "template-2",
-                "name": "Containerized Microservices",
-                "description": "Kubernetes cluster for microservices deployment",
-                "type": "terraform",
-                "provider": "aws",
-                "categories": ["kubernetes", "microservices", "containers"],
-                "tenantId": "tenant-1",
-            },
-            {
-                "id": "template-3",
-                "name": "Google Cloud Storage with CDN",
-                "description": "Static website hosting with CDN",
-                "type": "terraform",
-                "provider": "gcp",
-                "categories": ["storage", "cdn", "static-site"],
-                "tenantId": "tenant-1",
-            },
-            {
-                "id": "template-4",
-                "name": "Virtual Machine Scale Set",
-                "description": "Autoscaling VMs for high availability",
-                "type": "arm",
-                "provider": "azure",
-                "categories": ["virtual-machines", "autoscaling", "high-availability"],
-                "tenantId": "tenant-1",
-            },
-            {
-                "id": "template-5",
-                "name": "S3 Static Website",
-                "description": "Simple S3 bucket configured for website hosting",
-                "type": "cloudformation",
-                "provider": "aws",
-                "categories": ["storage", "static-site", "web"],
-                "tenantId": "tenant-1",
-            },
-            {
-                "id": "template-6",
-                "name": "Cloud SQL Database",
-                "description": "Managed PostgreSQL database on GCP",
-                "type": "terraform",
-                "provider": "gcp",
-                "categories": ["database", "postgresql"],
-                "tenantId": "tenant-2",
-            }
-        ]
+        # Import mock data from frontend
+        import json
+        import os
         
-        templates = {}
-        for template_data in mock_templates:
-            tenant = db.query(Tenant).filter(Tenant.tenant_id == template_data["tenantId"]).first()
-            if tenant:
-                template = Template(
-                    template_id=template_data["id"],
-                    name=template_data["name"],
-                    description=template_data["description"],
-                    category=",".join(template_data["categories"]),
-                    provider=template_data["provider"],
-                    is_public=False,
-                    tenant=tenant
-                )
-                db.add(template)
-                templates[template_data["id"]] = template
+        # Path to the mock data file
+        mock_data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 
+                                     "src", "data", "mock-data.ts")
         
-        # Commit templates to the database so they have IDs
-        db.commit()
-        logger.info("Templates created and committed to database")
+        # Read the mock data file
+        try:
+            with open(mock_data_path, "r") as f:
+                mock_data_content = f.read()
+                
+            # Extract mockTemplates array
+            import re
+            templates_match = re.search(r'export const mockTemplates: CloudTemplate\[\] = (\[[\s\S]*?\]);', mock_data_content)
+            deployments_match = re.search(r'export const mockDeployments: CloudDeployment\[\] = (\[[\s\S]*?\]);', mock_data_content)
+            
+            if templates_match and deployments_match:
+                # Convert to valid JSON by replacing single quotes with double quotes
+                templates_json = templates_match.group(1).replace("'", '"')
+                deployments_json = deployments_match.group(1).replace("'", '"')
+                
+                # Parse the JSON
+                import json
+                mock_templates_data = json.loads(templates_json)
+                mock_deployments_data = json.loads(deployments_json)
+                
+                logger.info(f"Successfully parsed mock data: {len(mock_templates_data)} templates, {len(mock_deployments_data)} deployments")
+            else:
+                logger.warning("Could not extract mock data from file, using default mock data")
+                mock_templates_data = []
+                mock_deployments_data = []
+        except Exception as e:
+            logger.error(f"Error reading mock data file: {str(e)}")
+            mock_templates_data = []
+            mock_deployments_data = []
         
-        # Create deployments from mock data
-        logger.info("Creating deployments from mock data")
-        
-        # Debug: List all tenants in the database
-        tenants = db.query(Tenant).all()
-        logger.info(f"Available tenants: {[t.tenant_id for t in tenants]}")
+        # Mock templates data (fallback if file reading fails)
+        if not mock_templates_data:
+            mock_templates_data = [
+                {
+                    "id": "template-1",
+                    "name": "Basic Web Application",
+                    "description": "Deploys a simple web application with supporting infrastructure",
+                    "type": "terraform",
+                    "provider": "azure",
+                    "categories": ["web", "basic"],
+                    "tenantId": "tenant-1",
+                },
+                {
+                    "id": "template-2",
+                    "name": "Containerized Microservices",
+                    "description": "Kubernetes cluster for microservices deployment",
+                    "type": "terraform",
+                    "provider": "aws",
+                    "categories": ["kubernetes", "microservices", "containers"],
+                    "tenantId": "tenant-1",
+                },
+                {
+                    "id": "template-3",
+                    "name": "Google Cloud Storage with CDN",
+                    "description": "Static website hosting with CDN",
+                    "type": "terraform",
+                    "provider": "gcp",
+                    "categories": ["storage", "cdn", "static-site"],
+                    "tenantId": "tenant-1",
+                },
+                {
+                    "id": "template-4",
+                    "name": "Virtual Machine Scale Set",
+                    "description": "Autoscaling VMs for high availability",
+                    "type": "arm",
+                    "provider": "azure",
+                    "categories": ["virtual-machines", "autoscaling", "high-availability"],
+                    "tenantId": "tenant-1",
+                },
+                {
+                    "id": "template-5",
+                    "name": "S3 Static Website",
+                    "description": "Simple S3 bucket configured for website hosting",
+                    "type": "cloudformation",
+                    "provider": "aws",
+                    "categories": ["storage", "static-site", "web"],
+                    "tenantId": "tenant-1",
+                },
+                {
+                    "id": "template-6",
+                    "name": "Cloud SQL Database",
+                    "description": "Managed PostgreSQL database on GCP",
+                    "type": "terraform",
+                    "provider": "gcp",
+                    "categories": ["database", "postgresql"],
+                    "tenantId": "tenant-2",
+                }
+            ]
         
         # Mock deployments data
         mock_deployments = [
@@ -501,65 +513,99 @@ def init_db() -> None:
             }
         ]
         
-        for deployment_data in mock_deployments:
+        templates = {}
+        for template_data in mock_templates_data:
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == template_data["tenantId"]).first()
+            if tenant:
+                template = Template(
+                    template_id=template_data["id"],
+                    name=template_data["name"],
+                    description=template_data["description"],
+                    category=template_data["categories"][0] if template_data["categories"] else "general",
+                    provider=template_data["provider"],
+                    is_public=False,
+                    tenant_id=tenant.id,
+                    code=template_data.get("code", "")  # Add template code
+                )
+                db.add(template)
+                templates[template_data["id"]] = template
+            else:
+                logger.warning(f"Tenant {template_data['tenantId']} not found, skipping template {template_data['id']}")
+        
+        db.commit()
+        logger.info(f"Created {len(templates)} templates")
+        
+        # Create deployments from mock data
+        logger.info("Creating deployments from mock data")
+        
+        # Debug: List all tenants in the database
+        tenants = db.query(Tenant).all()
+        logger.info(f"Available tenants: {[t.tenant_id for t in tenants]}")
+        
+        # Use mock deployments data from the frontend
+        deployments = []
+        for deployment_data in mock_deployments_data:
             tenant = db.query(Tenant).filter(Tenant.tenant_id == deployment_data["tenantId"]).first()
             if not tenant:
-                logger.warning(f"Tenant with ID {deployment_data['tenantId']} not found, skipping deployment {deployment_data['id']}")
+                logger.warning(f"Tenant {deployment_data['tenantId']} not found, skipping deployment {deployment_data['id']}")
                 continue
                 
             template = templates.get(deployment_data["templateId"])
             if not template:
-                logger.warning(f"Template with ID {deployment_data['templateId']} not found, skipping deployment {deployment_data['id']}")
+                logger.warning(f"Template {deployment_data['templateId']} not found, skipping deployment {deployment_data['id']}")
                 continue
-            
-            # Find environment by name and tenant
+                
+            # Find or create environment
+            environment_name = deployment_data["environment"]
             environment = db.query(Environment).filter(
-                Environment.name == deployment_data["environment"],
+                Environment.name == environment_name,
                 Environment.tenant_id == tenant.id
             ).first()
             
             if not environment:
-                logger.warning(f"Environment with name {deployment_data['environment']} for tenant {deployment_data['tenantId']} not found, skipping deployment {deployment_data['id']}")
-                continue
+                # Create environment if it doesn't exist
+                import uuid
+                environment = Environment(
+                    environment_id=str(uuid.uuid4()),
+                    name=environment_name,
+                    description=f"{environment_name} environment",
+                    tenant_id=tenant.id
+                )
+                db.add(environment)
+                db.commit()
+                logger.info(f"Created new environment: {environment_name}")
             
-            # Find a cloud account for this tenant with the right provider
+            # Find cloud account for provider
             cloud_account = db.query(CloudAccount).filter(
                 CloudAccount.provider == deployment_data["provider"],
                 CloudAccount.tenant_id == tenant.id
             ).first()
             
             if not cloud_account:
-                logger.warning(f"Cloud account with provider {deployment_data['provider']} for tenant {deployment_data['tenantId']} not found, skipping deployment {deployment_data['id']}")
+                logger.warning(f"No cloud account found for provider {deployment_data['provider']} and tenant {tenant.tenant_id}, skipping deployment {deployment_data['id']}")
                 continue
             
-            created_at = datetime.fromisoformat(deployment_data["createdAt"].replace("Z", "+00:00"))
-            updated_at = datetime.fromisoformat(deployment_data["updatedAt"].replace("Z", "+00:00"))
-            
-            # Find the appropriate user for the tenant
-            if tenant.tenant_id == "tenant-1":
-                created_by = acme_admin
-            elif tenant.tenant_id == "tenant-2":
-                created_by = startup_admin
-            else:
-                created_by = admin_user
-            
+            # Create deployment
             deployment = Deployment(
                 deployment_id=deployment_data["id"],
                 name=deployment_data["name"],
                 status=deployment_data["status"],
-                created_at=created_at,
-                updated_at=updated_at,
-                template=template,
-                environment=environment,
-                cloud_account=cloud_account,
-                tenant=tenant,
-                created_by=created_by
+                template_id=template.id,
+                environment_id=environment.id,
+                cloud_account_id=cloud_account.id,
+                tenant_id=tenant.id,
+                created_by_id=admin_user.id,
+                created_at=datetime.fromisoformat(deployment_data["createdAt"].replace("Z", "+00:00")),
+                updated_at=datetime.fromisoformat(deployment_data["updatedAt"].replace("Z", "+00:00")),
+                parameters=deployment_data.get("parameters", {}),
+                resources=deployment_data.get("resources", []),
+                region=deployment_data.get("region", "us-east-1")
             )
             db.add(deployment)
+            deployments.append(deployment)
         
-        # Commit deployments to the database so they have IDs
         db.commit()
-        logger.info("Deployments created and committed to database")
+        logger.info(f"Created {len(deployments)} deployments")
         
         # Create integration configs from mock data
         logger.info("Creating integration configs from mock data")
