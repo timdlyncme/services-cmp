@@ -14,6 +14,20 @@ const api = axios.create({
   withCredentials: false
 });
 
+// Helper function to ensure tenant ID is in the correct format
+const formatTenantId = (tenantId: string | number): string => {
+  // Convert to string if it's not already
+  const tenantIdStr = String(tenantId);
+  
+  // If the ID is already in the format "tenant-X", return it as is
+  if (tenantIdStr.startsWith('tenant-')) {
+    return tenantIdStr;
+  }
+  
+  // Otherwise, format it as "tenant-X"
+  return `tenant-${tenantIdStr}`;
+};
+
 export class DeploymentService {
   /**
    * Get all deployments for a tenant
@@ -30,7 +44,7 @@ export class DeploymentService {
           Authorization: `Bearer ${token}`
         },
         params: {
-          tenant_id: tenantId
+          tenant_id: formatTenantId(tenantId)
         }
       });
       return response.data;
@@ -77,7 +91,7 @@ export class DeploymentService {
           Authorization: `Bearer ${token}`
         },
         params: {
-          tenant_id: tenantId
+          tenant_id: formatTenantId(tenantId)
         }
       });
       return response.data;
@@ -102,7 +116,7 @@ export class DeploymentService {
           Authorization: `Bearer ${token}`
         },
         params: {
-          tenant_id: tenantId
+          tenant_id: formatTenantId(tenantId)
         }
       });
       return response.data;
