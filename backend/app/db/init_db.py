@@ -93,14 +93,19 @@ ROLES = [
 # Default tenants
 TENANTS = [
     {
-        "name": "Default Tenant",
-        "description": "Default tenant for the application",
-        "tenant_id": "default"
+        "name": "Acme Corp",
+        "description": "Main corporate tenant",
+        "tenant_id": "tenant-1"
     },
     {
-        "name": "Demo Tenant",
-        "description": "Demo tenant for showcasing features",
-        "tenant_id": "demo"
+        "name": "Dev Team",
+        "description": "Development team workspace",
+        "tenant_id": "tenant-2"
+    },
+    {
+        "name": "Cloud Ops",
+        "description": "Cloud operations team",
+        "tenant_id": "tenant-3"
     }
 ]
 
@@ -112,7 +117,8 @@ USERS = [
         "full_name": "Admin User",
         "password": "admin123",  # This would be hashed in production
         "role": "admin",
-        "tenant": "default"
+        "tenant": "tenant-1",
+        "user_id": "user-1"
     },
     {
         "email": "user@example.com",
@@ -120,7 +126,8 @@ USERS = [
         "full_name": "Regular User",
         "password": "user123",  # This would be hashed in production
         "role": "user",
-        "tenant": "default"
+        "tenant": "tenant-1",
+        "user_id": "user-2"
     },
     {
         "email": "msp@example.com",
@@ -128,7 +135,26 @@ USERS = [
         "full_name": "MSP User",
         "password": "msp123",  # This would be hashed in production
         "role": "msp",
-        "tenant": "default"
+        "tenant": "tenant-1",
+        "user_id": "user-3"
+    },
+    {
+        "email": "dev@example.com",
+        "username": "dev",
+        "full_name": "Developer User",
+        "password": "dev123",  # This would be hashed in production
+        "role": "user",
+        "tenant": "tenant-2",
+        "user_id": "user-4"
+    },
+    {
+        "email": "ops@example.com",
+        "username": "ops",
+        "full_name": "Operations User",
+        "password": "ops123",  # This would be hashed in production
+        "role": "user",
+        "tenant": "tenant-3",
+        "user_id": "user-5"
     }
 ]
 
@@ -186,7 +212,8 @@ def init_db(db: Session) -> None:
                     full_name=user_data["full_name"],
                     hashed_password=get_password_hash(user_data["password"]),
                     role_id=role.id,
-                    tenant_id=tenant.id
+                    tenant_id=tenant.id,
+                    user_id=user_data.get("user_id")
                 )
                 db.add(user)
     
@@ -197,69 +224,277 @@ def init_db(db: Session) -> None:
 
 def create_sample_data(db: Session) -> None:
     """Create sample data for the application."""
-    # Get default tenant
-    default_tenant = db.query(Tenant).filter_by(tenant_id="default").first()
-    if not default_tenant:
-        logger.error("Default tenant not found")
+    # Get all tenants
+    tenants = db.query(Tenant).all()
+    if not tenants:
+        logger.error("No tenants found")
         return
     
-    # Create sample cloud accounts
+    # Create sample cloud accounts for each tenant
     cloud_accounts = []
-    for provider in ["azure", "aws", "gcp"]:
-        account = CloudAccount(
-            account_id=f"{provider}-account",
-            name=f"{provider.capitalize()} Account",
-            provider=provider,
-            status="connected",
-            description=f"Sample {provider.upper()} account",
-            tenant_id=default_tenant.id
-        )
-        db.add(account)
-        db.flush()
-        cloud_accounts.append(account)
+    for tenant in tenants:
+        for provider in ["azure", "aws", "gcp"]:
+            account = CloudAccount(
+                account_id=f"{provider}-account-{tenant.tenant_id}",
+                name=f"{provider.capitalize()} Account for {tenant.name}",
+                provider=provider,
+                status="connected",
+                description=f"Sample {provider.upper()} account for {tenant.name}",
+                tenant_id=tenant.id
+            )
+            db.add(account)
+            db.flush()
+            cloud_accounts.append(account)
     
-    # Create sample environments
+    # Create sample environments for each tenant
     environments = []
-    for env_name in ["Development", "Staging", "Production"]:
-        environment = Environment(
-            environment_id=f"{env_name.lower()}-env",
-            name=env_name,
-            description=f"{env_name} environment",
-            tenant_id=default_tenant.id,
-            update_strategy="rolling",
-            scaling_policies={"min": 1, "max": 5, "target_cpu": 70},
-            environment_variables={"ENV": env_name.upper(), "DEBUG": env_name != "Production"}
-        )
-        db.add(environment)
-        db.flush()
-        environments.append(environment)
+    for tenant in tenants:
+        for env_name in ["Development", "Staging", "Production"]:
+            environment = Environment(
+                environment_id=f"{env_name.lower()}-env-{tenant.tenant_id}",
+                name=f"{env_name} for {tenant.name}",
+                description=f"{env_name} environment for {tenant.name}",
+                tenant_id=tenant.id,
+                update_strategy="rolling",
+                scaling_policies={"min": 1, "max": 5, "target_cpu": 70},
+                environment_variables={"ENV": env_name.upper(), "DEBUG": env_name != "Production"}
+            )
+            db.add(environment)
+            db.flush()
+            environments.append(environment)
     
     # Associate cloud accounts with environments
-    environments[0].cloud_accounts.append(cloud_accounts[0])  # Dev -> Azure
-    environments[1].cloud_accounts.append(cloud_accounts[1])  # Staging -> AWS
-    environments[2].cloud_accounts.extend([cloud_accounts[0], cloud_accounts[2]])  # Prod -> Azure, GCP
+    # Each tenant gets their own associations
+    for i, tenant in enumerate(tenants):
+        tenant_environments = [env for env in environments if env.tenant_id == tenant.id]
+        tenant_accounts = [acc for acc in cloud_accounts if acc.tenant_id == tenant.id]
+        
+        if tenant_environments and tenant_accounts:
+            # Development environment gets Azure
+            tenant_environments[0].cloud_accounts.append(tenant_accounts[0])
+            
+            # Staging environment gets AWS
+            if len(tenant_environments) > 1 and len(tenant_accounts) > 1:
+                tenant_environments[1].cloud_accounts.append(tenant_accounts[1])
+            
+            # Production environment gets Azure and GCP
+            if len(tenant_environments) > 2 and len(tenant_accounts) > 2:
+                tenant_environments[2].cloud_accounts.append(tenant_accounts[0])
+                tenant_environments[2].cloud_accounts.append(tenant_accounts[2])
     
-    # Create sample templates
+    # Create sample templates for each tenant
     templates = []
-    for i, (name, provider) in enumerate([
-        ("Web App", "azure"),
-        ("Database Cluster", "aws"),
-        ("Kubernetes Cluster", "gcp")
-    ]):
-        template = Template(
-            template_id=f"template-{i+1}",
-            name=name,
-            description=f"{name} template for {provider.upper()}",
-            category="Infrastructure",
-            provider=provider,
-            is_public=True,
-            tenant_id=default_tenant.id
-        )
-        db.add(template)
-        db.flush()
-        templates.append(template)
+    template_data = [
+        {
+            "name": "Web App",
+            "description": "Basic web application template",
+            "category": "Web",
+            "provider": "azure"
+        },
+        {
+            "name": "Database Cluster",
+            "description": "Managed database cluster",
+            "category": "Database",
+            "provider": "aws"
+        },
+        {
+            "name": "Kubernetes Cluster",
+            "description": "Managed Kubernetes service",
+            "category": "Containers",
+            "provider": "gcp"
+        },
+        {
+            "name": "Static Website",
+            "description": "Static website hosting",
+            "category": "Web",
+            "provider": "aws"
+        },
+        {
+            "name": "Virtual Machine Scale Set",
+            "description": "Autoscaling VM group",
+            "category": "Compute",
+            "provider": "azure"
+        }
+    ]
+    
+    for tenant in tenants:
+        for i, data in enumerate(template_data):
+            template = Template(
+                template_id=f"template-{i+1}-{tenant.tenant_id}",
+                name=data["name"],
+                description=f"{data['description']} for {tenant.name}",
+                category=data["category"],
+                provider=data["provider"],
+                is_public=True,
+                tenant_id=tenant.id
+            )
+            db.add(template)
+            db.flush()
+            templates.append(template)
+    
+    # Create sample deployments for each tenant
+    for tenant in tenants:
+        tenant_templates = [t for t in templates if t.tenant_id == tenant.id]
+        tenant_environments = [e for e in environments if e.tenant_id == tenant.id]
+        
+        if not tenant_templates or not tenant_environments:
+            continue
+        
+        # Create 2-3 deployments per tenant
+        for i in range(min(3, len(tenant_templates))):
+            template = tenant_templates[i]
+            environment = tenant_environments[i % len(tenant_environments)]
+            
+            # Get a user from this tenant
+            user = db.query(User).filter_by(tenant_id=tenant.id).first()
+            if not user:
+                continue
+                
+            deployment = Deployment(
+                deployment_id=f"deployment-{i+1}-{tenant.tenant_id}",
+                name=f"{template.name} Deployment {i+1}",
+                status=["running", "pending", "stopped"][i % 3],
+                template_id=template.id,
+                environment_id=environment.id,
+                tenant_id=tenant.id,
+                created_by_id=user.id,
+                parameters={
+                    "region": "us-east-1" if template.provider == "aws" else "eastus" if template.provider == "azure" else "us-central1",
+                    "size": "small",
+                    "instances": i + 1
+                }
+            )
+            db.add(deployment)
+    
+    # Create sample template foundry items
+    from app.models.template_foundry import TemplateFoundry
+    
+    # Sample template code snippets
+    code_snippets = {
+        "terraform": """
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "example" {
+  name     = "example-resources"
+  location = "East US"
+}
+
+resource "azurerm_virtual_network" "example" {
+  name                = "example-network"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+}
+""",
+        "arm": """
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "storageAccountName": {
+      "type": "string",
+      "metadata": {
+        "description": "Storage Account Name"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "[parameters('storageAccountName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2"
+    }
+  ]
+}
+""",
+        "cloudformation": """
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  MyS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: Private
+      BucketName: my-example-bucket
+"""
+    }
+    
+    foundry_templates = [
+        {
+            "name": "Virtual Network",
+            "description": "Azure Virtual Network with subnets",
+            "type": "terraform",
+            "provider": "azure",
+            "categories": ["Networking", "Infrastructure"],
+            "is_published": True
+        },
+        {
+            "name": "Storage Account",
+            "description": "Azure Storage Account with blob containers",
+            "type": "arm",
+            "provider": "azure",
+            "categories": ["Storage", "Infrastructure"],
+            "is_published": True
+        },
+        {
+            "name": "S3 Bucket",
+            "description": "AWS S3 Bucket for object storage",
+            "type": "cloudformation",
+            "provider": "aws",
+            "categories": ["Storage", "Infrastructure"],
+            "is_published": True
+        },
+        {
+            "name": "EKS Cluster",
+            "description": "AWS Elastic Kubernetes Service",
+            "type": "terraform",
+            "provider": "aws",
+            "categories": ["Containers", "Kubernetes"],
+            "is_published": False
+        },
+        {
+            "name": "GKE Cluster",
+            "description": "Google Kubernetes Engine cluster",
+            "type": "terraform",
+            "provider": "gcp",
+            "categories": ["Containers", "Kubernetes"],
+            "is_published": True
+        }
+    ]
+    
+    # Create template foundry items for each tenant
+    for tenant in tenants:
+        # Get a user from this tenant
+        user = db.query(User).filter_by(tenant_id=tenant.id).first()
+        if not user:
+            continue
+            
+        for i, template_data in enumerate(foundry_templates):
+            template_type = template_data["type"]
+            
+            foundry_item = TemplateFoundry(
+                template_id=f"foundry-{i+1}-{tenant.tenant_id}",
+                name=template_data["name"],
+                description=template_data["description"],
+                type=template_data["type"],
+                provider=template_data["provider"],
+                code=code_snippets.get(template_type, code_snippets["terraform"]),
+                version="1.0.0",
+                categories=template_data["categories"],
+                is_published=template_data["is_published"],
+                author=user.username,
+                commit_id=f"commit-{i+1}-{tenant.tenant_id}",
+                tenant_id=tenant.id,
+                created_by_id=user.id
+            )
+            db.add(foundry_item)
     
     # Commit all changes
     db.commit()
     logger.info("Sample data created successfully")
-

@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, FileCode, GitCommit, User } from "lucide-react";
+import { Search, FileCode, GitCommit, User, Loader2 } from "lucide-react";
 import { Template } from "@/types/template";
 
 interface TemplateListProps {
@@ -14,6 +13,7 @@ interface TemplateListProps {
   setActiveTemplate: (template: Template | null) => void;
   filter?: string;
   setFilter?: (filter: string) => void;
+  isLoading?: boolean;
 }
 
 export const TemplateList = ({ 
@@ -21,7 +21,8 @@ export const TemplateList = ({
   activeTemplate, 
   setActiveTemplate,
   filter = "all",
-  setFilter = () => {}
+  setFilter = () => {},
+  isLoading = false
 }: TemplateListProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredTemplates, setFilteredTemplates] = useState<Template[]>(templates);
@@ -77,66 +78,73 @@ export const TemplateList = ({
         </Tabs>
         
         <ScrollArea className="h-[500px] pr-3">
-          <div className="space-y-2">
-            {filteredTemplates.length > 0 ? (
-              filteredTemplates.map((template) => (
-                <div
-                  key={template.id}
-                  className={`p-3 rounded-md cursor-pointer hover:bg-accent ${
-                    activeTemplate?.id === template.id ? "bg-accent" : ""
-                  }`}
-                  onClick={() => setActiveTemplate(template)}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="font-medium truncate">{template.name}</div>
-                    <Badge variant={template.isPublished ? "secondary" : "outline"}>
-                      {template.isPublished ? "Published" : "Draft"}
-                    </Badge>
-                  </div>
-                  <div className="text-sm text-muted-foreground truncate">
-                    {template.description}
-                  </div>
-                  <div className="flex mt-2 justify-between items-center">
-                    <div className="flex gap-2">
-                      <Badge 
-                        className={
-                          template.provider === "azure" ? "bg-cloud-azure text-white" :
-                          template.provider === "aws" ? "bg-cloud-aws text-black" :
-                          "bg-cloud-gcp text-white"
-                        }>
-                        {template.provider.toUpperCase()}
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center h-[400px]">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="mt-2 text-muted-foreground">Loading templates...</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredTemplates.length > 0 ? (
+                filteredTemplates.map((template) => (
+                  <div
+                    key={template.id}
+                    className={`p-3 rounded-md cursor-pointer hover:bg-accent ${
+                      activeTemplate?.id === template.id ? "bg-accent" : ""
+                    }`}
+                    onClick={() => setActiveTemplate(template)}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="font-medium truncate">{template.name}</div>
+                      <Badge variant={template.isPublished ? "secondary" : "outline"}>
+                        {template.isPublished ? "Published" : "Draft"}
                       </Badge>
-                      <Badge variant="outline">{template.type}</Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      v{template.version}
+                    <div className="text-sm text-muted-foreground truncate">
+                      {template.description}
                     </div>
+                    <div className="flex mt-2 justify-between items-center">
+                      <div className="flex gap-2">
+                        <Badge 
+                          className={
+                            template.provider === "azure" ? "bg-cloud-azure text-white" :
+                            template.provider === "aws" ? "bg-cloud-aws text-black" :
+                            "bg-cloud-gcp text-white"
+                          }>
+                          {template.provider.toUpperCase()}
+                        </Badge>
+                        <Badge variant="outline">{template.type}</Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        v{template.version}
+                      </div>
+                    </div>
+                    {(template.author || template.commitId) && (
+                      <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                        {template.author && (
+                          <div className="flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            <span>{template.author}</span>
+                          </div>
+                        )}
+                        {template.commitId && (
+                          <div className="flex items-center gap-1 ml-2">
+                            <GitCommit className="h-3 w-3" />
+                            <span className="font-mono">{template.commitId.substring(0, 7)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {(template.author || template.commitId) && (
-                    <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-                      {template.author && (
-                        <div className="flex items-center gap-1">
-                          <User className="h-3 w-3" />
-                          <span>{template.author}</span>
-                        </div>
-                      )}
-                      {template.commitId && (
-                        <div className="flex items-center gap-1 ml-2">
-                          <GitCommit className="h-3 w-3" />
-                          <span className="font-mono">{template.commitId.substring(0, 7)}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <FileCode className="h-8 w-8 mx-auto text-muted-foreground" />
+                  <p className="mt-2 text-muted-foreground">No templates found</p>
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-8">
-                <FileCode className="h-8 w-8 mx-auto text-muted-foreground" />
-                <p className="mt-2 text-muted-foreground">No templates found</p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </ScrollArea>
       </CardContent>
     </Card>
