@@ -1,5 +1,6 @@
 from datetime import timedelta
 from typing import Any
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -40,15 +41,26 @@ def get_current_user(
         raise credentials_exception
     
     # Try to find user by user_id first
-    user = db.query(User).filter(User.user_id == user_id).first()
-    
-    # If not found, try to find by id (in case sub is the id)
-    if user is None:
+    try:
+        # Check if user_id is a valid UUID
+        if user_id.startswith("user-"):
+            # Legacy format - strip the prefix
+            user_id = user_id[5:]
+        
+        # Try to parse as UUID
         try:
-            id_value = int(user_id)
-            user = db.query(User).filter(User.id == id_value).first()
-        except (ValueError, TypeError):
-            pass
+            uuid_obj = uuid.UUID(user_id)
+            user = db.query(User).filter(User.user_id == str(uuid_obj)).first()
+        except ValueError:
+            # Not a valid UUID, try to find by numeric ID
+            try:
+                id_value = int(user_id)
+                user = db.query(User).filter(User.id == id_value).first()
+            except (ValueError, TypeError):
+                user = None
+    except Exception as e:
+        print(f"Error finding user: {e}")
+        user = None
     
     if user is None:
         raise credentials_exception
@@ -74,9 +86,9 @@ def login_for_access_token(
     
     access_token_expires = timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    # Use user.id as the subject for the token
+    # Use user.user_id as the subject for the token (UUID)
     access_token = create_access_token(
-        subject=str(user.id), expires_delta=access_token_expires
+        subject=str(user.user_id), expires_delta=access_token_expires
     )
     
     # Convert user to UserSchema

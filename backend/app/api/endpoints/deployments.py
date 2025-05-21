@@ -2,6 +2,7 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+import uuid
 
 from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
@@ -51,6 +52,10 @@ def get_deployments(
         
         # Filter by tenant
         if tenant_id:
+            # Remove 'tenant-' prefix if present
+            if tenant_id.startswith('tenant-'):
+                tenant_id = tenant_id[7:]
+                
             # Check if tenant exists
             tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
             if not tenant:
