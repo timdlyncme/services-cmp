@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Input } from "@/components/ui/input";
@@ -7,9 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CloudTemplate, CloudProvider, TemplateType } from "@/types/cloud";
-import { mockTemplates } from "@/data/mock-data";
 import { useNavigate } from "react-router-dom";
-import { Search, FileCode } from "lucide-react";
+import { Search, FileCode, RefreshCw, AlertCircle } from "lucide-react";
+import { cmpService } from "@/services/cmp-service";
+import { toast } from "sonner";
 
 interface FilterOptions {
   provider: CloudProvider | "all";
@@ -22,19 +22,41 @@ const Catalog = () => {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<CloudTemplate[]>([]);
   const [filteredTemplates, setFilteredTemplates] = useState<CloudTemplate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterOptions>({
     provider: "all",
     type: "all",
     search: ""
   });
 
+  const fetchTemplates = async () => {
+    if (!currentTenant) return;
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const templates = await cmpService.getTemplates(currentTenant.id);
+      setTemplates(templates);
+      setFilteredTemplates(templates);
+    } catch (error) {
+      console.error("Error fetching templates:", error);
+      setError("Failed to load templates. Please try again.");
+      
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to load templates");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (currentTenant) {
-      const tenantTemplates = mockTemplates.filter(
-        template => template.tenantId === currentTenant.id
-      );
-      setTemplates(tenantTemplates);
-      setFilteredTemplates(tenantTemplates);
+      fetchTemplates();
     }
   }, [currentTenant]);
 
@@ -80,6 +102,11 @@ const Catalog = () => {
     }
   };
 
+  const handleRefresh = () => {
+    fetchTemplates();
+    toast.success("Refreshing templates...");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -88,6 +115,11 @@ const Catalog = () => {
           <p className="text-muted-foreground">
             Browse and deploy cloud infrastructure templates
           </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={handleRefresh}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
         </div>
       </div>
       
@@ -116,65 +148,81 @@ const Catalog = () => {
         </Tabs>
       </div>
       
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredTemplates.length > 0 ? (
-          filteredTemplates.map(template => (
-            <Card key={template.id} className="overflow-hidden">
-              <CardHeader className="pb-0">
-                <div className="flex justify-between items-start mb-2">
-                  <Badge className={`${providerColor(template.provider)}`}>
-                    {template.provider.toUpperCase()}
-                  </Badge>
-                  <Badge variant="outline">{typeLabel(template.type)}</Badge>
-                </div>
-                <CardTitle className="line-clamp-1">{template.name}</CardTitle>
-                <CardDescription className="line-clamp-2">
-                  {template.description}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="flex flex-wrap gap-2">
-                  {template.categories.map(category => (
-                    <Badge key={category} variant="secondary">
-                      {category}
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-10">
+          <RefreshCw className="h-10 w-10 text-muted-foreground mb-2 animate-spin" />
+          <h3 className="text-lg font-medium">Loading templates...</h3>
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-10">
+          <AlertCircle className="h-10 w-10 text-destructive mb-2" />
+          <h3 className="text-lg font-medium">Error loading templates</h3>
+          <p className="text-muted-foreground">{error}</p>
+          <Button variant="outline" className="mt-4" onClick={fetchTemplates}>
+            Try Again
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredTemplates.length > 0 ? (
+            filteredTemplates.map(template => (
+              <Card key={template.id} className="overflow-hidden">
+                <CardHeader className="pb-0">
+                  <div className="flex justify-between items-start mb-2">
+                    <Badge className={`${providerColor(template.provider)}`}>
+                      {template.provider.toUpperCase()}
                     </Badge>
-                  ))}
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-                  <div className="flex flex-col">
-                    <span className="text-muted-foreground">Deployments</span>
-                    <span className="font-medium">{template.deploymentCount}</span>
+                    <Badge variant="outline">{typeLabel(template.type)}</Badge>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-muted-foreground">Updated</span>
-                    <span className="font-medium">
-                      {new Date(template.updatedAt).toLocaleDateString()}
-                    </span>
+                  <CardTitle className="line-clamp-1">{template.name}</CardTitle>
+                  <CardDescription className="line-clamp-2">
+                    {template.description}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="flex flex-wrap gap-2">
+                    {template.categories.map(category => (
+                      <Badge key={category} variant="secondary">
+                        {category}
+                      </Badge>
+                    ))}
                   </div>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button 
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => navigate(`/catalog/${template.id}`)}
-                >
-                  <FileCode className="mr-2 h-4 w-4" />
-                  View Template
-                </Button>
-              </CardFooter>
-            </Card>
-          ))
-        ) : (
-          <div className="col-span-3 py-8 text-center">
-            <FileCode className="mx-auto h-8 w-8 text-muted-foreground" />
-            <h3 className="mt-4 text-lg font-medium">No templates found</h3>
-            <p className="text-muted-foreground">
-              Try adjusting your search or filters.
-            </p>
-          </div>
-        )}
-      </div>
+                  <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground">Deployments</span>
+                      <span className="font-medium">{template.deploymentCount}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground">Updated</span>
+                      <span className="font-medium">
+                        {new Date(template.updatedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="flex justify-between">
+                  <Button 
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => navigate(`/catalog/${template.id}`)}
+                  >
+                    <FileCode className="mr-2 h-4 w-4" />
+                    View Template
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))
+          ) : (
+            <div className="col-span-3 py-8 text-center">
+              <FileCode className="mx-auto h-8 w-8 text-muted-foreground" />
+              <h3 className="mt-4 text-lg font-medium">No templates found</h3>
+              <p className="text-muted-foreground">
+                Try adjusting your search or filters.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

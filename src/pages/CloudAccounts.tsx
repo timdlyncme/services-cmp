@@ -11,9 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Search, Cloud, Plus, Users, Tag, Shield, CheckCircle, AlertCircle, XCircle, Edit, Trash, RefreshCw } from "lucide-react";
 import { CloudAccount } from "@/types/cloud";
-import { deploymentService } from "@/services/deployment-service";
+import { cmpService } from "@/services/cmp-service";
 
-// Mock data for discovered cloud accounts
+// Mock data for discovered cloud accounts - this would come from an API in a real implementation
 const mockDiscoveredAccounts = [
   // Azure Subscriptions
   { id: "azure-sub-1", name: "Production", type: "subscription", provider: "azure", status: "active" },
@@ -31,28 +31,6 @@ const mockDiscoveredAccounts = [
   { id: "gcp-proj-3", name: "Infrastructure", type: "project", provider: "gcp", status: "inactive" }
 ];
 
-// Mock data for created cloud accounts
-const mockCreatedCloudAccounts = [
-  {
-    id: "acc-1",
-    name: "Production Infrastructure",
-    description: "All production infrastructure across cloud providers",
-    cloudAccounts: ["azure-sub-1", "aws-acc-1", "gcp-proj-1"],
-    tags: { environment: "production", criticality: "high" },
-    createdAt: "2023-06-15T08:30:00Z",
-    status: "healthy"
-  },
-  {
-    id: "acc-2",
-    name: "Development Environment",
-    description: "Resources for development and testing",
-    cloudAccounts: ["azure-sub-2", "azure-sub-3", "aws-acc-2", "gcp-proj-2"],
-    tags: { environment: "development", team: "engineering" },
-    createdAt: "2023-06-16T10:45:00Z",
-    status: "warning"
-  }
-];
-
 const CloudAccounts = () => {
   const { currentTenant } = useAuth();
   const [activeTab, setActiveTab] = useState("connected");
@@ -64,6 +42,7 @@ const CloudAccounts = () => {
   // State for the new account dialog
   const [isNewAccountDialogOpen, setIsNewAccountDialogOpen] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountDescription, setNewAccountDescription] = useState("");
   const [newAccountProvider, setNewAccountProvider] = useState("azure");
   const [selectedDiscoveredAccounts, setSelectedDiscoveredAccounts] = useState<string[]>([]);
   const [tagKey, setTagKey] = useState("");
@@ -71,31 +50,33 @@ const CloudAccounts = () => {
   const [accountTags, setAccountTags] = useState<Record<string, string>>({});
   
   // Fetch cloud accounts from API
-  useEffect(() => {
-    const fetchCloudAccounts = async () => {
-      if (!currentTenant) return;
-      
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const accounts = await deploymentService.getCloudAccounts(currentTenant.id);
-        setCloudAccounts(accounts);
-      } catch (error) {
-        console.error("Error fetching cloud accounts:", error);
-        setError("Failed to load cloud accounts. Please try again.");
-        
-        if (error instanceof Error) {
-          toast.error(error.message);
-        } else {
-          toast.error("Failed to load cloud accounts");
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const fetchCloudAccounts = async () => {
+    if (!currentTenant) return;
     
-    fetchCloudAccounts();
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const accounts = await cmpService.getCloudAccounts(currentTenant.id);
+      setCloudAccounts(accounts);
+    } catch (error) {
+      console.error("Error fetching cloud accounts:", error);
+      setError("Failed to load cloud accounts. Please try again.");
+      
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to load cloud accounts");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    if (currentTenant) {
+      fetchCloudAccounts();
+    }
   }, [currentTenant]);
   
   // Helper functions
@@ -112,29 +93,82 @@ const CloudAccounts = () => {
     }
   };
   
-  const handleCreateCloudAccount = () => {
+  const handleCreateCloudAccount = async () => {
     if (!newAccountName) {
       toast.error("Cloud account name is required");
       return;
     }
     
-    if (selectedDiscoveredAccounts.length === 0) {
-      toast.error("Please select at least one cloud account");
+    if (!newAccountProvider) {
+      toast.error("Cloud provider is required");
       return;
     }
     
-    // In a real app, this would call the API to create the account
-    toast.success("Cloud account created successfully");
-    setIsNewAccountDialogOpen(false);
-    setNewAccountName("");
-    setNewAccountProvider("azure");
-    setSelectedDiscoveredAccounts([]);
-    setAccountTags({});
+    try {
+      setIsLoading(true);
+      
+      // Create the new cloud account
+      const newAccount = {
+        name: newAccountName,
+        provider: newAccountProvider as any,
+        status: "connected",
+        description: newAccountDescription
+      };
+      
+      await cmpService.createCloudAccount(newAccount, currentTenant!.id);
+      
+      // Refresh the list
+      await fetchCloudAccounts();
+      
+      // Reset form and close dialog
+      setNewAccountName("");
+      setNewAccountDescription("");
+      setNewAccountProvider("azure");
+      setSelectedDiscoveredAccounts([]);
+      setAccountTags({});
+      setIsNewAccountDialogOpen(false);
+      
+      toast.success("Cloud account created successfully");
+    } catch (error) {
+      console.error("Error creating cloud account:", error);
+      
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to create cloud account");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
   
-  const handleDeleteAccount = (accountId: string) => {
-    // In a real app, this would call the API to delete the account
-    toast.success("Cloud account deleted successfully");
+  const handleDeleteAccount = async (accountId: string) => {
+    try {
+      setIsLoading(true);
+      
+      // Delete the cloud account
+      await cmpService.deleteCloudAccount(accountId);
+      
+      // Refresh the list
+      await fetchCloudAccounts();
+      
+      toast.success("Cloud account deleted successfully");
+    } catch (error) {
+      console.error("Error deleting cloud account:", error);
+      
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to delete cloud account");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleRefresh = () => {
+    fetchCloudAccounts();
+    toast.success("Refreshing cloud accounts...");
   };
   
   // Tag management functions
@@ -178,137 +212,162 @@ const CloudAccounts = () => {
           </p>
         </div>
         
-        <Dialog open={isNewAccountDialogOpen} onOpenChange={setIsNewAccountDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Cloud Account
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create Cloud Account</DialogTitle>
-              <DialogDescription>
-                Group your cloud provider resources into a managed account
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="grid gap-4 py-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label htmlFor="name" className="text-sm font-medium">Account Name</label>
-                  <Input
-                    id="name"
-                    value={newAccountName}
-                    onChange={(e) => setNewAccountName(e.target.value)}
-                    placeholder="e.g., Production Infrastructure"
-                  />
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={handleRefresh}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          
+          <Dialog open={isNewAccountDialogOpen} onOpenChange={setIsNewAccountDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                New Cloud Account
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Create Cloud Account</DialogTitle>
+                <DialogDescription>
+                  Group your cloud provider resources into a managed account
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="grid gap-4 py-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="name" className="text-sm font-medium">Account Name</label>
+                    <Input
+                      id="name"
+                      value={newAccountName}
+                      onChange={(e) => setNewAccountName(e.target.value)}
+                      placeholder="e.g., Production Infrastructure"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="description" className="text-sm font-medium">Description</label>
+                    <Input
+                      id="description"
+                      value={newAccountDescription}
+                      onChange={(e) => setNewAccountDescription(e.target.value)}
+                      placeholder="Describe this cloud account"
+                    />
+                  </div>
                 </div>
                 
                 <div className="space-y-2">
-                  <label htmlFor="description" className="text-sm font-medium">Description</label>
-                  <Input
-                    id="description"
-                    value={newAccountName}
-                    onChange={(e) => setNewAccountName(e.target.value)}
-                    placeholder="Describe this cloud account"
-                  />
+                  <label className="text-sm font-medium">Select Cloud Provider</label>
+                  <Tabs defaultValue="azure" onValueChange={setNewAccountProvider}>
+                    <TabsList className="grid grid-cols-3 mb-2">
+                      <TabsTrigger value="azure">Azure</TabsTrigger>
+                      <TabsTrigger value="aws">AWS</TabsTrigger>
+                      <TabsTrigger value="gcp">GCP</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 </div>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Select Cloud Resources</label>
-                <Tabs defaultValue="azure" onValueChange={setActiveTab}>
-                  <TabsList className="grid grid-cols-3 mb-2">
-                    <TabsTrigger value="azure">Azure</TabsTrigger>
-                    <TabsTrigger value="aws">AWS</TabsTrigger>
-                    <TabsTrigger value="gcp">GCP</TabsTrigger>
-                  </TabsList>
-                  
-                  <div className="border rounded-md">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[50px]"></TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {mockDiscoveredAccounts.length > 0 ? (
-                          mockDiscoveredAccounts.map((account) => (
-                            <TableRow key={account.id}>
-                              <TableCell>
-                                <Checkbox
-                                  checked={selectedDiscoveredAccounts.includes(account.id)}
-                                  onCheckedChange={() => setSelectedDiscoveredAccounts([...selectedDiscoveredAccounts, account.id])}
-                                />
-                              </TableCell>
-                              <TableCell className="font-medium">{account.name}</TableCell>
-                              <TableCell className="capitalize">{account.type}</TableCell>
-                              <TableCell>
-                                <Badge variant={account.status === "active" ? "secondary" : "outline"}>
-                                  {account.status}
-                                </Badge>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Select Cloud Resources</label>
+                  <Tabs defaultValue="azure" onValueChange={setActiveTab}>
+                    <TabsList className="grid grid-cols-3 mb-2">
+                      <TabsTrigger value="azure">Azure</TabsTrigger>
+                      <TabsTrigger value="aws">AWS</TabsTrigger>
+                      <TabsTrigger value="gcp">GCP</TabsTrigger>
+                    </TabsList>
+                    
+                    <div className="border rounded-md">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[50px]"></TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {mockDiscoveredAccounts.filter(a => a.provider === activeTab).length > 0 ? (
+                            mockDiscoveredAccounts.filter(a => a.provider === activeTab).map((account) => (
+                              <TableRow key={account.id}>
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedDiscoveredAccounts.includes(account.id)}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setSelectedDiscoveredAccounts([...selectedDiscoveredAccounts, account.id]);
+                                      } else {
+                                        setSelectedDiscoveredAccounts(
+                                          selectedDiscoveredAccounts.filter(id => id !== account.id)
+                                        );
+                                      }
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell className="font-medium">{account.name}</TableCell>
+                                <TableCell className="capitalize">{account.type}</TableCell>
+                                <TableCell>
+                                  <Badge variant={account.status === "active" ? "secondary" : "outline"}>
+                                    {account.status}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
+                                No {activeTab.toUpperCase()} accounts found
                               </TableCell>
                             </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
-                              No {activeTab.toUpperCase()} accounts found
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </Tabs>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Account Tags</label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Tag key"
-                    value={tagKey}
-                    onChange={(e) => setTagKey(e.target.value)}
-                    className="w-1/3"
-                  />
-                  <Input
-                    placeholder="Tag value"
-                    value={tagValue}
-                    onChange={(e) => setTagValue(e.target.value)}
-                    className="w-1/3"
-                  />
-                  <Button onClick={addTag} type="button" variant="secondary">Add Tag</Button>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </Tabs>
                 </div>
                 
-                {Object.keys(accountTags).length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {Object.entries(accountTags).map(([key, value]) => (
-                      <Badge key={key} variant="secondary" className="flex gap-1 items-center">
-                        {key}: {value}
-                        <button 
-                          onClick={() => removeTag(key)}
-                          className="ml-1 hover:bg-primary-foreground rounded-full"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Account Tags</label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Tag key"
+                      value={tagKey}
+                      onChange={(e) => setTagKey(e.target.value)}
+                      className="w-1/3"
+                    />
+                    <Input
+                      placeholder="Tag value"
+                      value={tagValue}
+                      onChange={(e) => setTagValue(e.target.value)}
+                      className="w-1/3"
+                    />
+                    <Button onClick={addTag} type="button" variant="secondary">Add Tag</Button>
                   </div>
-                )}
+                  
+                  {Object.keys(accountTags).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {Object.entries(accountTags).map(([key, value]) => (
+                        <Badge key={key} variant="secondary" className="flex gap-1 items-center">
+                          {key}: {value}
+                          <button 
+                            onClick={() => removeTag(key)}
+                            className="ml-1 hover:bg-primary-foreground rounded-full"
+                          >
+                            <XCircle className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-            
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsNewAccountDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreateCloudAccount}>Create Account</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsNewAccountDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreateCloudAccount}>Create Account</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
       
       <div className="relative">
@@ -332,7 +391,7 @@ const CloudAccounts = () => {
             <AlertCircle className="h-12 w-12 text-red-500" />
             <h2 className="mt-4 text-xl font-semibold">Error Loading Cloud Accounts</h2>
             <p className="text-muted-foreground mt-2">{error}</p>
-            <Button className="mt-4" onClick={() => window.location.reload()}>
+            <Button className="mt-4" onClick={fetchCloudAccounts}>
               Try Again
             </Button>
           </div>
