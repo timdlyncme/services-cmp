@@ -1,4 +1,5 @@
 from typing import Any, List
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
@@ -68,7 +69,35 @@ def get_tenant(
         )
     
     try:
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
+        # Handle different tenant ID formats
+        try:
+            # Remove 'tenant-' prefix if present
+            if tenant_id.startswith('tenant-'):
+                tenant_id = tenant_id[7:]
+            
+            # Check if tenant_id contains query parameters
+            if '=' in tenant_id:
+                # Extract the actual UUID from the query parameter
+                parts = tenant_id.split('=')
+                if len(parts) > 1:
+                    tenant_id = parts[1]
+            
+            # Try to parse as UUID
+            try:
+                uuid_obj = uuid.UUID(tenant_id)
+                tenant = db.query(Tenant).filter(Tenant.tenant_id == str(uuid_obj)).first()
+            except ValueError:
+                # Not a valid UUID, try to find by numeric ID
+                try:
+                    id_value = int(tenant_id)
+                    tenant = db.query(Tenant).filter(Tenant.id == id_value).first()
+                except (ValueError, TypeError):
+                    tenant = None
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid tenant ID format: {str(e)}"
+            )
         
         if not tenant:
             raise HTTPException(

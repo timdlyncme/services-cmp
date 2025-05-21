@@ -2,6 +2,7 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+import uuid
 
 from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
@@ -46,15 +47,38 @@ def get_templates(
         
         # Filter by tenant if specified
         if tenant_id:
-            tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
-            if not tenant:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Tenant with ID {tenant_id} not found"
+            # Handle different tenant ID formats
+            try:
+                # Remove 'tenant-' prefix if present
+                if tenant_id.startswith('tenant-'):
+                    tenant_id = tenant_id[7:]
+                
+                # Try to parse as UUID
+                try:
+                    uuid_obj = uuid.UUID(tenant_id)
+                    tenant = db.query(Tenant).filter(Tenant.tenant_id == str(uuid_obj)).first()
+                except ValueError:
+                    # Not a valid UUID, try to find by numeric ID
+                    try:
+                        id_value = int(tenant_id)
+                        tenant = db.query(Tenant).filter(Tenant.id == id_value).first()
+                    except (ValueError, TypeError):
+                        tenant = None
+                
+                if not tenant:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Tenant with ID {tenant_id} not found"
+                    )
+                
+                query = query.filter(
+                    (Template.is_public == True) | (Template.tenant_id == tenant.id)
                 )
-            query = query.filter(
-                (Template.is_public == True) | (Template.tenant_id == tenant.id)
-            )
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid tenant ID format: {str(e)}"
+                )
         
         templates = query.all()
         
