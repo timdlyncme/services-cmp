@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, EmailStr
 
 
@@ -12,8 +12,8 @@ class TokenData(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str
+    token: str
+    token_type: str = "bearer"
     user: Dict[str, Any]
 
 
@@ -48,3 +48,13 @@ class UserResponse(UserBase):
 
 # Alias for backward compatibility
 User = UserResponse
+
+
+class User(BaseModel):
+    id: int
+    username: str
+    full_name: Optional[str] = None
+    email: str
+    role: str
+    tenantId: str
+    permissions: List[str]
