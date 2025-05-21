@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, DateTime, Table, JSON
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, JSON, Boolean, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -12,25 +12,21 @@ class TemplateFoundry(Base):
     template_id = Column(String, unique=True, index=True)
     name = Column(String)
     description = Column(String, nullable=True)
-    type = Column(String)  # terraform, arm, cloudformation
-    provider = Column(String)  # azure, aws, gcp
-    code = Column(String)
+    type = Column(String)  # terraform, arm, cloudformation, etc.
+    provider = Column(String)  # azure, aws, gcp, etc.
+    code = Column(Text)  # The actual template code
     version = Column(String)
+    categories = Column(JSON, default=[])
+    is_published = Column(Boolean, default=False)
+    author = Column(String)
+    commit_id = Column(String, nullable=True)  # For version control
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    is_published = Column(Boolean, default=False)
-    categories = Column(JSON, nullable=True)
-    author = Column(String, nullable=True)
-    commit_id = Column(String, nullable=True)
     
     # Relationships
     tenant_id = Column(Integer, ForeignKey("tenants.id"))
-    tenant = relationship("Tenant", back_populates="template_foundry")
+    tenant = relationship("Tenant", back_populates="template_foundry_items")
     
     created_by_id = Column(Integer, ForeignKey("users.id"))
-    created_by = relationship("User", foreign_keys=[created_by_id])
-    
-    # Add relationship to Tenant model
-    from app.models.user import Tenant
-    Tenant.template_foundry = relationship("TemplateFoundry", back_populates="tenant")
+    created_by = relationship("User", back_populates="template_foundry_items")
 

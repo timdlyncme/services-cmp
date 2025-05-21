@@ -1,42 +1,36 @@
 """
-Database migration script to update the schema with new tables and fields.
+Database schema update script.
 
-This script should be run after updating the models to ensure the database schema is in sync.
+This script creates all the database tables based on the SQLAlchemy models.
+Run this script before initializing the database with data.
 """
 
-import os
-import sys
-from pathlib import Path
-
-# Add the parent directory to sys.path
-sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Boolean, DateTime, Table, JSON
+import logging
+from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
-from app.models.base_models import Base
-from app.models.user import User, Tenant, Role, Permission
-from app.models.deployment import (
-    CloudAccount, Environment, Template, Deployment,
-    TemplateVersion, DeploymentHistory, environment_cloud_account
-)
+from app.db.session import Base
+from app.models.user import User, Role, Permission, Tenant
+from app.models.deployment import CloudAccount, Environment, Template, TemplateVersion, Deployment, DeploymentHistory
+from app.models.integration import IntegrationConfig
 from app.models.template_foundry import TemplateFoundry
 
-# Create engine and session
-engine = create_engine(settings.SQLALCHEMY_DATABASE_URI)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def run_migration():
-    """Run the migration to update the database schema."""
-    print("Starting database migration...")
+def create_tables():
+    """Create all database tables."""
+    engine = create_engine(settings.SQLALCHEMY_DATABASE_URI)
+    
+    # Import all models to ensure they're registered with the Base metadata
+    logger.info("Creating database tables...")
     
     # Create all tables
     Base.metadata.create_all(bind=engine)
-    
-    print("Migration completed successfully!")
+    logger.info("Database tables created successfully")
 
 if __name__ == "__main__":
-    run_migration()
+    create_tables()
 
