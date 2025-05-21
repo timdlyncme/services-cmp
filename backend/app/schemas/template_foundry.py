@@ -6,30 +6,35 @@ from datetime import datetime
 class TemplateFoundryBase(BaseModel):
     name: str
     description: Optional[str] = None
-    type: str  # terraform, arm, cloudformation
-    provider: str  # azure, aws, gcp
-    code: str
-    version: Optional[str] = "1.0.0"
-    categories: Optional[List[str]] = None
+    type: str  # terraform, arm, cloudformation, etc.
+    provider: str  # azure, aws, gcp, etc.
+    code: str  # The actual template code
+    version: str
+    categories: Optional[List[str]] = []
     is_published: Optional[bool] = False
     author: Optional[str] = None
     commit_id: Optional[str] = None
 
 
 class TemplateFoundryCreate(TemplateFoundryBase):
-    tenant_id: Optional[str] = None
+    pass
 
 
 class TemplateFoundryUpdate(TemplateFoundryBase):
-    pass
+    name: Optional[str] = None
+    type: Optional[str] = None
+    provider: Optional[str] = None
+    code: Optional[str] = None
+    version: Optional[str] = None
 
 
 class TemplateFoundryResponse(TemplateFoundryBase):
     id: int
     template_id: str
+    tenant_id: int
+    created_by_id: int
     created_at: datetime
     updated_at: datetime
-    tenant_id: int
 
     class Config:
         from_attributes = True

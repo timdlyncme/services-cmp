@@ -2,61 +2,45 @@
 
 This directory contains database migration scripts for the CMP application.
 
-## Running Migrations
+## Available Scripts
 
-To run the latest migration script, follow these steps:
+### `update_schema.py`
 
-1. Make sure your virtual environment is activated:
-   ```bash
-   source venv/bin/activate  # On Linux/Mac
-   # or
-   .\venv\Scripts\activate  # On Windows
-   ```
+This script creates all database tables based on the SQLAlchemy models. Run this script before initializing the database with data.
 
-2. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
+```bash
+python -m app.db.migrations.update_schema
+```
 
-3. Run the migration script:
-   ```bash
-   python -m app.db.migrations.update_schema
-   ```
+## Database Initialization
 
-## Migration History
+After creating the tables, you can initialize the database with default data using the `init_db.py` script:
 
-### update_schema.py (Latest)
+```bash
+python -m backend.init_db
+```
 
-This migration adds the following changes to the database schema:
+This will create:
+- Default roles and permissions
+- Default tenants
+- Admin users
+- Sample data for testing
 
-- Added new fields to the `Environment` model:
-  - `update_strategy`: Rolling, blue-green, or canary deployment strategy
-  - `scaling_policies`: JSON field for scaling configuration
-  - `environment_variables`: JSON field for environment variables
-  - `logging_config`: JSON field for logging configuration
-  - `monitoring_integration`: JSON field for monitoring integration
+## Database Schema
 
-- Added many-to-many relationship between `Environment` and `CloudAccount`
-  - Created `environment_cloud_account` association table
+The database schema includes the following main tables:
 
-- Added `TemplateVersion` model for template versioning
-  - Tracks version history for templates
-  - Stores version number, code, and commit messages
-
-- Added `DeploymentHistory` model for deployment tracking
-  - Records deployment events (create, update, delete, status changes)
-  - Stores event details and user information
-
-- Added `TemplateFoundry` model for template management
-  - Provides a workspace for creating and editing templates
-  - Supports draft templates and publishing workflow
-
-## Creating New Migrations
-
-When making changes to the database schema:
-
-1. Update the model definitions in the appropriate files
-2. Create a new migration script in this directory
-3. Update this README with details about the migration
-4. Run the migration script to apply the changes
+- `users`: User accounts
+- `roles`: User roles (admin, user, msp)
+- `permissions`: Individual permissions
+- `role_permissions`: Association table for roles and permissions
+- `tenants`: Multi-tenant support
+- `cloud_accounts`: Cloud provider accounts
+- `environments`: Deployment environments
+- `templates`: Infrastructure templates
+- `template_versions`: Version history for templates
+- `deployments`: Infrastructure deployments
+- `deployment_history`: History of deployment changes
+- `integration_configs`: External service integrations
+- `template_foundry`: Template development workspace
 

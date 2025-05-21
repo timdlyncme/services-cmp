@@ -31,6 +31,9 @@ class User(Base):
     
     # Relationship with deployments
     deployments = relationship("Deployment", back_populates="created_by")
+    
+    # Relationship with template foundry
+    template_foundry_items = relationship("TemplateFoundry", back_populates="created_by")
 
 
 class Role(Base):
@@ -64,4 +67,4 @@ class Tenant(Base):
     # Relationships
     users = relationship("User", back_populates="tenant")
     integration_configs = relationship("IntegrationConfig", back_populates="tenant")
-    # Other relationships are defined in deployment.py
+    template_foundry_items = relationship("TemplateFoundry", back_populates="tenant")
