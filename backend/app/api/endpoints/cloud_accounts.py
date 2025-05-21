@@ -174,6 +174,7 @@ def get_cloud_account(
 @router.post("/", response_model=CloudAccountFrontendResponse)
 def create_cloud_account(
     account: CloudAccountCreate,
+    tenant_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -189,6 +190,28 @@ def create_cloud_account(
         )
     
     try:
+        # Determine which tenant to use
+        target_tenant_id = current_user.tenant_id
+        
+        # If tenant_id is provided, use that instead
+        if tenant_id:
+            # Check if tenant exists
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
+            if not tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Tenant with ID {tenant_id} not found"
+                )
+            
+            # Check if user has access to this tenant
+            if tenant.id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to create cloud accounts for this tenant"
+                )
+            
+            target_tenant_id = tenant.id
+        
         # Create new cloud account
         import uuid
         new_account = CloudAccount(
@@ -197,7 +220,7 @@ def create_cloud_account(
             provider=account.provider,
             status=account.status,
             description=account.description,
-            tenant_id=current_user.tenant_id
+            tenant_id=target_tenant_id
         )
         
         db.add(new_account)

@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { useAzureOpenAI } from '@/contexts/AzureOpenAIContext';
+import { NexusAIService } from '@/services/nexus-ai-service';
 import { Settings } from 'lucide-react';
 
 interface ConfigDialogProps {
@@ -70,6 +71,17 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
       });
       
       addLog('Configuration updated', 'success');
+      
+      // Update the backend configuration
+      const nexusAIService = new NexusAIService();
+      await nexusAIService.updateConfig({
+        api_key: formValues.apiKey,
+        endpoint: formValues.endpoint,
+        deployment_name: formValues.deploymentName,
+        api_version: formValues.apiVersion,
+      });
+      
+      addLog('Backend configuration updated', 'success');
       
       // Test the connection
       const success = await testConnection();
@@ -184,3 +196,4 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
     </Dialog>
   );
 }
+
