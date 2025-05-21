@@ -25,7 +25,7 @@ class TemplateFoundry(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    tenant_id = Column(String, ForeignKey("tenants.tenant_id"))  # Changed from Integer to String
+    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))  # Changed to UUID type
     tenant = relationship("Tenant", back_populates="template_foundry_items")
     
     created_by_id = Column(Integer, ForeignKey("users.id"))

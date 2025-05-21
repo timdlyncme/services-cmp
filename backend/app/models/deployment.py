@@ -26,7 +26,7 @@ class CloudAccount(Base):
     description = Column(String, nullable=True)
     
     # Relationships
-    tenant_id = Column(String, ForeignKey("tenants.tenant_id"))  # Changed from Integer to String
+    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))  # Changed to UUID type
     tenant = relationship("Tenant", back_populates="cloud_accounts")
     
     # Many-to-many relationship with Environment
@@ -53,7 +53,7 @@ class Environment(Base):
     monitoring_integration = Column(JSON, nullable=True)
     
     # Relationships
-    tenant_id = Column(String, ForeignKey("tenants.tenant_id"))  # Changed from Integer to String
+    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))  # Changed to UUID type
     tenant = relationship("Tenant", back_populates="environments")
     
     deployments = relationship("Deployment", back_populates="environment")
@@ -79,7 +79,7 @@ class Template(Base):
     current_version = Column(String, nullable=True)
     
     # Relationships
-    tenant_id = Column(String, ForeignKey("tenants.tenant_id"))  # Changed from Integer to String
+    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))  # Changed to UUID type
     tenant = relationship("Tenant", back_populates="templates")
     
     deployments = relationship("Deployment", back_populates="template")
@@ -118,7 +118,7 @@ class Deployment(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    tenant_id = Column(String, ForeignKey("tenants.tenant_id"))  # Changed from Integer to String
+    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))  # Changed to UUID type
     tenant = relationship("Tenant", back_populates="deployments")
     
     environment_id = Column(Integer, ForeignKey("environments.id"))
