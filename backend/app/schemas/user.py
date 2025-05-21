@@ -44,3 +44,7 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+
+# Alias for backward compatibility
+User = UserResponse
