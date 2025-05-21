@@ -69,7 +69,8 @@ def login_for_access_token(
     # Convert user to UserSchema
     user_schema = UserSchema(
         id=user.id,
-        name=user.name,
+        username=user.username,
+        full_name=user.full_name,
         email=user.email,
         role=user.role.name,
         tenantId=user.tenant.tenant_id,
@@ -78,7 +79,8 @@ def login_for_access_token(
     
     return {
         "user": user_schema,
-        "token": access_token
+        "token": access_token,
+        "token_type": "bearer"
     }
 
 
@@ -102,7 +104,8 @@ def read_users_me(current_user: User = Depends(get_current_user)) -> Any:
     # Convert user to UserSchema
     user_schema = UserSchema(
         id=current_user.id,
-        name=current_user.name,
+        username=current_user.username,
+        full_name=current_user.full_name,
         email=current_user.email,
         role=current_user.role.name,
         tenantId=current_user.tenant.tenant_id,
