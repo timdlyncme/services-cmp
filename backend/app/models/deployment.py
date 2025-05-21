@@ -75,6 +75,7 @@ class Template(Base):
     category = Column(String, nullable=True)
     provider = Column(String)  # azure, aws, gcp
     is_public = Column(Boolean, default=False)
+    current_version = Column(String, nullable=True)
     
     # Relationships
     tenant_id = Column(Integer, ForeignKey("tenants.id"))
@@ -91,15 +92,15 @@ class TemplateVersion(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     version = Column(String)
-    code = Column(String)
-    commit_message = Column(String, nullable=True)
+    changes = Column(String, nullable=True)
+    code = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     template_id = Column(Integer, ForeignKey("templates.id"))
     template = relationship("Template", back_populates="versions")
     
-    created_by_id = Column(Integer, ForeignKey("users.id"))
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_by = relationship("User")
 
 
@@ -111,6 +112,7 @@ class Deployment(Base):
     name = Column(String)
     description = Column(String, nullable=True)
     status = Column(String)  # pending, running, completed, failed
+    parameters = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -136,9 +138,10 @@ class DeploymentHistory(Base):
     __tablename__ = "deployment_history"
     
     id = Column(Integer, primary_key=True, index=True)
-    event_type = Column(String)  # create, update, delete, status_change
-    event_details = Column(JSON, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    status = Column(String)  # pending, in_progress, completed, failed
+    message = Column(String, nullable=True)
+    details = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     deployment_id = Column(Integer, ForeignKey("deployments.id"))
