@@ -78,7 +78,7 @@ class User(Base):
     role_id = Column(Integer, ForeignKey("roles.id"))
     role = relationship("Role", back_populates="users")
     
-    tenant_id = Column(Integer, ForeignKey("tenants.id"))
+    tenant_id = Column(String, ForeignKey("tenants.tenant_id"))  # Changed from Integer to String
     tenant = relationship("Tenant", back_populates="users")
     
     # Relationship with Deployment
