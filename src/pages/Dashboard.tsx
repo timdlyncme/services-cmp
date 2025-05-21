@@ -33,8 +33,8 @@ export default function Dashboard() {
     try {
       // Fetch deployments and cloud accounts in parallel
       const [deploymentsData, cloudAccountsData] = await Promise.all([
-        deploymentService.getDeployments(currentTenant.id),
-        deploymentService.getCloudAccounts(currentTenant.id)
+        deploymentService.getDeployments(currentTenant.tenant_id),
+        deploymentService.getCloudAccounts(currentTenant.tenant_id)
       ]);
       
       setDeployments(deploymentsData);
@@ -54,10 +54,10 @@ export default function Dashboard() {
         const { mockDeployments, mockCloudAccounts } = await import("@/data/mock-data");
         
         const tenantDeployments = mockDeployments.filter(
-          deployment => deployment.tenantId === currentTenant.id
+          deployment => deployment.tenantId === currentTenant.tenant_id
         );
         const tenantCloudAccounts = mockCloudAccounts.filter(
-          account => account.tenantId === currentTenant.id
+          account => account.tenantId === currentTenant.tenant_id
         );
         
         setDeployments(tenantDeployments);

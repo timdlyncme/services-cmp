@@ -65,7 +65,7 @@ const DeploymentDetails = () => {
           if (deploymentData.templateId) {
             try {
               // In a real app, we would fetch the template from the API
-              const templates = await deploymentService.getTemplates(currentTenant?.id || "");
+              const templates = await deploymentService.getTemplates(currentTenant?.tenant_id || "");
               const associatedTemplate = templates.find(t => t.id === deploymentData.templateId);
               
               if (associatedTemplate) {

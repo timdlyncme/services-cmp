@@ -42,7 +42,7 @@ const TemplateManagement = () => {
     setError(null);
     
     try {
-      const templates = await cmpService.getTemplates(currentTenant.id);
+      const templates = await cmpService.getTemplates(currentTenant.tenant_id);
       setTemplates(templates);
       setFilteredTemplates(templates);
     } catch (error) {
@@ -115,7 +115,7 @@ const TemplateManagement = () => {
         code: ""
       };
       
-      await cmpService.createTemplate(newTemplate, currentTenant!.id);
+      await cmpService.createTemplate(newTemplate, currentTenant!.tenant_id);
       
       // Refresh the list
       await fetchTemplates();
@@ -410,4 +410,3 @@ const TemplateManagement = () => {
 };
 
 export default TemplateManagement;
-

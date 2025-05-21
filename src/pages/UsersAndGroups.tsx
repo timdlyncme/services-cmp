@@ -38,7 +38,7 @@ const UsersAndGroups = () => {
     setError(null);
     
     try {
-      const users = await cmpService.getUsers(currentTenant.id);
+      const users = await cmpService.getUsers(currentTenant.tenant_id);
       setUsers(users);
       setFilteredUsers(users);
     } catch (error) {
@@ -270,4 +270,3 @@ const UsersAndGroups = () => {
 };
 
 export default UsersAndGroups;
-
