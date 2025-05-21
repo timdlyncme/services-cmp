@@ -1,15 +1,15 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Table
 from sqlalchemy.orm import relationship
 
 from app.models.base_models import Base
 
 
-# Association table for many-to-many relationship between roles and permissions
+# Association table for many-to-many relationship between Role and Permission
 role_permission = Table(
-    "role_permission",
+    "role_permissions",
     Base.metadata,
-    Column("role_id", Integer, ForeignKey("roles.id")),
-    Column("permission_id", Integer, ForeignKey("permissions.id"))
+    Column("role_id", Integer, ForeignKey("roles.id"), primary_key=True),
+    Column("permission_id", Integer, ForeignKey("permissions.id"), primary_key=True)
 )
 
 
@@ -29,7 +29,7 @@ class User(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"))
     tenant = relationship("Tenant", back_populates="users")
     
-    # Use string reference to avoid circular import
+    # Relationship with deployments
     deployments = relationship("Deployment", back_populates="created_by")
 
 
@@ -37,31 +37,20 @@ class Role(Base):
     __tablename__ = "roles"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
+    name = Column(String, unique=True)
     description = Column(String, nullable=True)
     
     # Relationships
     users = relationship("User", back_populates="role")
-    permissions = relationship(
-        "Permission",
-        secondary=role_permission,
-        back_populates="roles"
-    )
+    permissions = relationship("Permission", secondary="role_permissions")
 
 
 class Permission(Base):
     __tablename__ = "permissions"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
+    name = Column(String, unique=True)
     description = Column(String, nullable=True)
-    
-    # Relationships
-    roles = relationship(
-        "Role",
-        secondary=role_permission,
-        back_populates="permissions"
-    )
 
 
 class Tenant(Base):
@@ -74,10 +63,4 @@ class Tenant(Base):
     
     # Relationships
     users = relationship("User", back_populates="tenant")
-    
-    # Use string references to avoid circular imports
-    cloud_accounts = relationship("CloudAccount", back_populates="tenant")
-    environments = relationship("Environment", back_populates="tenant")
-    templates = relationship("Template", back_populates="tenant")
-    deployments = relationship("Deployment", back_populates="tenant")
-    integration_configs = relationship("IntegrationConfig", back_populates="tenant")
+    # Other relationships are defined in deployment.py

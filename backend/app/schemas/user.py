@@ -1,5 +1,20 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 from pydantic import BaseModel, EmailStr
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: Dict[str, Any]
 
 
 class UserBase(BaseModel):
@@ -29,4 +44,3 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
-

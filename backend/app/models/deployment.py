@@ -124,6 +124,10 @@ class Deployment(Base):
     template_id = Column(Integer, ForeignKey("templates.id"))
     template = relationship("Template", back_populates="deployments")
     
+    # Add relationship with User
+    created_by_id = Column(Integer, ForeignKey("users.id"))
+    created_by = relationship("User", back_populates="deployments")
+    
     # Relationship with DeploymentHistory
     history = relationship("DeploymentHistory", back_populates="deployment")
 
