@@ -102,6 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               // Create a default tenant if none exists
               const defaultTenant = {
                 id: authUser.tenantId || "default-tenant",
+                tenant_id: authUser.tenantId || "default-tenant",
                 name: "Default Tenant",
                 description: "Default tenant for development",
                 createdAt: new Date().toISOString()
@@ -170,6 +171,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Create a default tenant if none exists
         const defaultTenant = {
           id: authUser.tenantId || "default-tenant",
+          tenant_id: authUser.tenantId || "default-tenant",
           name: "Default Tenant",
           description: "Default tenant for development",
           createdAt: new Date().toISOString()

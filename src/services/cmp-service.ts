@@ -27,6 +27,7 @@ const formatTenantId = (tenantId: string | number): string => {
   
   // If the ID is already in the format "tenant-X", extract the UUID part
   if (tenantIdStr.startsWith('tenant-')) {
+    console.warn('Warning: Using "tenant-" prefix is deprecated. Use raw UUID instead.');
     return tenantIdStr.substring(7); // Remove 'tenant-' prefix
   }
   
