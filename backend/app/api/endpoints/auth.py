@@ -39,9 +39,20 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
     
+    # Try to find user by user_id first
     user = db.query(User).filter(User.user_id == user_id).first()
+    
+    # If not found, try to find by id (in case sub is the id)
+    if user is None:
+        try:
+            id_value = int(user_id)
+            user = db.query(User).filter(User.id == id_value).first()
+        except (ValueError, TypeError):
+            pass
+    
     if user is None:
         raise credentials_exception
+    
     return user
 
 
@@ -62,8 +73,10 @@ def login_for_access_token(
         )
     
     access_token_expires = timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    # Use user.id as the subject for the token
     access_token = create_access_token(
-        subject=user.user_id, expires_delta=access_token_expires
+        subject=str(user.id), expires_delta=access_token_expires
     )
     
     # Convert user to UserSchema
