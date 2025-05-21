@@ -41,9 +41,14 @@ def get_templates(
     
     try:
         # Get templates that are either public or belong to the user's tenant
-        query = db.query(Template).filter(
-            (Template.is_public == True) | (Template.tenant_id == current_user.tenant_id)
-        )
+        query = db.query(Template)
+        
+        # Get the user's tenant
+        user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        if user_tenant:
+            query = query.filter(
+                (Template.is_public == True) | (Template.tenant_id == user_tenant.tenant_id)
+            )
         
         # Filter by tenant if specified
         if tenant_id:
@@ -72,7 +77,7 @@ def get_templates(
                     )
                 
                 query = query.filter(
-                    (Template.is_public == True) | (Template.tenant_id == tenant.id)
+                    (Template.is_public == True) | (Template.tenant_id == tenant.tenant_id)
                 )
             except Exception as e:
                 raise HTTPException(
@@ -103,7 +108,7 @@ def get_templates(
             # Get tenant ID for the template
             tenant_id = "public"
             if template.tenant_id:
-                tenant = db.query(Tenant).filter(Tenant.id == template.tenant_id).first()
+                tenant = db.query(Tenant).filter(Tenant.tenant_id == template.tenant_id).first()
                 if tenant:
                     tenant_id = tenant.tenant_id
             
@@ -176,7 +181,7 @@ def get_template(
         # Get tenant ID for the template
         tenant_id = "public"
         if template.tenant_id:
-            tenant = db.query(Tenant).filter(Tenant.id == template.tenant_id).first()
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == template.tenant_id).first()
             if tenant:
                 tenant_id = tenant.tenant_id
         
@@ -305,6 +310,14 @@ def create_template(
         )
     
     try:
+        # Get the user's tenant
+        user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        if not user_tenant and not template.is_public:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User's tenant not found"
+            )
+        
         # Create new template
         import uuid
         new_template = Template(
@@ -314,7 +327,7 @@ def create_template(
             category=template.category,
             provider=template.provider,
             is_public=template.is_public,
-            tenant_id=None if template.is_public else current_user.tenant_id
+            tenant_id=None if template.is_public else user_tenant.tenant_id
         )
         
         db.add(new_template)
@@ -324,7 +337,7 @@ def create_template(
         # Get tenant ID for the template
         tenant_id = "public"
         if new_template.tenant_id:
-            tenant = db.query(Tenant).filter(Tenant.id == new_template.tenant_id).first()
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == new_template.tenant_id).first()
             if tenant:
                 tenant_id = tenant.tenant_id
         
@@ -403,7 +416,10 @@ def update_template(
         if template_update.is_public:
             template.tenant_id = None
         elif template.tenant_id is None:
-            template.tenant_id = current_user.tenant_id
+            # Get the user's tenant
+            user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+            if user_tenant:
+                template.tenant_id = user_tenant.tenant_id
         
         db.commit()
         db.refresh(template)
@@ -411,7 +427,7 @@ def update_template(
         # Get tenant ID for the template
         tenant_id = "public"
         if template.tenant_id:
-            tenant = db.query(Tenant).filter(Tenant.id == template.tenant_id).first()
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == template.tenant_id).first()
             if tenant:
                 tenant_id = tenant.tenant_id
         

@@ -38,7 +38,7 @@ def get_cloud_accounts(
         )
     
     try:
-        query = db.query(CloudAccount).join(Tenant, CloudAccount.tenant_id == Tenant.id)
+        query = db.query(CloudAccount).join(Tenant, CloudAccount.tenant_id == Tenant.tenant_id)
         
         # Filter by tenant
         if tenant_id:
@@ -51,7 +51,7 @@ def get_cloud_accounts(
                 )
             
             # Check if user has access to this tenant
-            if tenant.id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+            if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to view cloud accounts for this tenant"
@@ -60,7 +60,9 @@ def get_cloud_accounts(
             query = query.filter(Tenant.tenant_id == tenant_id)
         else:
             # Default to current user's tenant
-            query = query.filter(CloudAccount.tenant_id == current_user.tenant_id)
+            user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+            if user_tenant:
+                query = query.filter(Tenant.tenant_id == user_tenant.tenant_id)
         
         cloud_accounts = query.all()
         
@@ -68,7 +70,7 @@ def get_cloud_accounts(
         result = []
         for account in cloud_accounts:
             # Get the tenant associated with this account
-            tenant = db.query(Tenant).filter(Tenant.id == account.tenant_id).first()
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == account.tenant_id).first()
             
             # Debug log to see what's happening
             print(f"Account {account.account_id} has tenant_id {account.tenant_id}")
@@ -91,7 +93,7 @@ def get_cloud_accounts(
                     name=account.name,
                     provider=account.provider,
                     status=account.status,
-                    tenantId=tenant_id_for_response,
+                    tenantId=tenant.tenant_id if tenant else account.tenant_id,
                     connectionDetails={}  # Would need to add a connection_details field
                 )
             )
@@ -152,14 +154,14 @@ def get_cloud_account(
             # Fallback to current user's tenant if no tenant found
             tenant_id_for_response = current_user.tenant.tenant_id
         
-        # Convert to frontend-compatible format
+        # Return frontend-compatible response
         return CloudAccountFrontendResponse(
             id=account.account_id,
             name=account.name,
             provider=account.provider,
             status=account.status,
-            tenantId=tenant_id_for_response,
-            connectionDetails={}  # Would need to add a connection_details field
+            tenantId=tenant.tenant_id if tenant else account.tenant_id,
+            connectionDetails={}
         )
     
     except HTTPException:
@@ -191,7 +193,14 @@ def create_cloud_account(
     
     try:
         # Determine which tenant to use
-        target_tenant_id = current_user.tenant_id
+        user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        if not user_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User's tenant not found"
+            )
+        
+        target_tenant_id = user_tenant.tenant_id
         
         # If tenant_id is provided, use that instead
         if tenant_id:
@@ -204,13 +213,13 @@ def create_cloud_account(
                 )
             
             # Check if user has access to this tenant
-            if tenant.id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+            if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to create cloud accounts for this tenant"
                 )
             
-            target_tenant_id = tenant.id
+            target_tenant_id = tenant.tenant_id
         
         # Create new cloud account
         import uuid
@@ -228,7 +237,7 @@ def create_cloud_account(
         db.refresh(new_account)
         
         # Get the tenant associated with this account
-        tenant = db.query(Tenant).filter(Tenant.id == new_account.tenant_id).first()
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == new_account.tenant_id).first()
         
         # Return frontend-compatible response
         return CloudAccountFrontendResponse(
@@ -236,7 +245,7 @@ def create_cloud_account(
             name=new_account.name,
             provider=new_account.provider,
             status=new_account.status,
-            tenantId=tenant.tenant_id if tenant else current_user.tenant.tenant_id,
+            tenantId=tenant.tenant_id if tenant else new_account.tenant_id,
             connectionDetails={}
         )
     

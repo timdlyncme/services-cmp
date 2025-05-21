@@ -47,7 +47,7 @@ def get_deployments(
         ).join(
             Environment, Deployment.environment_id == Environment.id
         ).join(
-            Tenant, Deployment.tenant_id == Tenant.id
+            Tenant, Deployment.tenant_id == Tenant.tenant_id  # Join on tenant_id (UUID) instead of id (Integer)
         )
         
         # Filter by tenant
@@ -65,7 +65,7 @@ def get_deployments(
                 )
             
             # Check if user has access to this tenant
-            if tenant.id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+            if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to view deployments for this tenant"
@@ -74,7 +74,9 @@ def get_deployments(
             query = query.filter(Tenant.tenant_id == tenant_id)
         else:
             # Default to current user's tenant
-            query = query.filter(Deployment.tenant_id == current_user.tenant_id)
+            tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+            if tenant:
+                query = query.filter(Tenant.tenant_id == tenant.tenant_id)
         
         results = query.all()
         
@@ -139,7 +141,7 @@ def get_deployment(
         ).join(
             Environment, Deployment.environment_id == Environment.id
         ).join(
-            Tenant, Deployment.tenant_id == Tenant.id
+            Tenant, Deployment.tenant_id == Tenant.tenant_id  # Join on tenant_id (UUID) instead of id (Integer)
         ).filter(
             Deployment.deployment_id == deployment_id
         ).first()
@@ -221,6 +223,9 @@ def create_deployment(
                 detail=f"Environment with ID {deployment.environment_id} not found"
             )
         
+        # Get tenant for response
+        tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        
         # Create new deployment
         import uuid
         new_deployment = Deployment(
@@ -230,7 +235,7 @@ def create_deployment(
             status="pending",  # Default status for new deployments
             template_id=deployment.template_id,
             environment_id=deployment.environment_id,
-            tenant_id=current_user.tenant_id,
+            tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
             created_by_id=current_user.id,
             parameters=deployment.parameters
         )
@@ -238,9 +243,6 @@ def create_deployment(
         db.add(new_deployment)
         db.commit()
         db.refresh(new_deployment)
-        
-        # Get tenant for response
-        tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
         
         # Extract region from parameters if available
         region = None
@@ -302,7 +304,7 @@ def update_deployment(
         ).join(
             Environment, Deployment.environment_id == Environment.id
         ).join(
-            Tenant, Deployment.tenant_id == Tenant.id
+            Tenant, Deployment.tenant_id == Tenant.tenant_id  # Join on tenant_id (UUID) instead of id (Integer)
         ).filter(
             Deployment.deployment_id == deployment_id
         ).first()
