@@ -6,8 +6,10 @@ from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import User, Tenant
 from app.models.template_foundry import TemplateFoundry
+from app.models.template_foundry_versions import TemplateFoundryVersion
 from app.schemas.template_foundry import (
-    TemplateFoundryResponse, TemplateFoundryCreate, TemplateFoundryUpdate
+    TemplateFoundryResponse, TemplateFoundryCreate, TemplateFoundryUpdate,
+    TemplateFoundryVersionCreate, TemplateFoundryVersionResponse
 )
 
 router = APIRouter()
@@ -180,6 +182,21 @@ def create_template(
         db.commit()
         db.refresh(new_template)
         
+        # Create initial version
+        initial_version = TemplateFoundryVersion(
+            version=template.version,
+            changes="Initial version",
+            code=template.code,
+            template_id=new_template.id,
+            created_by_id=current_user.id
+        )
+        
+        db.add(initial_version)
+        db.commit()
+        
+        # Refresh template to include the version
+        db.refresh(new_template)
+        
         return new_template
     
     except Exception as e:
@@ -227,17 +244,52 @@ def update_template(
                     detail="Not authorized to update this template"
                 )
         
-        # Update template
-        template.name = template_update.name
-        template.description = template_update.description
-        template.type = template_update.type
-        template.provider = template_update.provider
-        template.code = template_update.code
-        template.version = template_update.version
-        template.categories = template_update.categories
-        template.is_published = template_update.is_published
-        template.author = template_update.author or template.author
-        template.commit_id = template_update.commit_id or template.commit_id
+        # Check if code has changed
+        code_changed = template_update.code is not None and template_update.code != template.code
+        version_changed = template_update.version is not None and template_update.version != template.version
+        
+        # Update template fields
+        if template_update.name is not None:
+            template.name = template_update.name
+        
+        if template_update.description is not None:
+            template.description = template_update.description
+        
+        if template_update.type is not None:
+            template.type = template_update.type
+        
+        if template_update.provider is not None:
+            template.provider = template_update.provider
+        
+        if template_update.code is not None:
+            template.code = template_update.code
+        
+        if template_update.version is not None:
+            template.version = template_update.version
+        
+        if template_update.categories is not None:
+            template.categories = template_update.categories
+        
+        if template_update.is_published is not None:
+            template.is_published = template_update.is_published
+        
+        if template_update.author is not None:
+            template.author = template_update.author
+        
+        if template_update.commit_id is not None:
+            template.commit_id = template_update.commit_id
+        
+        # Create a new version if code or version has changed
+        if code_changed or version_changed:
+            new_version = TemplateFoundryVersion(
+                version=template.version,
+                changes=f"Updated to version {template.version}",
+                code=template.code,
+                template_id=template.id,
+                created_by_id=current_user.id
+            )
+            
+            db.add(new_version)
         
         db.commit()
         db.refresh(template)
@@ -291,7 +343,7 @@ def delete_template(
                     detail="Not authorized to delete this template"
                 )
         
-        # Delete template
+        # Delete template (versions will be deleted automatically due to cascade)
         db.delete(template)
         db.commit()
         
@@ -305,6 +357,128 @@ def delete_template(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting template: {str(e)}"
+        )
+
+
+@router.post("/{template_id}/versions", response_model=TemplateFoundryVersionResponse)
+def create_template_version(
+    template_id: str,
+    version: TemplateFoundryVersionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Create a new version for a template
+    """
+    # Check if user has permission to update templates
+    has_permission = any(p.name == "update:template-foundry" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    try:
+        # Get the template
+        template = db.query(TemplateFoundry).filter(TemplateFoundry.template_id == template_id).first()
+        
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template with ID {template_id} not found"
+            )
+        
+        # Check if user has access to this template's tenant
+        if template.tenant_id != current_user.tenant_id:
+            # Admin users can update all templates
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to update this template"
+                )
+        
+        # Create new version
+        new_version = TemplateFoundryVersion(
+            version=version.version,
+            changes=version.changes,
+            code=version.code,
+            template_id=template.id,
+            created_by_id=current_user.id
+        )
+        
+        db.add(new_version)
+        
+        # Update template with new version
+        template.version = version.version
+        template.code = version.code
+        
+        db.commit()
+        db.refresh(new_version)
+        
+        return new_version
+    
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating template version: {str(e)}"
+        )
+
+
+@router.get("/{template_id}/versions", response_model=List[TemplateFoundryVersionResponse])
+def get_template_versions(
+    template_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Get all versions for a template
+    """
+    # Check if user has permission to view templates
+    has_permission = any(p.name == "view:template-foundry" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    try:
+        # Get the template
+        template = db.query(TemplateFoundry).filter(TemplateFoundry.template_id == template_id).first()
+        
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template with ID {template_id} not found"
+            )
+        
+        # Check if user has access to this template's tenant
+        if template.tenant_id != current_user.tenant_id:
+            # Admin users can view all templates
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to access this template"
+                )
+        
+        # Get versions
+        versions = db.query(TemplateFoundryVersion).filter(
+            TemplateFoundryVersion.template_id == template.id
+        ).order_by(
+            TemplateFoundryVersion.created_at.desc()
+        ).all()
+        
+        return versions
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving template versions: {str(e)}"
         )
 
 
@@ -330,4 +504,3 @@ def options_template_by_id():
     response.headers["Access-Control-Allow-Methods"] = "GET, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
-

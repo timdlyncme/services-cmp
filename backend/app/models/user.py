@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Table
+from sqlalchemy import Column, Integer, String, ForeignKey, Table, Boolean
 from sqlalchemy.orm import relationship
 
 from app.models.base_models import Base
@@ -6,11 +6,56 @@ from app.models.base_models import Base
 
 # Association table for many-to-many relationship between Role and Permission
 role_permission = Table(
-    "role_permissions",
+    "role_permission",
     Base.metadata,
     Column("role_id", Integer, ForeignKey("roles.id"), primary_key=True),
     Column("permission_id", Integer, ForeignKey("permissions.id"), primary_key=True)
 )
+
+
+class Permission(Base):
+    __tablename__ = "permissions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    description = Column(String, nullable=True)
+    
+    # Relationships
+    roles = relationship("Role", secondary=role_permission, back_populates="permissions")
+
+
+class Role(Base):
+    __tablename__ = "roles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    description = Column(String, nullable=True)
+    
+    # Relationships
+    permissions = relationship("Permission", secondary=role_permission, back_populates="roles")
+    users = relationship("User", back_populates="role")
+
+
+class Tenant(Base):
+    __tablename__ = "tenants"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(String, unique=True, index=True)
+    name = Column(String)
+    description = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    
+    # Relationships
+    users = relationship("User", back_populates="tenant")
+    
+    # These relationships will be added by the respective models
+    # cloud_accounts = relationship("CloudAccount", back_populates="tenant")
+    # environments = relationship("Environment", back_populates="tenant")
+    # templates = relationship("Template", back_populates="tenant")
+    # deployments = relationship("Deployment", back_populates="tenant")
+    
+    # Relationship with TemplateFoundry
+    template_foundry_items = relationship("TemplateFoundry", back_populates="tenant")
 
 
 class User(Base):
@@ -31,42 +76,8 @@ class User(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"))
     tenant = relationship("Tenant", back_populates="users")
     
-    # Relationship with deployments
+    # Relationship with Deployment
     deployments = relationship("Deployment", back_populates="created_by")
     
-    # Relationship with template foundry
+    # Relationship with TemplateFoundry
     template_foundry_items = relationship("TemplateFoundry", back_populates="created_by")
-
-
-class Role(Base):
-    __tablename__ = "roles"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True)
-    description = Column(String, nullable=True)
-    
-    # Relationships
-    users = relationship("User", back_populates="role")
-    permissions = relationship("Permission", secondary="role_permissions")
-
-
-class Permission(Base):
-    __tablename__ = "permissions"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True)
-    description = Column(String, nullable=True)
-
-
-class Tenant(Base):
-    __tablename__ = "tenants"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(String, unique=True, index=True)
-    name = Column(String)
-    description = Column(String, nullable=True)
-    
-    # Relationships
-    users = relationship("User", back_populates="tenant")
-    integration_configs = relationship("IntegrationConfig", back_populates="tenant")
-    template_foundry_items = relationship("TemplateFoundry", back_populates="tenant")

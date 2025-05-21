@@ -166,13 +166,87 @@ def get_template(
         if template.category:
             categories = [cat.strip() for cat in template.category.split(",")]
         
+        # Get template code from the latest version
+        code = ""
+        latest_version = None
+        if hasattr(template, 'versions') and template.versions:
+            # Sort versions by created_at in descending order
+            sorted_versions = sorted(template.versions, key=lambda v: v.created_at, reverse=True)
+            if sorted_versions:
+                latest_version = sorted_versions[0]
+                code = latest_version.code or ""
+        
+        # If no code found in versions, use a default template based on provider
+        if not code:
+            if template.provider == "azure":
+                code = """
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "example" {
+  name     = "example-resources"
+  location = "East US"
+}
+
+resource "azurerm_virtual_network" "example" {
+  name                = "example-network"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+}
+"""
+            elif template.provider == "aws":
+                code = """
+provider "aws" {
+  region = "us-west-2"
+}
+
+resource "aws_vpc" "example" {
+  cidr_block = "10.0.0.0/16"
+  
+  tags = {
+    Name = "example-vpc"
+  }
+}
+
+resource "aws_subnet" "example" {
+  vpc_id     = aws_vpc.example.id
+  cidr_block = "10.0.1.0/24"
+  
+  tags = {
+    Name = "example-subnet"
+  }
+}
+"""
+            elif template.provider == "gcp":
+                code = """
+provider "google" {
+  project = "my-project-id"
+  region  = "us-central1"
+}
+
+resource "google_compute_network" "vpc_network" {
+  name = "example-network"
+}
+
+resource "google_compute_subnetwork" "subnet" {
+  name          = "example-subnet"
+  ip_cidr_range = "10.0.0.0/16"
+  region        = "us-central1"
+  network       = google_compute_network.vpc_network.id
+}
+"""
+            else:
+                code = "# No template code available for this provider"
+        
         return CloudTemplateResponse(
             id=template.template_id,
             name=template.name,
             description=template.description or "",
             type="terraform",  # Default to terraform, would need to add a type field
             provider=template.provider,
-            code="",  # Would need to add a code field or store in a separate table
+            code=code,
             deploymentCount=deployment_count,
             uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",

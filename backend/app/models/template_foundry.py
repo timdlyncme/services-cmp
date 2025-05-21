@@ -29,4 +29,6 @@ class TemplateFoundry(Base):
     
     created_by_id = Column(Integer, ForeignKey("users.id"))
     created_by = relationship("User", back_populates="template_foundry_items")
-
+    
+    # Relationship with versions
+    versions = relationship("TemplateFoundryVersion", back_populates="template", cascade="all, delete-orphan")

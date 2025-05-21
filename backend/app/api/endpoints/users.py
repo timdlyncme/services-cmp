@@ -1,11 +1,12 @@
 from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 
 from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import User, Tenant, Role
-from app.schemas.user import UserResponse, UserCreate, UserUpdate
+from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.core.security import get_password_hash
 
 router = APIRouter()
 
@@ -19,12 +20,6 @@ def get_users(
     """
     Get all users for the current user's tenant or a specific tenant
     """
-    # Add CORS headers
-    response = Response()
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    
     # Check if user has permission to view users
     has_permission = any(p.name == "view:users" for p in current_user.role.permissions)
     if not has_permission:
@@ -55,22 +50,13 @@ def get_users(
             query = query.filter(User.tenant_id == tenant.id)
         else:
             # Default to current user's tenant
-            query = query.filter(User.tenant_id == current_user.tenant_id)
+            # MSP users can see all users
+            if current_user.role.name != "msp":
+                query = query.filter(User.tenant_id == current_user.tenant_id)
         
         users = query.all()
         
-        return [
-            UserResponse(
-                id=user.id,
-                email=user.email,
-                username=user.username,
-                full_name=user.full_name,
-                is_active=user.is_active,
-                role=user.role.name,
-                tenant_id=user.tenant_id
-            )
-            for user in users
-        ]
+        return users
     
     except Exception as e:
         raise HTTPException(
@@ -106,23 +92,13 @@ def get_user(
             )
         
         # Check if user has access to this user's tenant
-        if user.tenant_id != current_user.tenant_id:
-            # Admin users can view all users
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to access this user"
-                )
+        if user.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this user"
+            )
         
-        return UserResponse(
-            id=user.id,
-            email=user.email,
-            username=user.username,
-            full_name=user.full_name,
-            is_active=user.is_active,
-            role=user.role.name,
-            tenant_id=user.tenant_id
-        )
+        return user
     
     except HTTPException:
         raise
@@ -152,12 +128,15 @@ def create_user(
         )
     
     try:
-        # Check if email already exists
-        existing_user = db.query(User).filter(User.email == user.email).first()
+        # Check if username or email already exists
+        existing_user = db.query(User).filter(
+            (User.username == user.username) | (User.email == user.email)
+        ).first()
+        
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Username or email already registered"
             )
         
         # Determine which tenant to use
@@ -182,20 +161,21 @@ def create_user(
             
             target_tenant_id = tenant.id
         
-        # Get the role
+        # Get role
         role = db.query(Role).filter(Role.name == user.role).first()
         if not role:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Role {user.role} not found"
+                detail=f"Role '{user.role}' not found"
             )
         
         # Create new user
-        from app.core.security import get_password_hash
+        import uuid
         new_user = User(
-            email=user.email,
+            user_id=str(uuid.uuid4()),
             username=user.username,
             full_name=user.full_name,
+            email=user.email,
             hashed_password=get_password_hash(user.password),
             is_active=True,
             role_id=role.id,
@@ -206,16 +186,11 @@ def create_user(
         db.commit()
         db.refresh(new_user)
         
-        return UserResponse(
-            id=new_user.id,
-            email=new_user.email,
-            username=new_user.username,
-            full_name=new_user.full_name,
-            is_active=new_user.is_active,
-            role=new_user.role.name,
-            tenant_id=new_user.tenant_id
-        )
+        return new_user
     
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(
@@ -253,60 +228,83 @@ def update_user(
             )
         
         # Check if user has access to this user's tenant
-        if user.tenant_id != current_user.tenant_id:
-            # Admin users can update all users
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to update this user"
-                )
+        if user.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to update this user"
+            )
         
-        # Update user
-        if user_update.email is not None:
-            # Check if email already exists
-            existing_user = db.query(User).filter(User.email == user_update.email).first()
-            if existing_user and existing_user.id != user_id:
+        # Update user fields
+        if user_update.username is not None:
+            # Check if username already exists
+            existing_user = db.query(User).filter(
+                (User.username == user_update.username) & (User.id != user_id)
+            ).first()
+            
+            if existing_user:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email already registered"
+                    detail="Username already registered"
                 )
-            user.email = user_update.email
-        
-        if user_update.username is not None:
+            
             user.username = user_update.username
         
         if user_update.full_name is not None:
             user.full_name = user_update.full_name
         
+        if user_update.email is not None:
+            # Check if email already exists
+            existing_user = db.query(User).filter(
+                (User.email == user_update.email) & (User.id != user_id)
+            ).first()
+            
+            if existing_user:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email already registered"
+                )
+            
+            user.email = user_update.email
+        
         if user_update.password is not None:
-            from app.core.security import get_password_hash
             user.hashed_password = get_password_hash(user_update.password)
         
         if user_update.is_active is not None:
             user.is_active = user_update.is_active
         
         if user_update.role is not None:
-            # Get the role
+            # Get role
             role = db.query(Role).filter(Role.name == user_update.role).first()
             if not role:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Role {user_update.role} not found"
+                    detail=f"Role '{user_update.role}' not found"
                 )
+            
             user.role_id = role.id
+        
+        if user_update.tenant_id is not None:
+            # Check if tenant exists
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == user_update.tenant_id).first()
+            if not tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Tenant with ID {user_update.tenant_id} not found"
+                )
+            
+            # Check if user has access to this tenant
+            if tenant.id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to assign users to this tenant"
+                )
+            
+            user.tenant_id = tenant.id
         
         db.commit()
         db.refresh(user)
         
-        return UserResponse(
-            id=user.id,
-            email=user.email,
-            username=user.username,
-            full_name=user.full_name,
-            is_active=user.is_active,
-            role=user.role.name,
-            tenant_id=user.tenant_id
-        )
+        return user
     
     except HTTPException:
         db.rollback()
@@ -347,13 +345,11 @@ def delete_user(
             )
         
         # Check if user has access to this user's tenant
-        if user.tenant_id != current_user.tenant_id:
-            # Admin users can delete all users
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to delete this user"
-                )
+        if user.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to delete this user"
+            )
         
         # Prevent deleting yourself
         if user.id == current_user.id:
@@ -377,28 +373,4 @@ def delete_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting user: {str(e)}"
         )
-
-
-@router.options("/")
-def options_users():
-    """
-    Handle preflight requests for users
-    """
-    response = Response(status_code=200)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    return response
-
-
-@router.options("/{user_id}")
-def options_user_by_id():
-    """
-    Handle preflight requests for specific user
-    """
-    response = Response(status_code=200)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    return response
 

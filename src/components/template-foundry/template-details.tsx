@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,7 @@ import {
   ChevronUp,
   Edit
 } from "lucide-react";
+import { cmpService } from "@/services/cmp-service";
 
 interface TemplateDetailsProps {
   template: Template;
@@ -32,6 +33,16 @@ interface TemplateDetailsProps {
   onUnpublish: (template: Template) => void;
   isMSP: boolean;
   availableTenants: Tenant[];
+}
+
+interface TemplateVersion {
+  id: number;
+  version: string;
+  changes: string;
+  created_at: string;
+  created_by?: {
+    username: string;
+  };
 }
 
 export const TemplateDetails = ({
@@ -50,7 +61,59 @@ export const TemplateDetails = ({
   const [historyExpanded, setHistoryExpanded] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editedTemplate, setEditedTemplate] = useState<Template>({...template});
+  const [versionHistory, setVersionHistory] = useState<TemplateVersion[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   
+  // Load version history when template changes
+  useEffect(() => {
+    const loadVersionHistory = async () => {
+      if (!template.id) return;
+      
+      setIsLoadingHistory(true);
+      try {
+        // Get template versions from API
+        const templateData = await cmpService.getTemplateFoundryItem(template.id);
+        if (templateData && templateData.versions) {
+          setVersionHistory(templateData.versions);
+        } else {
+          // If no versions available, create a default history entry
+          setVersionHistory([
+            {
+              id: 1,
+              version: template.version,
+              changes: "Initial version",
+              created_at: template.createdAt,
+              created_by: {
+                username: template.author || "System"
+              }
+            }
+          ]);
+        }
+      } catch (error) {
+        console.error("Error loading version history:", error);
+        // Set default history if API fails
+        setVersionHistory([
+          {
+            id: 1,
+            version: template.version,
+            changes: "Initial version",
+            created_at: template.createdAt,
+            created_by: {
+              username: template.author || "System"
+            }
+          }
+        ]);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+    
+    // Reset edited code when template changes
+    setEditedCode(template.codeSnippet);
+    
+    loadVersionHistory();
+  }, [template.id, template.codeSnippet]);
+
   const handleCodeChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setEditedCode(e.target.value);
   };
@@ -356,28 +419,39 @@ export const TemplateDetails = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow>
-                  <TableCell className="font-medium">v{template.version}</TableCell>
-                  <TableCell>{new Date(template.updatedAt).toLocaleDateString()}</TableCell>
-                  <TableCell>{template.author || "System"}</TableCell>
-                  <TableCell className="font-mono text-xs">{template.commitId || "a2f391d"}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon">
-                      <History className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell className="font-medium">v0.9.0</TableCell>
-                  <TableCell>{new Date(new Date(template.createdAt).getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString()}</TableCell>
-                  <TableCell>{template.author || "System"}</TableCell>
-                  <TableCell className="font-mono text-xs">9c72e5b</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon">
-                      <History className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                {isLoadingHistory ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-4">
+                      <div className="flex justify-center items-center">
+                        <svg className="animate-spin h-5 w-5 mr-3 text-primary" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Loading version history...
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : versionHistory.length > 0 ? (
+                  versionHistory.map((version) => (
+                    <TableRow key={version.id}>
+                      <TableCell className="font-medium">v{version.version}</TableCell>
+                      <TableCell>{new Date(version.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell>{version.created_by?.username || template.author || "System"}</TableCell>
+                      <TableCell className="font-mono text-xs">{template.commitId || "a2f391d"}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon">
+                          <History className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-4">
+                      No version history available
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>

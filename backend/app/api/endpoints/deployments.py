@@ -40,13 +40,11 @@ def get_deployments(
     
     try:
         query = db.query(
-            Deployment, Template, Environment, CloudAccount, Tenant
+            Deployment, Template, Environment, Tenant
         ).join(
             Template, Deployment.template_id == Template.id
         ).join(
             Environment, Deployment.environment_id == Environment.id
-        ).join(
-            CloudAccount, Deployment.cloud_account_id == CloudAccount.id
         ).join(
             Tenant, Deployment.tenant_id == Tenant.id
         )
@@ -77,21 +75,29 @@ def get_deployments(
         
         # Convert to frontend-compatible format
         deployments = []
-        for deployment, template, environment, cloud_account, tenant in results:
+        for deployment, template, environment, tenant in results:
+            # Get provider from template
+            provider = template.provider
+            
+            # Get region from parameters if available
+            region = None
+            if deployment.parameters and "region" in deployment.parameters:
+                region = deployment.parameters["region"]
+            
             deployments.append(CloudDeploymentResponse(
                 id=deployment.deployment_id,
                 name=deployment.name,
                 templateId=template.template_id,
                 templateName=template.name,
-                provider=cloud_account.provider,
+                provider=provider,
                 status=deployment.status,
                 environment=environment.name,
                 createdAt=deployment.created_at.isoformat(),
                 updatedAt=deployment.updated_at.isoformat(),
                 parameters=deployment.parameters or {},
-                resources=deployment.resources or [],
+                resources=[],  # Default empty list if not available
                 tenantId=tenant.tenant_id,
-                region=deployment.region
+                region=region
             ))
         
         return deployments
@@ -122,13 +128,11 @@ def get_deployment(
     
     try:
         result = db.query(
-            Deployment, Template, Environment, CloudAccount, Tenant
+            Deployment, Template, Environment, Tenant
         ).join(
             Template, Deployment.template_id == Template.id
         ).join(
             Environment, Deployment.environment_id == Environment.id
-        ).join(
-            CloudAccount, Deployment.cloud_account_id == CloudAccount.id
         ).join(
             Tenant, Deployment.tenant_id == Tenant.id
         ).filter(
@@ -141,7 +145,7 @@ def get_deployment(
                 detail=f"Deployment with ID {deployment_id} not found"
             )
         
-        deployment, template, environment, cloud_account, tenant = result
+        deployment, template, environment, tenant = result
         
         # Check if user has access to this deployment's tenant
         if deployment.tenant_id != current_user.tenant_id:
@@ -158,13 +162,13 @@ def get_deployment(
             name=deployment.name,
             templateId=template.template_id,
             templateName=template.name,
-            provider=cloud_account.provider,
+            provider=template.provider,
             status=deployment.status,
             environment=environment.name,
             createdAt=deployment.created_at.isoformat(),
             updatedAt=deployment.updated_at.isoformat(),
             parameters=deployment.parameters or {},
-            resources=deployment.resources or [],
+            resources=[],  # Default empty list if not available
             tenantId=tenant.tenant_id,
             region=deployment.region
         )
@@ -212,28 +216,18 @@ def create_deployment(
                 detail=f"Environment with ID {deployment.environment_id} not found"
             )
         
-        # Verify cloud account exists
-        cloud_account = db.query(CloudAccount).filter(CloudAccount.id == deployment.cloud_account_id).first()
-        if not cloud_account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Cloud account with ID {deployment.cloud_account_id} not found"
-            )
-        
         # Create new deployment
         import uuid
         new_deployment = Deployment(
             deployment_id=str(uuid.uuid4()),
             name=deployment.name,
-            status=deployment.status,
+            description=deployment.description,
+            status="pending",  # Default status for new deployments
             template_id=deployment.template_id,
             environment_id=deployment.environment_id,
-            cloud_account_id=deployment.cloud_account_id,
             tenant_id=current_user.tenant_id,
             created_by_id=current_user.id,
-            parameters=deployment.parameters,
-            resources=deployment.resources,
-            region=deployment.region
+            parameters=deployment.parameters
         )
         
         db.add(new_deployment)
@@ -243,21 +237,26 @@ def create_deployment(
         # Get tenant for response
         tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
         
+        # Extract region from parameters if available
+        region = None
+        if new_deployment.parameters and "region" in new_deployment.parameters:
+            region = new_deployment.parameters["region"]
+        
         # Return frontend-compatible response
         return CloudDeploymentResponse(
             id=new_deployment.deployment_id,
             name=new_deployment.name,
             templateId=template.template_id,
             templateName=template.name,
-            provider=cloud_account.provider,
+            provider=template.provider,
             status=new_deployment.status,
             environment=environment.name,
             createdAt=new_deployment.created_at.isoformat(),
             updatedAt=new_deployment.updated_at.isoformat(),
             parameters=new_deployment.parameters or {},
-            resources=new_deployment.resources or [],
+            resources=[],  # Default empty list for new deployments
             tenantId=tenant.tenant_id,
-            region=new_deployment.region
+            region=region
         )
     
     except HTTPException:
@@ -292,13 +291,11 @@ def update_deployment(
     try:
         # Get the deployment
         result = db.query(
-            Deployment, Template, Environment, CloudAccount, Tenant
+            Deployment, Template, Environment, Tenant
         ).join(
             Template, Deployment.template_id == Template.id
         ).join(
             Environment, Deployment.environment_id == Environment.id
-        ).join(
-            CloudAccount, Deployment.cloud_account_id == CloudAccount.id
         ).join(
             Tenant, Deployment.tenant_id == Tenant.id
         ).filter(
@@ -311,7 +308,7 @@ def update_deployment(
                 detail=f"Deployment with ID {deployment_id} not found"
             )
         
-        deployment, template, environment, cloud_account, tenant = result
+        deployment, template, environment, tenant = result
         
         # Check if user has access to this deployment's tenant
         if deployment.tenant_id != current_user.tenant_id:
@@ -338,13 +335,13 @@ def update_deployment(
             name=deployment.name,
             templateId=template.template_id,
             templateName=template.name,
-            provider=cloud_account.provider,
+            provider=template.provider,
             status=deployment.status,
             environment=environment.name,
             createdAt=deployment.created_at.isoformat(),
             updatedAt=deployment.updated_at.isoformat(),
             parameters=deployment.parameters or {},
-            resources=deployment.resources or [],
+            resources=[],  # Default empty list if not available
             tenantId=tenant.tenant_id,
             region=deployment.region
         )

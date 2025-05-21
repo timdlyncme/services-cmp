@@ -1,60 +1,46 @@
-from typing import Optional, Dict, Any, List
+from typing import List, Optional
 from pydantic import BaseModel, EmailStr
 
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
-class TokenData(BaseModel):
-    username: Optional[str] = None
-
-
-class LoginResponse(BaseModel):
-    token: str
-    token_type: str = "bearer"
-    user: Dict[str, Any]
-
-
 class UserBase(BaseModel):
-    email: Optional[EmailStr] = None
-    username: Optional[str] = None
+    username: str
     full_name: Optional[str] = None
+    email: EmailStr
     is_active: Optional[bool] = True
-    role: Optional[str] = None
 
 
 class UserCreate(UserBase):
-    email: EmailStr
-    username: str
     password: str
     role: str
+    tenant_id: Optional[str] = None
 
 
-class UserUpdate(UserBase):
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
     password: Optional[str] = None
+    is_active: Optional[bool] = None
+    role: Optional[str] = None
+    tenant_id: Optional[str] = None
+
+
+class UserSchema(BaseModel):
+    id: int
+    username: str
+    full_name: Optional[str] = None
+    email: EmailStr
+    role: str
+    tenantId: str
+    permissions: List[str]
 
 
 class UserResponse(UserBase):
     id: int
-    email: EmailStr
-    username: str
-    tenant_id: int
-
+    user_id: str
+    role: Optional[str] = None
+    tenant_id: Optional[int] = None
+    
     class Config:
         from_attributes = True
 
-
-# Alias for backward compatibility
-User = UserResponse
-
-
-class User(BaseModel):
-    id: int
-    username: str
-    full_name: Optional[str] = None
-    email: str
-    role: str
-    tenantId: str
-    permissions: List[str]
