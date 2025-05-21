@@ -78,7 +78,7 @@ def login_for_access_token(
     )
     
     return {
-        "user": user_schema,
+        "user": user_schema.model_dump(),  # Convert to dictionary
         "token": access_token,
         "token_type": "bearer"
     }
@@ -112,7 +112,8 @@ def read_users_me(current_user: User = Depends(get_current_user)) -> Any:
         permissions=[p.name for p in current_user.role.permissions]
     )
     
-    return user_schema
+    return user_schema.model_dump()
+
 
 @router.get("/verify")
 def verify_token(current_user: User = Depends(get_current_user)) -> Any:
