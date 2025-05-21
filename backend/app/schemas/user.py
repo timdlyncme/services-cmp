@@ -36,7 +36,7 @@ class UserUpdate(BaseModel):
     tenant_id: Optional[str] = None
 
 
-class UserSchema(BaseModel):
+class User(BaseModel):
     id: int
     username: str
     full_name: Optional[str] = None
@@ -44,6 +44,11 @@ class UserSchema(BaseModel):
     role: str
     tenantId: str
     permissions: List[str]
+
+
+class UserSchema(User):
+    """Alias for User schema for backward compatibility"""
+    pass
 
 
 class UserResponse(UserBase):
