@@ -220,7 +220,7 @@ def init_db(db: Session) -> None:
                     full_name=user_data["full_name"],
                     hashed_password=get_password_hash(user_data["password"]),
                     role_id=role.id,
-                    tenant_id=tenant.id,
+                    tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
                     user_id=user_data.get("user_id")
                 )
                 db.add(user)
@@ -241,9 +241,9 @@ def create_sample_data(db: Session) -> None:
     # Get all users for later use
     users_by_tenant = {}
     for tenant in tenants:
-        tenant_users = db.query(User).filter(User.tenant_id == tenant.id).all()
+        tenant_users = db.query(User).filter(User.tenant_id == tenant.tenant_id).all()
         if tenant_users:
-            users_by_tenant[tenant.id] = tenant_users
+            users_by_tenant[tenant.tenant_id] = tenant_users
     
     # Create sample cloud accounts for each tenant
     cloud_accounts = []
@@ -255,7 +255,7 @@ def create_sample_data(db: Session) -> None:
                 provider=provider,
                 status="connected",
                 description=f"Sample {provider.upper()} account for {tenant.name}",
-                tenant_id=tenant.id
+                tenant_id=tenant.tenant_id  # Use tenant_id (UUID) instead of id (Integer)
             )
             db.add(account)
             db.flush()
@@ -270,7 +270,7 @@ def create_sample_data(db: Session) -> None:
                         provider=provider,
                         status=["connected", "warning", "error"][j % 3],
                         description=f"Additional {provider.upper()} account {j+1} for {tenant.name}",
-                        tenant_id=tenant.id
+                        tenant_id=tenant.tenant_id  # Use tenant_id (UUID) instead of id (Integer)
                     )
                     db.add(extra_account)
                     db.flush()
@@ -279,34 +279,26 @@ def create_sample_data(db: Session) -> None:
     # Create sample environments for each tenant
     environments = []
     for tenant in tenants:
-        for env_name in ["Development", "Staging", "Production"]:
+        # Create multiple environments per tenant
+        for i, env_type in enumerate(["Development", "Testing", "Staging", "Production"]):
+            if i > 0 and tenant.name == "Cloud Ops":  # Fewer environments for Cloud Ops
+                continue
+                
             environment = Environment(
                 environment_id=generate_uuid(),
-                name=f"{env_name} for {tenant.name}",
-                description=f"{env_name} environment for {tenant.name}",
-                tenant_id=tenant.id,
-                # Add new fields with sample data
-                update_strategy=["rolling", "blue-green", "canary"][len(environments) % 3],
+                name=f"{env_type} Environment",
+                description=f"{env_type} environment for {tenant.name}",
+                tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
+                update_strategy="rolling" if env_type == "Production" else "blue-green",
                 scaling_policies={
                     "min_instances": 1,
-                    "max_instances": 5,
-                    "cpu_threshold": 70,
-                    "memory_threshold": 80
+                    "max_instances": 10 if env_type == "Production" else 3,
+                    "cpu_threshold": 70
                 },
                 environment_variables={
-                    "ENV": env_name.upper(),
-                    "DEBUG": "true" if env_name == "Development" else "false",
-                    "LOG_LEVEL": "DEBUG" if env_name == "Development" else "INFO"
-                },
-                logging_config={
-                    "retention_days": 30,
-                    "log_level": "DEBUG" if env_name == "Development" else "INFO",
-                    "enable_application_insights": True
-                },
-                monitoring_integration={
-                    "enable_alerts": True,
-                    "alert_channels": ["email", "slack"],
-                    "metrics_retention_days": 90
+                    "ENV_TYPE": env_type.upper(),
+                    "DEBUG": "false" if env_type == "Production" else "true",
+                    "LOG_LEVEL": "INFO" if env_type == "Production" else "DEBUG"
                 }
             )
             db.add(environment)
@@ -324,35 +316,30 @@ def create_sample_data(db: Session) -> None:
     # Create sample templates for each tenant
     templates = []
     for tenant in tenants:
-        for i, (name, provider) in enumerate([
-            ("Web App", "azure"),
-            ("Database Cluster", "aws"),
-            ("Kubernetes Cluster", "gcp"),
-            ("Storage Account", "azure"),
-            ("Lambda Function", "aws"),
-            ("Virtual Machine", "azure"),
-            ("Container Registry", "gcp")
-        ]):
-            template = Template(
-                template_id=generate_uuid(),
-                name=f"{name} for {tenant.name}",
-                description=f"{name} template for {tenant.name}",
-                category=["Compute", "Storage", "Database", "Networking", "Containers"][i % 5],
-                provider=provider,
-                is_public=i % 3 == 0,  # Every third template is public
-                current_version="1.0.0",
-                tenant_id=tenant.id
-            )
-            db.add(template)
-            db.flush()
-            templates.append(template)
+        # Create templates for each cloud provider
+        for provider in ["azure", "aws", "gcp"]:
+            # Create multiple templates per provider
+            for i, category in enumerate(["Compute", "Storage", "Networking", "Database"]):
+                template = Template(
+                    template_id=generate_uuid(),
+                    name=f"{provider.capitalize()} {category}",
+                    description=f"{provider.capitalize()} {category} template for {tenant.name}",
+                    category=category,
+                    provider=provider,
+                    is_public=i % 2 == 0,  # Alternate between public and private
+                    current_version="1.0.0",
+                    tenant_id=tenant.tenant_id  # Use tenant_id (UUID) instead of id (Integer)
+                )
+                db.add(template)
+                db.flush()
+                templates.append(template)
             
             # Create template versions
             for version_num in range(1, 3):  # Create 2 versions for each template
                 template_version = Template.versions.prop.entity.class_(
                     version=f"1.0.{version_num-1}",
                     changes=f"Version {version_num} changes",
-                    code=f"# Sample template code for {name} version {version_num}",
+                    code=f"# Sample template code for {provider.capitalize()} {category} version {version_num}",
                     template_id=template.id,
                     created_at=datetime.utcnow() - timedelta(days=30 - version_num * 10)
                 )
@@ -363,9 +350,9 @@ def create_sample_data(db: Session) -> None:
     # Create sample deployments for each tenant
     deployments = []
     for tenant in tenants:
-        tenant_templates = [t for t in templates if t.tenant_id == tenant.id]
-        tenant_environments = [e for e in environments if e.tenant_id == tenant.id]
-        tenant_users = users_by_tenant.get(tenant.id, [])
+        tenant_templates = [t for t in templates if t.tenant_id == tenant.tenant_id]
+        tenant_environments = [e for e in environments if e.tenant_id == tenant.tenant_id]
+        tenant_users = users_by_tenant.get(tenant.tenant_id, [])
         
         if not tenant_templates or not tenant_environments or not tenant_users:
             continue
@@ -386,7 +373,7 @@ def create_sample_data(db: Session) -> None:
                     status=status,
                     template_id=template.id,
                     environment_id=environment.id,
-                    tenant_id=tenant.id,
+                    tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
                     created_by_id=user.id,
                     created_at=datetime.utcnow() - timedelta(days=j*15),
                     updated_at=datetime.utcnow() - timedelta(days=j*10),
@@ -520,7 +507,6 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' = {
   sku: {
     name: 'Standard_LRS'
   }
-  kind: 'StorageV2'
 }
 
 output storageAccountId string = storageAccount.id
@@ -612,7 +598,7 @@ output storageAccountId string = storageAccount.id
     
     # Create template foundry items for each tenant
     for tenant in tenants:
-        tenant_users = users_by_tenant.get(tenant.id, [])
+        tenant_users = users_by_tenant.get(tenant.tenant_id, [])
         if not tenant_users:
             continue
             
@@ -636,7 +622,7 @@ output storageAccountId string = storageAccount.id
                 is_published=template_data["is_published"],
                 author=user.username,
                 commit_id=generate_uuid(),
-                tenant_id=tenant.id,
+                tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
                 created_by_id=user.id,
                 created_at=created_at,
                 updated_at=updated_at
