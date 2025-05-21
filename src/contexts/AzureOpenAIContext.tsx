@@ -84,36 +84,21 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
     addLog(`Endpoint: ${config.endpoint}/openai/deployments/${config.deploymentName}`, "info");
 
     try {
-      // Simple test request to Azure OpenAI
-      const requestBody = {
-        messages: [{ role: "system", content: "You are a helpful assistant." }],
-        max_tokens: 5,
-      };
+      // Use the NexusAI service to check the connection status
+      const nexusAIService = new NexusAIService();
+      const status = await nexusAIService.checkStatus();
       
-      addLog("Sending test request to Azure OpenAI", "request", requestBody);
-      
-      const response = await fetch(`${config.endpoint}/openai/deployments/${config.deploymentName}/chat/completions?api-version=${config.apiVersion}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "api-key": config.apiKey,
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        addLog(`Response status: ${response.status} ${response.statusText}`, "error", errorData);
-        throw new Error(errorData?.error?.message || `HTTP error ${response.status}`);
+      if (status.status === "connected") {
+        setConnectionStatus("connected");
+        addLog("Connection successful", "success");
+        toast.success("Successfully connected to Azure OpenAI");
+        return true;
+      } else {
+        setConnectionStatus("error");
+        addLog(`Connection error: ${status.message}`, "error");
+        toast.error(`Failed to connect: ${status.message}`);
+        return false;
       }
-
-      const responseData = await response.json();
-      addLog("Received successful response from Azure OpenAI", "response", responseData);
-      
-      setConnectionStatus("connected");
-      addLog("Connection successful", "success");
-      toast.success("Successfully connected to Azure OpenAI");
-      return true;
     } catch (error) {
       setConnectionStatus("error");
       const errorMessage = error instanceof Error ? error.message : "Unknown error";

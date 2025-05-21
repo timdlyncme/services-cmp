@@ -93,11 +93,13 @@ export class CMPService {
       }
 
       const response = await api.post('/cloud-accounts', {
-        ...account,
-        tenant_id: formatTenantId(tenantId)
+        ...account
       }, {
         headers: {
           Authorization: `Bearer ${token}`
+        },
+        params: {
+          tenant_id: formatTenantId(tenantId)
         }
       });
       return response.data;
@@ -323,11 +325,13 @@ export class CMPService {
       }
 
       const response = await api.post('/environments', {
-        ...environment,
-        tenant_id: formatTenantId(tenantId)
+        ...environment
       }, {
         headers: {
           Authorization: `Bearer ${token}`
+        },
+        params: {
+          tenant_id: formatTenantId(tenantId)
         }
       });
       return response.data;
@@ -383,11 +387,11 @@ export class CMPService {
   /**
    * Get all tenants
    */
-  async getTenants(): Promise<Tenant[]> {
+  async getTenants(): Promise<any[]> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        return [];
+        throw new Error('Authentication token not found');
       }
 
       const response = await api.get('/tenants', {
@@ -403,13 +407,13 @@ export class CMPService {
   }
 
   /**
-   * Get a tenant by ID
+   * Get a specific tenant
    */
-  async getTenant(tenantId: string): Promise<Tenant | null> {
+  async getTenant(tenantId: string): Promise<any> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        return null;
+        throw new Error('Authentication token not found');
       }
 
       const response = await api.get(`/tenants/${tenantId}`, {
@@ -419,19 +423,88 @@ export class CMPService {
       });
       return response.data;
     } catch (error) {
-      console.error(`Get tenant ${tenantId} error:`, error);
-      return null;
+      console.error('Get tenant error:', error);
+      throw error;
     }
   }
 
   /**
-   * Get all users for a tenant
+   * Create a new tenant
    */
-  async getUsers(tenantId: string): Promise<User[]> {
+  async createTenant(tenant: any): Promise<any> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        return [];
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await api.post('/tenants', {
+        ...tenant
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Create tenant error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a tenant
+   */
+  async updateTenant(tenantId: string, tenant: any): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await api.put(`/tenants/${tenantId}`, {
+        ...tenant
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Update tenant error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a tenant
+   */
+  async deleteTenant(tenantId: string): Promise<void> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      await api.delete(`/tenants/${tenantId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+    } catch (error) {
+      console.error('Delete tenant error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all users
+   */
+  async getUsers(tenantId: string): Promise<any[]> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
       }
 
       const response = await api.get('/users', {
@@ -450,13 +523,13 @@ export class CMPService {
   }
 
   /**
-   * Get a user by ID
+   * Get a specific user
    */
-  async getUser(userId: string): Promise<User | null> {
+  async getUser(userId: number): Promise<any> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        return null;
+        throw new Error('Authentication token not found');
       }
 
       const response = await api.get(`/users/${userId}`, {
@@ -466,8 +539,80 @@ export class CMPService {
       });
       return response.data;
     } catch (error) {
-      console.error(`Get user ${userId} error:`, error);
-      return null;
+      console.error('Get user error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new user
+   */
+  async createUser(user: any, tenantId: string): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await api.post('/users', {
+        ...user
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        params: {
+          tenant_id: formatTenantId(tenantId)
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Create user error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a user
+   */
+  async updateUser(userId: number, user: any): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await api.put(`/users/${userId}`, {
+        ...user
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Update user error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a user
+   */
+  async deleteUser(userId: number): Promise<void> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      await api.delete(`/users/${userId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+    } catch (error) {
+      console.error('Delete user error:', error);
+      throw error;
     }
   }
 
@@ -517,8 +662,126 @@ export class CMPService {
       return null;
     }
   }
+
+  /**
+   * Get all templates from the template foundry
+   */
+  async getTemplateFoundry(tenantId: string): Promise<any[]> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await api.get('/template-foundry', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        params: {
+          tenant_id: formatTenantId(tenantId)
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get template foundry error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a specific template from the template foundry
+   */
+  async getTemplateFoundryItem(templateId: string): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await api.get(`/template-foundry/${templateId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get template foundry item error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new template in the template foundry
+   */
+  async createTemplateFoundryItem(template: any, tenantId: string): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await api.post('/template-foundry', {
+        ...template
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        params: {
+          tenant_id: formatTenantId(tenantId)
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Create template foundry item error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a template in the template foundry
+   */
+  async updateTemplateFoundryItem(templateId: string, template: any): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await api.put(`/template-foundry/${templateId}`, {
+        ...template
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Update template foundry item error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a template from the template foundry
+   */
+  async deleteTemplateFoundryItem(templateId: string): Promise<void> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      await api.delete(`/template-foundry/${templateId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+    } catch (error) {
+      console.error('Delete template foundry item error:', error);
+      throw error;
+    }
+  }
 }
 
 // Create a singleton instance
 export const cmpService = new CMPService();
-

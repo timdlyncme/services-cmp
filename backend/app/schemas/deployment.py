@@ -6,8 +6,8 @@ from pydantic import BaseModel
 class CloudAccountBase(BaseModel):
     name: str
     provider: str
-    status: str
     description: Optional[str] = None
+    status: Optional[str] = "connected"
 
 
 class CloudAccountCreate(CloudAccountBase):
@@ -15,7 +15,8 @@ class CloudAccountCreate(CloudAccountBase):
 
 
 class CloudAccountUpdate(CloudAccountBase):
-    pass
+    name: Optional[str] = None
+    provider: Optional[str] = None
 
 
 class CloudAccountResponse(CloudAccountBase):
@@ -30,6 +31,12 @@ class CloudAccountResponse(CloudAccountBase):
 class EnvironmentBase(BaseModel):
     name: str
     description: Optional[str] = None
+    update_strategy: Optional[str] = None
+    scaling_policies: Optional[Dict[str, Any]] = None
+    environment_variables: Optional[Dict[str, Any]] = None
+    logging_config: Optional[Dict[str, Any]] = None
+    monitoring_integration: Optional[Dict[str, Any]] = None
+    cloud_account_ids: Optional[List[int]] = None
 
 
 class EnvironmentCreate(EnvironmentBase):
@@ -37,13 +44,14 @@ class EnvironmentCreate(EnvironmentBase):
 
 
 class EnvironmentUpdate(EnvironmentBase):
-    pass
+    name: Optional[str] = None
 
 
 class EnvironmentResponse(EnvironmentBase):
     id: int
     environment_id: str
     tenant_id: int
+    cloud_accounts: Optional[List[CloudAccountResponse]] = None
 
     class Config:
         from_attributes = True
@@ -52,24 +60,44 @@ class EnvironmentResponse(EnvironmentBase):
 class TemplateBase(BaseModel):
     name: str
     description: Optional[str] = None
-    category: str
+    category: Optional[str] = None
     provider: str
-    is_public: bool = False
-    code: Optional[str] = None
+    is_public: Optional[bool] = False
 
 
 class TemplateCreate(TemplateBase):
-    pass
+    code: str
 
 
 class TemplateUpdate(TemplateBase):
+    name: Optional[str] = None
+    provider: Optional[str] = None
+    code: Optional[str] = None
+
+
+class TemplateVersionBase(BaseModel):
+    version: str
+    code: str
+    commit_message: Optional[str] = None
+
+
+class TemplateVersionCreate(TemplateVersionBase):
     pass
+
+
+class TemplateVersionResponse(TemplateVersionBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class TemplateResponse(TemplateBase):
     id: int
     template_id: str
-    tenant_id: Optional[int] = None
+    tenant_id: int
+    versions: Optional[List[TemplateVersionResponse]] = None
 
     class Config:
         from_attributes = True
@@ -77,32 +105,48 @@ class TemplateResponse(TemplateBase):
 
 class DeploymentBase(BaseModel):
     name: str
-    status: str
-    region: Optional[str] = None
+    description: Optional[str] = None
+    environment_id: int
+    template_id: int
     parameters: Optional[Dict[str, Any]] = None
-    resources: Optional[List[str]] = None
 
 
 class DeploymentCreate(DeploymentBase):
-    template_id: int
-    environment_id: int
-    cloud_account_id: int
+    pass
 
 
 class DeploymentUpdate(DeploymentBase):
-    pass
+    name: Optional[str] = None
+    environment_id: Optional[int] = None
+    template_id: Optional[int] = None
+    parameters: Optional[Dict[str, Any]] = None
+    status: Optional[str] = None
+
+
+class DeploymentHistoryBase(BaseModel):
+    event_type: str
+    event_details: Optional[Dict[str, Any]] = None
+
+
+class DeploymentHistoryResponse(DeploymentHistoryBase):
+    id: int
+    timestamp: datetime
+    user_id: int
+
+    class Config:
+        from_attributes = True
 
 
 class DeploymentResponse(DeploymentBase):
     id: int
     deployment_id: str
+    status: str
     created_at: datetime
     updated_at: datetime
-    template_id: int
-    environment_id: int
-    cloud_account_id: int
     tenant_id: int
-    created_by_id: int
+    environment: EnvironmentResponse
+    template: TemplateResponse
+    history: Optional[List[DeploymentHistoryResponse]] = None
 
     class Config:
         from_attributes = True

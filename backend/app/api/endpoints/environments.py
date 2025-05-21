@@ -6,7 +6,7 @@ from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import User, Tenant
 from app.models.deployment import Environment, CloudAccount
-from app.schemas.deployment import EnvironmentResponse, EnvironmentCreate, EnvironmentUpdate
+from app.schemas.deployment import EnvironmentResponse, EnvironmentCreate, EnvironmentUpdate, CloudAccountResponse
 
 router = APIRouter()
 
@@ -52,16 +52,35 @@ def get_environments(
         
         environments = query.all()
         
-        return [
-            EnvironmentResponse(
-                id=env.id,
-                environment_id=env.environment_id,
-                name=env.name,
-                description=env.description,
-                tenant_id=env.tenant_id
+        result = []
+        for env in environments:
+            # Get associated cloud accounts for response
+            cloud_accounts = []
+            for account in env.cloud_accounts:
+                cloud_accounts.append(
+                    CloudAccountResponse(
+                        id=account.id,
+                        account_id=account.account_id,
+                        name=account.name,
+                        provider=account.provider,
+                        status=account.status,
+                        description=account.description,
+                        tenant_id=account.tenant_id
+                    )
+                )
+            
+            result.append(
+                EnvironmentResponse(
+                    id=env.id,
+                    environment_id=env.environment_id,
+                    name=env.name,
+                    description=env.description,
+                    tenant_id=env.tenant_id,
+                    cloud_accounts=cloud_accounts
+                )
             )
-            for env in environments
-        ]
+        
+        return result
     
     except Exception as e:
         raise HTTPException(
@@ -105,12 +124,28 @@ def get_environment(
                     detail="Not authorized to access this environment"
                 )
         
+        # Get associated cloud accounts for response
+        cloud_accounts = []
+        for account in environment.cloud_accounts:
+            cloud_accounts.append(
+                CloudAccountResponse(
+                    id=account.id,
+                    account_id=account.account_id,
+                    name=account.name,
+                    provider=account.provider,
+                    status=account.status,
+                    description=account.description,
+                    tenant_id=account.tenant_id
+                )
+            )
+        
         return EnvironmentResponse(
             id=environment.id,
             environment_id=environment.environment_id,
             name=environment.name,
             description=environment.description,
-            tenant_id=environment.tenant_id
+            tenant_id=environment.tenant_id,
+            cloud_accounts=cloud_accounts
         )
     
     except HTTPException:
@@ -125,6 +160,7 @@ def get_environment(
 @router.post("/", response_model=EnvironmentResponse)
 def create_environment(
     environment: EnvironmentCreate,
+    tenant_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -140,25 +176,78 @@ def create_environment(
         )
     
     try:
+        # Determine which tenant to use
+        target_tenant_id = current_user.tenant_id
+        
+        # If tenant_id is provided, use that instead
+        if tenant_id:
+            # Check if tenant exists
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
+            if not tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Tenant with ID {tenant_id} not found"
+                )
+            
+            # Check if user has access to this tenant
+            if tenant.id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to create environments for this tenant"
+                )
+            
+            target_tenant_id = tenant.id
+        
         # Create new environment
         import uuid
         new_environment = Environment(
             environment_id=str(uuid.uuid4()),
             name=environment.name,
             description=environment.description,
-            tenant_id=current_user.tenant_id
+            tenant_id=target_tenant_id,
+            update_strategy=environment.update_strategy,
+            scaling_policies=environment.scaling_policies,
+            environment_variables=environment.environment_variables,
+            logging_config=environment.logging_config,
+            monitoring_integration=environment.monitoring_integration
         )
         
         db.add(new_environment)
         db.commit()
         db.refresh(new_environment)
         
+        # Add cloud account associations if provided
+        if environment.cloud_account_ids:
+            for account_id in environment.cloud_account_ids:
+                cloud_account = db.query(CloudAccount).filter(CloudAccount.id == account_id).first()
+                if cloud_account:
+                    new_environment.cloud_accounts.append(cloud_account)
+            
+            db.commit()
+            db.refresh(new_environment)
+        
+        # Get associated cloud accounts for response
+        cloud_accounts = []
+        for account in new_environment.cloud_accounts:
+            cloud_accounts.append(
+                CloudAccountResponse(
+                    id=account.id,
+                    account_id=account.account_id,
+                    name=account.name,
+                    provider=account.provider,
+                    status=account.status,
+                    description=account.description,
+                    tenant_id=account.tenant_id
+                )
+            )
+        
         return EnvironmentResponse(
             id=new_environment.id,
             environment_id=new_environment.environment_id,
             name=new_environment.name,
             description=new_environment.description,
-            tenant_id=new_environment.tenant_id
+            tenant_id=new_environment.tenant_id,
+            cloud_accounts=cloud_accounts
         )
     
     except Exception as e:
@@ -210,15 +299,58 @@ def update_environment(
         environment.name = environment_update.name
         environment.description = environment_update.description
         
+        # Update new fields if provided
+        if environment_update.update_strategy is not None:
+            environment.update_strategy = environment_update.update_strategy
+        
+        if environment_update.scaling_policies is not None:
+            environment.scaling_policies = environment_update.scaling_policies
+        
+        if environment_update.environment_variables is not None:
+            environment.environment_variables = environment_update.environment_variables
+        
+        if environment_update.logging_config is not None:
+            environment.logging_config = environment_update.logging_config
+        
+        if environment_update.monitoring_integration is not None:
+            environment.monitoring_integration = environment_update.monitoring_integration
+        
+        # Update cloud account associations if provided
+        if environment_update.cloud_account_ids is not None:
+            # Clear existing associations
+            environment.cloud_accounts = []
+            
+            # Add new associations
+            for account_id in environment_update.cloud_account_ids:
+                cloud_account = db.query(CloudAccount).filter(CloudAccount.id == account_id).first()
+                if cloud_account:
+                    environment.cloud_accounts.append(cloud_account)
+        
         db.commit()
         db.refresh(environment)
+        
+        # Get associated cloud accounts for response
+        cloud_accounts = []
+        for account in environment.cloud_accounts:
+            cloud_accounts.append(
+                CloudAccountResponse(
+                    id=account.id,
+                    account_id=account.account_id,
+                    name=account.name,
+                    provider=account.provider,
+                    status=account.status,
+                    description=account.description,
+                    tenant_id=account.tenant_id
+                )
+            )
         
         return EnvironmentResponse(
             id=environment.id,
             environment_id=environment.environment_id,
             name=environment.name,
             description=environment.description,
-            tenant_id=environment.tenant_id
+            tenant_id=environment.tenant_id,
+            cloud_accounts=cloud_accounts
         )
     
     except HTTPException:
