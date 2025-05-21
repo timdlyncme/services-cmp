@@ -55,7 +55,7 @@ class UserResponse(UserBase):
     id: int
     user_id: str
     role: Optional[str] = None
-    tenant_id: Optional[int] = None
+    tenant_id: Optional[str] = None  # Changed to str for UUID
     
     class Config:
         from_attributes = True

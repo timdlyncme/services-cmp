@@ -22,7 +22,7 @@ class CloudAccountUpdate(CloudAccountBase):
 class CloudAccountResponse(CloudAccountBase):
     id: int
     account_id: str
-    tenant_id: int
+    tenant_id: str  # Changed to str for UUID
 
     class Config:
         from_attributes = True
@@ -50,7 +50,7 @@ class EnvironmentUpdate(EnvironmentBase):
 class EnvironmentResponse(EnvironmentBase):
     id: int
     environment_id: str
-    tenant_id: int
+    tenant_id: str  # Changed to str for UUID
     cloud_accounts: Optional[List[CloudAccountResponse]] = None
 
     class Config:
@@ -96,7 +96,7 @@ class TemplateVersionResponse(TemplateVersionBase):
 class TemplateResponse(TemplateBase):
     id: int
     template_id: str
-    tenant_id: int
+    tenant_id: str  # Changed to str for UUID
     versions: Optional[List[TemplateVersionResponse]] = None
 
     class Config:
@@ -143,7 +143,7 @@ class DeploymentResponse(DeploymentBase):
     status: str
     created_at: datetime
     updated_at: datetime
-    tenant_id: int
+    tenant_id: str  # Changed to str for UUID
     environment: EnvironmentResponse
     template: TemplateResponse
     history: Optional[List[DeploymentHistoryResponse]] = None

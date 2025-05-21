@@ -55,7 +55,7 @@ class TemplateFoundryUpdate(BaseModel):
 class TemplateFoundryResponse(TemplateFoundryBase):
     id: int
     template_id: str
-    tenant_id: int
+    tenant_id: str  # Changed to str for UUID
     created_by_id: int
     created_at: datetime
     updated_at: datetime
@@ -63,4 +63,3 @@ class TemplateFoundryResponse(TemplateFoundryBase):
     
     class Config:
         from_attributes = True
-

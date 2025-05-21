@@ -23,7 +23,7 @@ class IntegrationConfigResponse(IntegrationConfigBase):
     id: int
     integration_id: str
     last_checked: datetime
-    tenant_id: int
+    tenant_id: str  # Changed to str for UUID
 
     class Config:
         from_attributes = True
@@ -42,4 +42,3 @@ class IntegrationConfigFrontendResponse(BaseModel):
 
     class Config:
         from_attributes = False
-
