@@ -1,303 +1,147 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import {
-  Plus,
-  Server,
-  Database,
-  Cloud,
-  Search,
-  CloudCog,
-  Trash,
-  Edit,
-  FileCode,
-  X,
-  CheckCircle,
-  AlertCircle
-} from "lucide-react";
-import { CloudAccount } from "@/types/auth";
+import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, Layers } from "lucide-react";
+import { cmpService } from "@/services/cmp-service";
 
 interface Environment {
   id: string;
+  environment_id: string;
   name: string;
   description: string;
-  cloudAccounts: CloudAccount[];
-  resourceTypes: string[];
-  tags: Record<string, string>;
-  createdAt: string;
-  deploymentCount: number;
+  tenant_id: number;
 }
 
-// Mock data for cloud accounts
-const mockCloudAccounts: CloudAccount[] = [
-  {
-    id: "account-1",
-    name: "Production Azure",
-    provider: "azure",
-    status: "connected",
-    tenantId: "tenant-1"
-  },
-  {
-    id: "account-2",
-    name: "Development AWS",
-    provider: "aws",
-    status: "connected",
-    tenantId: "tenant-1"
-  },
-  {
-    id: "account-3",
-    name: "Testing GCP",
-    provider: "gcp",
-    status: "connected",
-    tenantId: "tenant-1"
-  },
-  {
-    id: "account-4",
-    name: "Staging Azure",
-    provider: "azure",
-    status: "warning",
-    tenantId: "tenant-1"
-  }
-];
-
-// Mock data for environments
-const mockEnvironments: Environment[] = [
-  {
-    id: "env-1",
-    name: "Production",
-    description: "Main production environment with strict security policies",
-    cloudAccounts: [mockCloudAccounts[0]],
-    resourceTypes: ["Virtual Machines", "Storage Accounts", "Networking"],
-    tags: {
-      environment: "production",
-      criticality: "high"
-    },
-    createdAt: "2023-05-10T08:30:00Z",
-    deploymentCount: 12
-  },
-  {
-    id: "env-2",
-    name: "Development",
-    description: "Development environment for testing new features",
-    cloudAccounts: [mockCloudAccounts[1], mockCloudAccounts[2]],
-    resourceTypes: ["Virtual Machines", "Storage Accounts", "Databases", "Containers"],
-    tags: {
-      environment: "development",
-      team: "engineering"
-    },
-    createdAt: "2023-05-15T10:45:00Z",
-    deploymentCount: 8
-  },
-  {
-    id: "env-3",
-    name: "Testing",
-    description: "QA testing environment",
-    cloudAccounts: [mockCloudAccounts[2]],
-    resourceTypes: ["Virtual Machines", "Databases"],
-    tags: {
-      environment: "testing",
-      team: "qa"
-    },
-    createdAt: "2023-05-20T14:15:00Z",
-    deploymentCount: 5
-  }
-];
-
-// Available resource types
-const resourceTypes = [
-  "Virtual Machines",
-  "Storage Accounts",
-  "Networking",
-  "Databases",
-  "Containers",
-  "Serverless Functions",
-  "Kubernetes Clusters",
-  "Message Queues",
-  "CDN",
-  "API Management"
-];
-
 const Environments = () => {
-  const { user } = useAuth();
-  const isMSP = user?.role === "msp";
+  const { currentTenant } = useAuth();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [filteredEnvironments, setFilteredEnvironments] = useState<Environment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  const [environments, setEnvironments] = useState<Environment[]>(mockEnvironments);
-  const [isCreating, setIsCreating] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [editingEnvironmentId, setEditingEnvironmentId] = useState<string | null>(null);
+  // State for the new environment dialog
+  const [isNewEnvironmentDialogOpen, setIsNewEnvironmentDialogOpen] = useState(false);
+  const [newEnvironmentName, setNewEnvironmentName] = useState("");
+  const [newEnvironmentDescription, setNewEnvironmentDescription] = useState("");
   
-  const [newEnvironment, setNewEnvironment] = useState<Partial<Environment>>({
-    name: "",
-    description: "",
-    cloudAccounts: [],
-    resourceTypes: [],
-    tags: {}
-  });
+  // Fetch environments from API
+  const fetchEnvironments = async () => {
+    if (!currentTenant) return;
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const environments = await cmpService.getEnvironments(currentTenant.id);
+      setEnvironments(environments);
+      setFilteredEnvironments(environments);
+    } catch (error) {
+      console.error("Error fetching environments:", error);
+      setError("Failed to load environments. Please try again.");
+      
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to load environments");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
-  const [tagKey, setTagKey] = useState("");
-  const [tagValue, setTagValue] = useState("");
+  useEffect(() => {
+    if (currentTenant) {
+      fetchEnvironments();
+    }
+  }, [currentTenant]);
   
-  // Filter environments based on search term
-  const filteredEnvironments = environments.filter(env =>
-    env.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    env.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const filtered = environments.filter(env => 
+        env.name.toLowerCase().includes(query) || 
+        (env.description && env.description.toLowerCase().includes(query))
+      );
+      setFilteredEnvironments(filtered);
+    } else {
+      setFilteredEnvironments(environments);
+    }
+  }, [searchQuery, environments]);
   
-  const handleCreateEnvironment = () => {
-    // Validate form
-    if (!newEnvironment.name) {
+  const handleCreateEnvironment = async () => {
+    if (!newEnvironmentName) {
       toast.error("Environment name is required");
       return;
     }
     
-    if ((newEnvironment.cloudAccounts || []).length === 0) {
-      toast.error("Please select at least one cloud account");
-      return;
-    }
-    
-    if (editingEnvironmentId) {
-      // Update existing environment
-      setEnvironments(environments.map(env => 
-        env.id === editingEnvironmentId 
-          ? { 
-              ...env, 
-              name: newEnvironment.name || "",
-              description: newEnvironment.description || "",
-              cloudAccounts: newEnvironment.cloudAccounts || [],
-              resourceTypes: newEnvironment.resourceTypes || [],
-              tags: newEnvironment.tags || {}
-            }
-          : env
-      ));
-      setIsEditing(false);
-      setEditingEnvironmentId(null);
-      resetEnvironmentForm();
-      toast.success("Environment updated successfully");
-    } else {
-      // Create new environment
-      const createdEnvironment: Environment = {
-        id: `env-${Date.now()}`,
-        name: newEnvironment.name || "",
-        description: newEnvironment.description || "",
-        cloudAccounts: newEnvironment.cloudAccounts || [],
-        resourceTypes: newEnvironment.resourceTypes || [],
-        tags: newEnvironment.tags || {},
-        createdAt: new Date().toISOString(),
-        deploymentCount: 0
+    try {
+      setIsLoading(true);
+      
+      // Create the new environment
+      const newEnvironment = {
+        name: newEnvironmentName,
+        description: newEnvironmentDescription
       };
       
-      setEnvironments([...environments, createdEnvironment]);
-      setIsCreating(false);
-      resetEnvironmentForm();
+      await cmpService.createEnvironment(newEnvironment, currentTenant!.id);
+      
+      // Refresh the list
+      await fetchEnvironments();
+      
+      // Reset form and close dialog
+      setNewEnvironmentName("");
+      setNewEnvironmentDescription("");
+      setIsNewEnvironmentDialogOpen(false);
+      
       toast.success("Environment created successfully");
-    }
-  };
-  
-  const handleEditEnvironment = (environment: Environment) => {
-    setNewEnvironment({
-      name: environment.name,
-      description: environment.description,
-      cloudAccounts: [...environment.cloudAccounts],
-      resourceTypes: [...environment.resourceTypes],
-      tags: {...environment.tags}
-    });
-    setEditingEnvironmentId(environment.id);
-    setIsEditing(true);
-  };
-  
-  const resetEnvironmentForm = () => {
-    setNewEnvironment({
-      name: "",
-      description: "",
-      cloudAccounts: [],
-      resourceTypes: [],
-      tags: {}
-    });
-    setTagKey("");
-    setTagValue("");
-    setEditingEnvironmentId(null);
-  };
-  
-  const handleDeleteEnvironment = (environmentId: string) => {
-    setEnvironments(environments.filter(env => env.id !== environmentId));
-    toast.success("Environment deleted successfully");
-  };
-  
-  const toggleCloudAccount = (account: CloudAccount) => {
-    const cloudAccounts = newEnvironment.cloudAccounts || [];
-    const accountExists = cloudAccounts.find(acc => acc.id === account.id);
-    
-    if (accountExists) {
-      setNewEnvironment({
-        ...newEnvironment,
-        cloudAccounts: cloudAccounts.filter(acc => acc.id !== account.id)
-      });
-    } else {
-      setNewEnvironment({
-        ...newEnvironment,
-        cloudAccounts: [...cloudAccounts, account]
-      });
-    }
-  };
-  
-  const toggleResourceType = (type: string) => {
-    const resourceTypes = newEnvironment.resourceTypes || [];
-    
-    if (resourceTypes.includes(type)) {
-      setNewEnvironment({
-        ...newEnvironment,
-        resourceTypes: resourceTypes.filter(t => t !== type)
-      });
-    } else {
-      setNewEnvironment({
-        ...newEnvironment,
-        resourceTypes: [...resourceTypes, type]
-      });
-    }
-  };
-  
-  const addTag = () => {
-    if (!tagKey.trim()) {
-      toast.error("Tag key is required");
-      return;
-    }
-    
-    setNewEnvironment({
-      ...newEnvironment,
-      tags: {
-        ...(newEnvironment.tags || {}),
-        [tagKey]: tagValue
+    } catch (error) {
+      console.error("Error creating environment:", error);
+      
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to create environment");
       }
-    });
-    
-    setTagKey("");
-    setTagValue("");
+    } finally {
+      setIsLoading(false);
+    }
   };
   
-  const removeTag = (key: string) => {
-    const updatedTags = { ...(newEnvironment.tags || {}) };
-    delete updatedTags[key];
-    
-    setNewEnvironment({
-      ...newEnvironment,
-      tags: updatedTags
-    });
+  const handleDeleteEnvironment = async (environmentId: string) => {
+    try {
+      setIsLoading(true);
+      
+      // Delete the environment
+      await cmpService.deleteEnvironment(environmentId);
+      
+      // Refresh the list
+      await fetchEnvironments();
+      
+      toast.success("Environment deleted successfully");
+    } catch (error) {
+      console.error("Error deleting environment:", error);
+      
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to delete environment");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
   
-  const calculateCloudAccountStatus = (cloudAccount: CloudAccount) => {
-    // This would typically be a real health check in a production app
-    return cloudAccount.status === "connected" ? "healthy" : "warning";
+  const handleRefresh = () => {
+    fetchEnvironments();
+    toast.success("Refreshing environments...");
   };
   
   return (
@@ -306,284 +150,55 @@ const Environments = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Environments</h1>
           <p className="text-muted-foreground">
-            Create and manage deployment environments for your templates
+            Manage deployment environments for your infrastructure
           </p>
         </div>
+        
         <div className="flex gap-2">
-          <Dialog open={isCreating} onOpenChange={setIsCreating}>
+          <Button variant="outline" size="icon" onClick={handleRefresh}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          
+          <Dialog open={isNewEnvironmentDialogOpen} onOpenChange={setIsNewEnvironmentDialogOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
                 New Environment
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create Deployment Environment</DialogTitle>
+                <DialogTitle>Create Environment</DialogTitle>
                 <DialogDescription>
-                  Define an environment for deploying your cloud templates
+                  Add a new environment for your deployments
                 </DialogDescription>
               </DialogHeader>
               
               <div className="grid gap-4 py-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label htmlFor="name" className="text-sm font-medium">Environment Name</label>
-                    <Input
-                      id="name"
-                      value={newEnvironment.name}
-                      onChange={(e) => setNewEnvironment({ ...newEnvironment, name: e.target.value })}
-                      placeholder="e.g., Production, Development, Testing"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label htmlFor="description" className="text-sm font-medium">Description</label>
-                    <Input
-                      id="description"
-                      value={newEnvironment.description}
-                      onChange={(e) => setNewEnvironment({ ...newEnvironment, description: e.target.value })}
-                      placeholder="Describe the environment's purpose"
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <label htmlFor="name" className="text-sm font-medium">Environment Name</label>
+                  <Input
+                    id="name"
+                    value={newEnvironmentName}
+                    onChange={(e) => setNewEnvironmentName(e.target.value)}
+                    placeholder="e.g., Production, Development, Testing"
+                  />
                 </div>
                 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Cloud Accounts</label>
-                  <div className="border rounded-md p-3">
-                    <div className="grid gap-2">
-                      {mockCloudAccounts.map((account) => (
-                        <div key={account.id} className="flex items-center justify-between p-2 border rounded-md">
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`account-${account.id}`}
-                              checked={(newEnvironment.cloudAccounts || []).some(acc => acc.id === account.id)}
-                              onCheckedChange={() => toggleCloudAccount(account)}
-                            />
-                            <label htmlFor={`account-${account.id}`} className="flex items-center gap-2">
-                              {account.provider === "azure" && <Cloud className="h-4 w-4 text-blue-500" />}
-                              {account.provider === "aws" && <Cloud className="h-4 w-4 text-amber-500" />}
-                              {account.provider === "gcp" && <Cloud className="h-4 w-4 text-red-500" />}
-                              <span>{account.name}</span>
-                            </label>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={account.status === "connected" ? "secondary" : "outline"}>
-                              {account.status}
-                            </Badge>
-                            {calculateCloudAccountStatus(account) === "healthy" ? (
-                              <CheckCircle className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <AlertCircle className="h-4 w-4 text-amber-500" />
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Resource Types</label>
-                  <div className="border rounded-md p-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      {resourceTypes.map((type) => (
-                        <div key={type} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`resource-${type}`}
-                            checked={(newEnvironment.resourceTypes || []).includes(type)}
-                            onCheckedChange={() => toggleResourceType(type)}
-                          />
-                          <label
-                            htmlFor={`resource-${type}`}
-                            className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                          >
-                            {type}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Environment Tags</label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Tag key"
-                      value={tagKey}
-                      onChange={(e) => setTagKey(e.target.value)}
-                      className="w-1/3"
-                    />
-                    <Input
-                      placeholder="Tag value"
-                      value={tagValue}
-                      onChange={(e) => setTagValue(e.target.value)}
-                      className="w-1/3"
-                    />
-                    <Button onClick={addTag} type="button" variant="secondary">Add Tag</Button>
-                  </div>
-                  
-                  {Object.keys(newEnvironment.tags || {}).length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {Object.entries(newEnvironment.tags || {}).map(([key, value]) => (
-                        <Badge key={key} variant="secondary" className="flex gap-1 items-center">
-                          {key}: {value}
-                          <button 
-                            onClick={() => removeTag(key)}
-                            className="ml-1 hover:bg-primary-foreground rounded-full"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+                  <label htmlFor="description" className="text-sm font-medium">Description</label>
+                  <Input
+                    id="description"
+                    value={newEnvironmentDescription}
+                    onChange={(e) => setNewEnvironmentDescription(e.target.value)}
+                    placeholder="Describe this environment"
+                  />
                 </div>
               </div>
               
               <DialogFooter>
-                <Button variant="outline" onClick={() => {
-                  setIsCreating(false);
-                  resetEnvironmentForm();
-                }}>Cancel</Button>
-                <Button onClick={handleCreateEnvironment}>{editingEnvironmentId ? "Update" : "Create"} Environment</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          
-          {/* Dialog for editing environment */}
-          <Dialog open={isEditing} onOpenChange={setIsEditing}>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Edit Environment</DialogTitle>
-                <DialogDescription>
-                  Update your deployment environment settings
-                </DialogDescription>
-              </DialogHeader>
-              
-              {/* Same form as creation, but with environment data pre-filled */}
-              <div className="grid gap-4 py-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label htmlFor="edit-name" className="text-sm font-medium">Environment Name</label>
-                    <Input
-                      id="edit-name"
-                      value={newEnvironment.name}
-                      onChange={(e) => setNewEnvironment({ ...newEnvironment, name: e.target.value })}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label htmlFor="edit-description" className="text-sm font-medium">Description</label>
-                    <Input
-                      id="edit-description"
-                      value={newEnvironment.description}
-                      onChange={(e) => setNewEnvironment({ ...newEnvironment, description: e.target.value })}
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Cloud Accounts</label>
-                  <div className="border rounded-md p-3">
-                    <div className="grid gap-2">
-                      {mockCloudAccounts.map((account) => (
-                        <div key={account.id} className="flex items-center justify-between p-2 border rounded-md">
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`edit-account-${account.id}`}
-                              checked={(newEnvironment.cloudAccounts || []).some(acc => acc.id === account.id)}
-                              onCheckedChange={() => toggleCloudAccount(account)}
-                            />
-                            <label htmlFor={`edit-account-${account.id}`} className="flex items-center gap-2">
-                              {account.provider === "azure" && <Cloud className="h-4 w-4 text-blue-500" />}
-                              {account.provider === "aws" && <Cloud className="h-4 w-4 text-amber-500" />}
-                              {account.provider === "gcp" && <Cloud className="h-4 w-4 text-red-500" />}
-                              <span>{account.name}</span>
-                            </label>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={account.status === "connected" ? "secondary" : "outline"}>
-                              {account.status}
-                            </Badge>
-                            {calculateCloudAccountStatus(account) === "healthy" ? (
-                              <CheckCircle className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <AlertCircle className="h-4 w-4 text-amber-500" />
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Resource Types</label>
-                  <div className="border rounded-md p-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      {resourceTypes.map((type) => (
-                        <div key={type} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`edit-resource-${type}`}
-                            checked={(newEnvironment.resourceTypes || []).includes(type)}
-                            onCheckedChange={() => toggleResourceType(type)}
-                          />
-                          <label
-                            htmlFor={`edit-resource-${type}`}
-                            className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                          >
-                            {type}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Environment Tags</label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Tag key"
-                      value={tagKey}
-                      onChange={(e) => setTagKey(e.target.value)}
-                      className="w-1/3"
-                    />
-                    <Input
-                      placeholder="Tag value"
-                      value={tagValue}
-                      onChange={(e) => setTagValue(e.target.value)}
-                      className="w-1/3"
-                    />
-                    <Button onClick={addTag} type="button" variant="secondary">Add Tag</Button>
-                  </div>
-                  
-                  {Object.keys(newEnvironment.tags || {}).length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {Object.entries(newEnvironment.tags || {}).map(([key, value]) => (
-                        <Badge key={key} variant="secondary" className="flex gap-1 items-center">
-                          {key}: {value}
-                          <button 
-                            onClick={() => removeTag(key)}
-                            className="ml-1 hover:bg-primary-foreground rounded-full"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <DialogFooter>
-                <Button variant="outline" onClick={() => {
-                  setIsEditing(false);
-                  resetEnvironmentForm();
-                }}>Cancel</Button>
-                <Button onClick={handleCreateEnvironment}>Update Environment</Button>
+                <Button variant="outline" onClick={() => setIsNewEnvironmentDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreateEnvironment}>Create Environment</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -595,153 +210,72 @@ const Environments = () => {
         <Input
           placeholder="Search environments..."
           className="pl-8 mb-4"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
         />
       </div>
       
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredEnvironments.map((environment) => (
-          <Card key={environment.id}>
-            <CardHeader className="pb-3 flex flex-row justify-between items-start">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Server className="h-5 w-5" />
-                  {environment.name}
-                </CardTitle>
-              </div>
-              <div className="flex gap-2">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={() => handleEditEnvironment(environment)}
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={() => handleDeleteEnvironment(environment.id)}
-                >
-                  <Trash className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {environment.description}
-                </p>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium mb-1">Cloud Accounts</h3>
-                <div className="flex flex-wrap gap-2">
-                  {environment.cloudAccounts.map((account) => (
-                    <Badge key={account.id} variant="outline" className="flex items-center gap-1">
-                      {account.provider === "azure" && <Cloud className="h-3 w-3 text-blue-500" />}
-                      {account.provider === "aws" && <Cloud className="h-3 w-3 text-amber-500" />}
-                      {account.provider === "gcp" && <Cloud className="h-3 w-3 text-red-500" />}
-                      {account.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium mb-1">Resource Types</h3>
-                <div className="flex flex-wrap gap-1">
-                  {environment.resourceTypes.map((type) => (
-                    <Badge key={type} variant="secondary" className="text-xs">
-                      {type}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              
-              {Object.keys(environment.tags).length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium mb-1">Tags</h3>
-                  <div className="flex flex-wrap gap-1">
-                    {Object.entries(environment.tags).map(([key, value]) => (
-                      <Badge key={key} variant="outline" className="text-xs">
-                        {key}: {value}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex justify-between items-center text-sm text-muted-foreground pt-2">
-                <span>Created: {new Date(environment.createdAt).toLocaleDateString()}</span>
-                <span className="flex items-center gap-1">
-                  <FileCode className="h-3 w-3" />
-                  {environment.deploymentCount} deployments
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-        
-        {filteredEnvironments.length === 0 && (
-          <div className="col-span-full flex flex-col items-center justify-center py-12">
-            <Server className="h-12 w-12 text-muted-foreground" />
+      <div className="mt-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-muted-foreground">Loading environments...</span>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center h-64">
+            <AlertCircle className="h-12 w-12 text-red-500" />
+            <h2 className="mt-4 text-xl font-semibold">Error Loading Environments</h2>
+            <p className="text-muted-foreground mt-2">{error}</p>
+            <Button className="mt-4" onClick={fetchEnvironments}>
+              Try Again
+            </Button>
+          </div>
+        ) : filteredEnvironments.length > 0 ? (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredEnvironments.map((environment) => (
+                  <TableRow key={environment.environment_id}>
+                    <TableCell className="font-medium">{environment.name}</TableCell>
+                    <TableCell>{environment.description || "No description"}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteEnvironment(environment.environment_id)}>
+                        <Trash className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon">
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-64 border rounded-md p-8">
+            <Layers className="h-12 w-12 mx-auto text-muted-foreground" />
             <h2 className="mt-4 text-xl font-semibold">No Environments Found</h2>
-            <p className="text-center text-muted-foreground mt-2">
-              {searchTerm 
+            <p className="text-muted-foreground mt-2">
+              {searchQuery 
                 ? "No environments match your search criteria" 
-                : "Create your first deployment environment to get started"}
+                : "Create your first environment to start organizing your deployments"}
             </p>
-            <Button
-              className="mt-4"
-              onClick={() => setIsCreating(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
+            <Button className="mt-4" onClick={() => setIsNewEnvironmentDialogOpen(true)}>
               Create Environment
             </Button>
           </div>
         )}
       </div>
-      
-      {filteredEnvironments.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Environment Comparison</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Cloud Providers</TableHead>
-                  <TableHead>Resource Types</TableHead>
-                  <TableHead>Deployments</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredEnvironments.map((environment) => (
-                  <TableRow key={environment.id}>
-                    <TableCell className="font-medium">{environment.name}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {Array.from(new Set(environment.cloudAccounts.map(acc => acc.provider))).map((provider) => (
-                          <Badge key={provider} variant="outline" className="capitalize">
-                            {provider}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>{environment.resourceTypes.length}</TableCell>
-                    <TableCell>{environment.deploymentCount}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 };
 
 export default Environments;
+
