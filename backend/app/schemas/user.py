@@ -1,5 +1,16 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class LoginResponse(BaseModel):
+    user: Dict[str, Any]
+    token: str
+    token_type: str
 
 
 class UserBase(BaseModel):
@@ -43,4 +54,3 @@ class UserResponse(UserBase):
     
     class Config:
         from_attributes = True
-
