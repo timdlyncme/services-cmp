@@ -318,7 +318,7 @@ export const TemplateDetails = ({
                 <h3 className="text-sm font-medium mb-2">Assigned Tenants</h3>
                 <div className="flex flex-wrap gap-2">
                   {template.tenantIds.map((tenantId) => {
-                    const tenant = availableTenants.find(t => t.id === tenantId);
+                    const tenant = availableTenants.find(t => t.tenant_id === tenantId);
                     return tenant ? (
                       <Badge key={tenantId} variant="outline">
                         {tenant.name}
@@ -515,15 +515,15 @@ export const TemplateDetails = ({
                 <Label>Assigned Tenants</Label>
                 <div className="grid grid-cols-2 gap-2 border rounded-md p-3">
                   {availableTenants.map(tenant => (
-                    <div key={tenant.id} className="flex items-center space-x-2">
+                    <div key={tenant.tenant_id} className="flex items-center space-x-2">
                       <Checkbox 
-                        id={`tenant-${tenant.id}`} 
-                        checked={editedTemplate.tenantIds.includes(tenant.id)}
+                        id={`tenant-${tenant.tenant_id}`} 
+                        checked={editedTemplate.tenantIds.includes(tenant.tenant_id)}
                         onCheckedChange={(checked) => {
-                          handleTenantChange(tenant.id, checked === true);
+                          handleTenantChange(tenant.tenant_id, checked === true);
                         }}
                       />
-                      <Label htmlFor={`tenant-${tenant.id}`}>{tenant.name}</Label>
+                      <Label htmlFor={`tenant-${tenant.tenant_id}`}>{tenant.name}</Label>
                     </div>
                   ))}
                 </div>
@@ -539,3 +539,4 @@ export const TemplateDetails = ({
     </div>
   );
 };
+
