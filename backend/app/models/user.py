@@ -1,7 +1,9 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Table, Boolean
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
+import uuid
 
-from app.models.base_models import Base
+from app.models.base_models import Base, generate_uuid
 
 
 # Association table for many-to-many relationship between Role and Permission
@@ -40,7 +42,7 @@ class Tenant(Base):
     __tablename__ = "tenants"
     
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(String, unique=True, index=True)
+    tenant_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
@@ -65,7 +67,7 @@ class User(Base):
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, unique=True, index=True)
+    user_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     username = Column(String, unique=True, index=True)
     full_name = Column(String)
     email = Column(String, unique=True, index=True)

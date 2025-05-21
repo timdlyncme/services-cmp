@@ -1,8 +1,9 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, DateTime, Table, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
-from app.models.base_models import Base
+from app.models.base_models import Base, generate_uuid
 
 
 # Association table for many-to-many relationship between Environment and CloudAccount
@@ -18,7 +19,7 @@ class CloudAccount(Base):
     __tablename__ = "cloud_accounts"
     
     id = Column(Integer, primary_key=True, index=True)
-    account_id = Column(String, unique=True, index=True)
+    account_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     provider = Column(String)  # azure, aws, gcp
     status = Column(String)  # connected, disconnected, error
@@ -40,7 +41,7 @@ class Environment(Base):
     __tablename__ = "environments"
     
     id = Column(Integer, primary_key=True, index=True)
-    environment_id = Column(String, unique=True, index=True)
+    environment_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
     
@@ -69,7 +70,7 @@ class Template(Base):
     __tablename__ = "templates"
     
     id = Column(Integer, primary_key=True, index=True)
-    template_id = Column(String, unique=True, index=True)
+    template_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
     category = Column(String, nullable=True)
@@ -108,7 +109,7 @@ class Deployment(Base):
     __tablename__ = "deployments"
     
     id = Column(Integer, primary_key=True, index=True)
-    deployment_id = Column(String, unique=True, index=True)
+    deployment_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
     status = Column(String)  # pending, running, completed, failed

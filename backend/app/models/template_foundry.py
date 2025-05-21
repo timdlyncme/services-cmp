@@ -1,15 +1,16 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, JSON, Boolean, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
-from app.models.base_models import Base
+from app.models.base_models import Base, generate_uuid
 
 
 class TemplateFoundry(Base):
     __tablename__ = "template_foundry"
     
     id = Column(Integer, primary_key=True, index=True)
-    template_id = Column(String, unique=True, index=True)
+    template_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
     type = Column(String)  # terraform, arm, cloudformation, etc.
@@ -19,7 +20,7 @@ class TemplateFoundry(Base):
     categories = Column(JSON, default=[])
     is_published = Column(Boolean, default=False)
     author = Column(String)
-    commit_id = Column(String, nullable=True)  # For version control
+    commit_id = Column(UUID(as_uuid=False), nullable=True, default=generate_uuid)  # For version control
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
