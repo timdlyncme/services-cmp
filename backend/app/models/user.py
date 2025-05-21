@@ -56,6 +56,9 @@ class Tenant(Base):
     
     # Relationship with TemplateFoundry
     template_foundry_items = relationship("TemplateFoundry", back_populates="tenant")
+    
+    # Relationship with IntegrationConfig
+    integration_configs = relationship("IntegrationConfig", back_populates="tenant")
 
 
 class User(Base):
