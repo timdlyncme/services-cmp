@@ -63,4 +63,5 @@ class Tenant(Base):
     
     # Relationships
     users = relationship("User", back_populates="tenant")
+    integration_configs = relationship("IntegrationConfig", back_populates="tenant")
     # Other relationships are defined in deployment.py
