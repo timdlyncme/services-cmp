@@ -13,12 +13,15 @@ import { CloudTemplate } from "@/types/cloud";
 import { mockTemplates } from "@/data/mock-data";
 import { ChevronLeft, Save, Play, MessagesSquare, History, FileEdit } from "lucide-react";
 import { toast } from "sonner";
+import { cmpService } from "@/services/cmp-service";
 
 const TemplateDetails = () => {
   const { templateId } = useParams();
   const { currentTenant } = useAuth();
   const navigate = useNavigate();
   const [template, setTemplate] = useState<CloudTemplate | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [aiMessage, setAiMessage] = useState("");
   const [deployDialogOpen, setDeployDialogOpen] = useState(false);
@@ -26,30 +29,52 @@ const TemplateDetails = () => {
   const [deployEnv, setDeployEnv] = useState("development");
   
   useEffect(() => {
-    if (templateId && currentTenant) {
-      const found = mockTemplates.find(
-        t => t.id === templateId && t.tenantId === currentTenant.tenant_id
-      );
-      
-      if (found) {
-        setTemplate(found);
-        setCode(found.code);
-        setDeployName(`${found.name}-${deployEnv}`);
+    const fetchTemplate = async () => {
+      if (!templateId) {
+        setError("No template ID provided");
+        setLoading(false);
+        return;
       }
-    }
-  }, [templateId, currentTenant]);
+      
+      try {
+        setLoading(true);
+        const templateData = await cmpService.getTemplate(templateId);
+        
+        if (templateData) {
+          setTemplate(templateData);
+          setCode(templateData.code || "");
+          setDeployName(`${templateData.name}-${deployEnv}`);
+        } else {
+          setError("Template not found");
+        }
+      } catch (err) {
+        console.error("Error fetching template:", err);
+        setError("Failed to load template details");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchTemplate();
+  }, [templateId]);
   
-  const handleSaveTemplate = () => {
+  const handleSaveTemplate = async () => {
     if (!template) return;
     
-    // In a real app, this would save to backend
-    setTemplate({
-      ...template,
-      code: code,
-      updatedAt: new Date().toISOString()
-    });
-    
-    toast.success("Template saved successfully");
+    try {
+      const updatedTemplate = await cmpService.updateTemplate(template.id, {
+        ...template,
+        code: code
+      });
+      
+      if (updatedTemplate) {
+        setTemplate(updatedTemplate);
+        toast.success("Template saved successfully");
+      }
+    } catch (err) {
+      console.error("Error saving template:", err);
+      toast.error("Failed to save template");
+    }
   };
   
   const handleDeployTemplate = () => {
@@ -76,12 +101,22 @@ const TemplateDetails = () => {
     }
   };
 
-  if (!template) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold">Loading template...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !template) {
     return (
       <div className="flex items-center justify-center h-[50vh]">
         <div className="text-center">
           <h2 className="text-xl font-semibold">Template not found</h2>
-          <p className="text-muted-foreground">The requested template does not exist</p>
+          <p className="text-muted-foreground">{error || "The requested template does not exist"}</p>
           <Button 
             variant="outline" 
             className="mt-4"
@@ -123,7 +158,7 @@ const TemplateDetails = () => {
            template.type === "arm" ? "ARM Template" : "CloudFormation"}
         </Badge>
         
-        {template.categories.map(category => (
+        {template.categories && template.categories.map(category => (
           <Badge key={category} variant="secondary">
             {category}
           </Badge>
