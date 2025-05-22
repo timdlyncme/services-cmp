@@ -23,7 +23,7 @@ export interface Permission {
 
 export interface User {
   id: string;
-  name: string;
+  full_name: string;
   email: string;
   role: UserRole;
   tenantId: string;
