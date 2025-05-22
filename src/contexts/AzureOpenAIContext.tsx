@@ -88,10 +88,14 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
       return false;
     }
 
-    // If we've already checked the connection and it failed, don't try again
-    // unless explicitly requested via the refresh button
-    if (connectionChecked && connectionStatus === "error") {
+    // If we're already connecting, don't start another connection test
+    if (connectionStatus === "connecting") {
       return false;
+    }
+
+    // If we've already checked the connection and it's connected, don't check again
+    if (connectionChecked && connectionStatus === "connected") {
+      return true;
     }
 
     setConnectionStatus("connecting");
@@ -109,13 +113,11 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
         setConnectionStatus("connected");
         setConnectionError(null);
         addLog("Connection successful", "success");
-        toast.success("Successfully connected to Azure OpenAI");
         return true;
       } else {
         setConnectionStatus("error");
         setConnectionError(status.message);
         addLog(`Connection error: ${status.message}`, "error");
-        toast.error(`Failed to connect: ${status.message}`);
         return false;
       }
     } catch (error) {
@@ -124,7 +126,6 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       setConnectionError(errorMessage);
       addLog(`Connection error: ${errorMessage}`, "error", error);
-      toast.error(`Failed to connect: ${errorMessage}`);
       return false;
     }
   };

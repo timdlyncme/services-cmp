@@ -61,6 +61,12 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // If already connecting or loading, don't submit again
+    if (loading || connectionStatus === 'connecting') {
+      return;
+    }
+    
     try {
       setLoading(true);
       

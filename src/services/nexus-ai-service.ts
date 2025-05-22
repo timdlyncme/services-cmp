@@ -252,10 +252,30 @@ export class NexusAIService {
       const response = await api.get('/nexus-ai/status', {
         headers: {
           Authorization: `Bearer ${token}`
-        }
+        },
+        // Add a timeout to prevent hanging requests
+        timeout: 5000
       });
       
-      return response.data;
+      const data = response.data;
+      
+      // Map the backend status to our frontend status format
+      if (data.status === 'connected') {
+        return {
+          status: 'connected',
+          message: 'Successfully connected to Azure OpenAI'
+        };
+      } else if (data.status === 'not_configured') {
+        return {
+          status: 'not_configured',
+          message: 'Azure OpenAI is not configured'
+        };
+      } else {
+        return {
+          status: 'error',
+          message: data.error || 'Failed to connect to Azure OpenAI'
+        };
+      }
     } catch (error) {
       console.error('Check status error:', error);
       return {

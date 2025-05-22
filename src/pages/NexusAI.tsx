@@ -45,10 +45,10 @@ export default function NexusAI() {
 
   useEffect(() => {
     // Check connection status on component mount, but only once
-    if (isConfigured && !isConnected && !connectionChecked) {
+    if (isConfigured && !connectionChecked) {
       testConnection();
     }
-  }, [isConfigured, isConnected, testConnection, connectionChecked]);
+  }, [isConfigured, testConnection, connectionChecked]);
 
   // Cleanup streaming on unmount
   useEffect(() => {
