@@ -9,48 +9,57 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import requests
+from sqlalchemy.orm import Session
 
-from app.api.endpoints.auth import get_current_user
-from app.core.config import settings
+from app.api.deps import get_current_user, get_db
 from app.models.user import User
+from app.models.nexus_ai import NexusAIConfig, NexusAILog
 
 router = APIRouter()
 
-# Setup logging
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# In-memory storage for configuration and logs
-# In a production environment, this would be stored in a database
-AZURE_CONFIG = {
-    "api_key": settings.AZURE_OPENAI_API_KEY,
-    "endpoint": settings.AZURE_OPENAI_ENDPOINT,
-    "api_version": settings.AZURE_OPENAI_API_VERSION,
-    "deployment_name": settings.AZURE_OPENAI_DEPLOYMENT_NAME,
-}
-
-CONNECTION_STATUS = {
-    "status": "disconnected",
-    "last_checked": None,
-    "error": None
-}
-
+# Debug logs for development
 DEBUG_LOGS = []
 
-
-def add_log(message: str, level: str = "info"):
-    """Add a log message to the debug logs"""
-    timestamp = datetime.now().isoformat()
-    DEBUG_LOGS.append({
-        "timestamp": timestamp,
+def add_log(message: str, level: str = "info", details: Any = None):
+    """Add a log entry to the debug logs"""
+    log_entry = {
+        "timestamp": datetime.now().isoformat(),
         "level": level,
-        "message": message
-    })
-    if level == "error":
-        logger.error(message)
-    else:
-        logger.info(message)
+        "message": message,
+        "details": details
+    }
+    DEBUG_LOGS.append(log_entry)
+    logger.info(f"[NexusAI] {level.upper()}: {message}")
+    
+    # Also add to database
+    try:
+        db = next(get_db())
+        db_log = NexusAILog(
+            timestamp=datetime.now(),
+            level=level,
+            message=message,
+            details=details
+        )
+        db.add(db_log)
+        db.commit()
+    except Exception as e:
+        logger.error(f"Failed to add log to database: {e}")
 
+# Helper function to get the current configuration
+def get_config(db: Session):
+    """Get the current NexusAI configuration from the database"""
+    config = db.query(NexusAIConfig).first()
+    if not config:
+        # Create a default config if none exists
+        config = NexusAIConfig()
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+    return config
 
 # Models
 class ChatMessage(BaseModel):
@@ -103,7 +112,8 @@ class LogsResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ) -> Any:
     """
     Chat with Azure OpenAI
@@ -116,8 +126,11 @@ async def chat(
             detail="Not enough permissions"
         )
     
+    # Get the configuration from the database
+    config = get_config(db)
+    
     # Check if Azure OpenAI is configured
-    if not AZURE_CONFIG["api_key"] or not AZURE_CONFIG["endpoint"] or not AZURE_CONFIG["deployment_name"]:
+    if not config.api_key or not config.endpoint or not config.deployment_name:
         add_log("Azure OpenAI is not configured", "error")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -126,24 +139,23 @@ async def chat(
     
     # If streaming is requested, use the streaming endpoint
     if request.stream:
-        return await stream_chat(request, current_user)
+        return await stream_chat(request, current_user, db)
     
     try:
         add_log(f"Sending request to Azure OpenAI: {len(request.messages)} messages")
         
         # Prepare the request to Azure OpenAI
-        azure_url = f"{AZURE_CONFIG['endpoint']}/openai/deployments/{AZURE_CONFIG['deployment_name']}/chat/completions?api-version={AZURE_CONFIG['api_version']}"
+        azure_url = f"{config.endpoint}/openai/deployments/{config.deployment_name}/chat/completions?api-version={config.api_version}"
         
         headers = {
             "Content-Type": "application/json",
-            "api-key": AZURE_CONFIG["api_key"]
+            "api-key": config.api_key
         }
         
         payload = {
             "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
             "max_completion_tokens": request.max_completion_tokens,
-            "temperature": request.temperature,
-            "stream": True
+            "temperature": request.temperature
         }
         
         # Send the request to Azure OpenAI
@@ -156,6 +168,13 @@ async def chat(
         # Check if the request was successful
         if response.status_code != 200:
             add_log(f"Error from Azure OpenAI: {response.status_code} {response.text}", "error")
+            
+            # Update connection status in the database
+            config.last_status = "error"
+            config.last_checked = datetime.utcnow()
+            config.last_error = f"Error: {response.status_code} {response.text}"
+            db.commit()
+            
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error from Azure OpenAI: {response.status_code} {response.text}"
@@ -164,10 +183,11 @@ async def chat(
         # Parse the response
         response_data = response.json()
         
-        # Update connection status
-        CONNECTION_STATUS["status"] = "connected"
-        CONNECTION_STATUS["last_checked"] = datetime.now().isoformat()
-        CONNECTION_STATUS["error"] = None
+        # Update connection status in the database
+        config.last_status = "connected"
+        config.last_checked = datetime.utcnow()
+        config.last_error = None
+        db.commit()
         
         add_log("Successfully received response from Azure OpenAI")
         
@@ -181,10 +201,11 @@ async def chat(
         }
     
     except Exception as e:
-        # Update connection status
-        CONNECTION_STATUS["status"] = "error"
-        CONNECTION_STATUS["last_checked"] = datetime.now().isoformat()
-        CONNECTION_STATUS["error"] = str(e)
+        # Update connection status in the database
+        config.last_status = "error"
+        config.last_checked = datetime.utcnow()
+        config.last_error = str(e)
+        db.commit()
         
         add_log(f"Error in chat endpoint: {str(e)}", "error")
         
@@ -197,7 +218,8 @@ async def chat(
 @router.post("/chat/stream")
 async def stream_chat_endpoint(
     request: ChatRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ) -> StreamingResponse:
     """
     Stream chat responses from Azure OpenAI
@@ -210,34 +232,41 @@ async def stream_chat_endpoint(
             detail="Not enough permissions"
         )
     
+    # Get the configuration from the database
+    config = get_config(db)
+    
     # Check if Azure OpenAI is configured
-    if not AZURE_CONFIG["api_key"] or not AZURE_CONFIG["endpoint"] or not AZURE_CONFIG["deployment_name"]:
+    if not config.api_key or not config.endpoint or not config.deployment_name:
         add_log("Azure OpenAI is not configured", "error")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Azure OpenAI is not configured"
         )
     
-    return await stream_chat(request, current_user)
+    return await stream_chat(request, current_user, db)
 
 
 async def stream_chat(
     request: ChatRequest,
-    current_user: User
+    current_user: User,
+    db: Session
 ) -> StreamingResponse:
     """
     Stream chat responses from Azure OpenAI
     """
+    # Get the configuration from the database
+    config = get_config(db)
+    
     add_log(f"Streaming request to Azure OpenAI: {len(request.messages)} messages")
     
     async def generate():
         try:
             # Prepare the request to Azure OpenAI
-            azure_url = f"{AZURE_CONFIG['endpoint']}/openai/deployments/{AZURE_CONFIG['deployment_name']}/chat/completions?api-version={AZURE_CONFIG['api_version']}"
+            azure_url = f"{config.endpoint}/openai/deployments/{config.deployment_name}/chat/completions?api-version={config.api_version}"
             
             headers = {
                 "Content-Type": "application/json",
-                "api-key": AZURE_CONFIG["api_key"]
+                "api-key": config.api_key
             }
             
             payload = {
@@ -252,13 +281,21 @@ async def stream_chat(
                 if response.status_code != 200:
                     error_msg = f"Error from Azure OpenAI: {response.status_code} {response.text}"
                     add_log(error_msg, "error")
+                    
+                    # Update connection status in the database
+                    config.last_status = "error"
+                    config.last_checked = datetime.utcnow()
+                    config.last_error = error_msg
+                    db.commit()
+                    
                     yield f"data: {json.dumps({'error': error_msg})}\n\n"
                     return
                 
-                # Update connection status
-                CONNECTION_STATUS["status"] = "connected"
-                CONNECTION_STATUS["last_checked"] = datetime.now().isoformat()
-                CONNECTION_STATUS["error"] = None
+                # Update connection status in the database
+                config.last_status = "connected"
+                config.last_checked = datetime.utcnow()
+                config.last_error = None
+                db.commit()
                 
                 # Process the streaming response
                 for line in response.iter_lines():
@@ -282,10 +319,11 @@ async def stream_chat(
                 yield f"data: [DONE]\n\n"
         
         except Exception as e:
-            # Update connection status
-            CONNECTION_STATUS["status"] = "error"
-            CONNECTION_STATUS["last_checked"] = datetime.now().isoformat()
-            CONNECTION_STATUS["error"] = str(e)
+            # Update connection status in the database
+            config.last_status = "error"
+            config.last_checked = datetime.utcnow()
+            config.last_error = str(e)
+            db.commit()
             
             error_msg = f"Error in streaming chat: {str(e)}"
             add_log(error_msg, "error")
@@ -298,8 +336,9 @@ async def stream_chat(
 
 
 @router.get("/config", response_model=ConfigResponse)
-async def get_config(
-    current_user: User = Depends(get_current_user)
+async def get_config_endpoint(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ) -> Any:
     """
     Get Azure OpenAI configuration
@@ -312,19 +351,23 @@ async def get_config(
             detail="Not enough permissions"
         )
     
+    # Get the configuration from the database
+    config = get_config(db)
+    
     # Return the configuration (mask the API key)
     return {
-        "api_key": "********" if AZURE_CONFIG["api_key"] else None,
-        "endpoint": AZURE_CONFIG["endpoint"],
-        "api_version": AZURE_CONFIG["api_version"],
-        "deployment_name": AZURE_CONFIG["deployment_name"]
+        "api_key": "********" if config.api_key else None,
+        "endpoint": config.endpoint,
+        "api_version": config.api_version,
+        "deployment_name": config.deployment_name
     }
 
 
 @router.post("/config", response_model=ConfigResponse)
 async def update_config(
     request: ConfigRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ) -> Any:
     """
     Update Azure OpenAI configuration
@@ -337,35 +380,44 @@ async def update_config(
             detail="Not enough permissions"
         )
     
+    # Get the configuration from the database
+    config = get_config(db)
+    
     # Update the configuration
     if request.api_key is not None:
-        AZURE_CONFIG["api_key"] = request.api_key
+        config.api_key = request.api_key
         add_log("API key updated")
     
     if request.endpoint is not None:
-        AZURE_CONFIG["endpoint"] = request.endpoint
+        config.endpoint = request.endpoint
         add_log("Endpoint updated")
     
     if request.api_version is not None:
-        AZURE_CONFIG["api_version"] = request.api_version
+        config.api_version = request.api_version
         add_log("API version updated")
     
     if request.deployment_name is not None:
-        AZURE_CONFIG["deployment_name"] = request.deployment_name
+        config.deployment_name = request.deployment_name
         add_log("Deployment name updated")
+    
+    # Save the changes to the database
+    config.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(config)
     
     # Return the updated configuration (mask the API key)
     return {
-        "api_key": "********" if AZURE_CONFIG["api_key"] else None,
-        "endpoint": AZURE_CONFIG["endpoint"],
-        "api_version": AZURE_CONFIG["api_version"],
-        "deployment_name": AZURE_CONFIG["deployment_name"]
+        "api_key": "********" if config.api_key else None,
+        "endpoint": config.endpoint,
+        "api_version": config.api_version,
+        "deployment_name": config.deployment_name
     }
 
 
 @router.get("/status", response_model=StatusResponse)
 async def get_status(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ) -> Any:
     """
     Get Azure OpenAI connection status
@@ -378,8 +430,11 @@ async def get_status(
             detail="Not enough permissions"
         )
     
-    # Check the connection status
-    if not AZURE_CONFIG["api_key"] or not AZURE_CONFIG["endpoint"] or not AZURE_CONFIG["deployment_name"]:
+    # Get the configuration from the database
+    config = get_config(db)
+    
+    # Check if Azure OpenAI is configured
+    if not config.api_key or not config.endpoint or not config.deployment_name:
         return {
             "status": "not_configured",
             "last_checked": datetime.now().isoformat(),
@@ -387,21 +442,25 @@ async def get_status(
         }
     
     # If the status is already "connected" and was checked recently, return the cached status
-    if (CONNECTION_STATUS["status"] == "connected" and 
-        CONNECTION_STATUS["last_checked"] and 
-        (datetime.now() - datetime.fromisoformat(CONNECTION_STATUS["last_checked"])).total_seconds() < 60):
-        return CONNECTION_STATUS
+    if (config.last_status == "connected" and 
+        config.last_checked and 
+        (datetime.utcnow() - config.last_checked).total_seconds() < 60):
+        return {
+            "status": config.last_status,
+            "last_checked": config.last_checked.isoformat() if config.last_checked else None,
+            "error": config.last_error
+        }
     
     # Otherwise, check the connection by making a simple request to the chat endpoint
     try:
         add_log("Checking connection to Azure OpenAI")
         
-        # Prepare the request to Azure OpenAI - use chat completions endpoint instead
-        azure_url = f"{AZURE_CONFIG['endpoint']}/openai/deployments/{AZURE_CONFIG['deployment_name']}/chat/completions?api-version={AZURE_CONFIG['api_version']}"
+        # Prepare the request to Azure OpenAI
+        azure_url = f"{config.endpoint}/openai/deployments/{config.deployment_name}/chat/completions?api-version={config.api_version}"
         
         headers = {
             "Content-Type": "application/json",
-            "api-key": AZURE_CONFIG["api_key"]
+            "api-key": config.api_key
         }
         
         # Send a minimal request to check if the deployment exists and is accessible
@@ -418,27 +477,36 @@ async def get_status(
         # Check if the request was successful
         if response.status_code != 200:
             add_log(f"Error checking connection: {response.status_code} {response.text}", "error")
-            CONNECTION_STATUS["status"] = "error"
-            CONNECTION_STATUS["last_checked"] = datetime.now().isoformat()
-            CONNECTION_STATUS["error"] = f"Error: {response.status_code} {response.text}"
+            config.last_status = "error"
+            config.last_checked = datetime.utcnow()
+            config.last_error = f"Error: {response.status_code} {response.text}"
         else:
             add_log("Connection successful")
-            CONNECTION_STATUS["status"] = "connected"
-            CONNECTION_STATUS["last_checked"] = datetime.now().isoformat()
-            CONNECTION_STATUS["error"] = None
+            config.last_status = "connected"
+            config.last_checked = datetime.utcnow()
+            config.last_error = None
+        
+        # Save the changes to the database
+        db.commit()
     
     except Exception as e:
         add_log(f"Error checking connection: {str(e)}", "error")
-        CONNECTION_STATUS["status"] = "error"
-        CONNECTION_STATUS["last_checked"] = datetime.now().isoformat()
-        CONNECTION_STATUS["error"] = str(e)
+        config.last_status = "error"
+        config.last_checked = datetime.utcnow()
+        config.last_error = str(e)
+        db.commit()
     
-    return CONNECTION_STATUS
+    return {
+        "status": config.last_status,
+        "last_checked": config.last_checked.isoformat() if config.last_checked else None,
+        "error": config.last_error
+    }
 
 
 @router.get("/logs", response_model=LogsResponse)
 async def get_logs(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ) -> Any:
     """
     Get debug logs
@@ -451,7 +519,20 @@ async def get_logs(
             detail="Not enough permissions"
         )
     
+    # Get logs from the database
+    logs = db.query(NexusAILog).order_by(NexusAILog.timestamp.desc()).limit(100).all()
+    
+    # Convert to response format
+    log_entries = [
+        {
+            "timestamp": log.timestamp.isoformat(),
+            "level": log.level,
+            "message": log.message
+        }
+        for log in logs
+    ]
+    
     # Return the logs
     return {
-        "logs": DEBUG_LOGS
+        "logs": log_entries
     }

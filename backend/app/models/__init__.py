@@ -5,3 +5,4 @@ from app.models.deployment import CloudAccount, Environment, Template, TemplateV
 from app.models.template_foundry import TemplateFoundry
 from app.models.template_foundry_versions import TemplateFoundryVersion
 from app.models.integration import IntegrationConfig
+from app.models.nexus_ai import NexusAIConfig, NexusAILog

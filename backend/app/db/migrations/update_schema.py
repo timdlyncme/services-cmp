@@ -16,6 +16,7 @@ from app.models.user import User, Role, Permission, Tenant
 from app.models.deployment import CloudAccount, Environment, Template, TemplateVersion, Deployment, DeploymentHistory
 from app.models.integration import IntegrationConfig
 from app.models.template_foundry import TemplateFoundry
+from app.models.nexus_ai import NexusAIConfig, NexusAILog
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,4 +34,3 @@ def create_tables():
 
 if __name__ == "__main__":
     create_tables()
-
