@@ -1,4 +1,3 @@
-
 export type CloudProvider = "azure" | "aws" | "gcp";
 export type TemplateType = "terraform" | "arm" | "cloudformation";
 export type DeploymentStatus = "running" | "pending" | "failed" | "stopped" | "deploying";
@@ -25,6 +24,21 @@ export interface CloudTemplate {
   updatedAt: string;
   categories: string[];
   tenantId: string;
+  lastUpdatedBy?: string;
+  parameters?: Record<string, TemplateParameter>;
+  variables?: Record<string, TemplateVariable>;
+}
+
+export interface TemplateParameter {
+  value: string;
+  type: "string" | "int" | "password";
+  description?: string;
+}
+
+export interface TemplateVariable {
+  value: string;
+  type: "string" | "int" | "password";
+  description?: string;
 }
 
 export interface CloudDeployment {

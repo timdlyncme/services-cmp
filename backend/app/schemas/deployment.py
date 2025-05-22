@@ -67,12 +67,16 @@ class TemplateBase(BaseModel):
 
 class TemplateCreate(TemplateBase):
     code: str
+    parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
 
 
 class TemplateUpdate(TemplateBase):
     name: Optional[str] = None
     provider: Optional[str] = None
     code: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
 
 
 class TemplateVersionBase(BaseModel):
@@ -185,6 +189,9 @@ class CloudTemplateResponse(BaseModel):
     updatedAt: str
     categories: List[str]
     tenantId: str
+    lastUpdatedBy: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = False

@@ -78,6 +78,8 @@ class Template(Base):
     is_public = Column(Boolean, default=False)
     current_version = Column(String, nullable=True)
     code = Column(String, nullable=True)  # Store the template code directly
+    parameters = Column(JSON, nullable=True)  # Store template parameters
+    variables = Column(JSON, nullable=True)  # Store template variables
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
