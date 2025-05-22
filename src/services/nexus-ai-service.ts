@@ -26,6 +26,7 @@ export interface ChatRequest {
   presence_penalty?: number;
   stop?: string[];
   stream?: boolean;
+  platform_data?: any; // Platform data to provide context
 }
 
 export interface ChatResponse {
@@ -96,6 +97,9 @@ export class NexusAIService {
       ...request,
       stream: true
     };
+
+    // Log the request data for debugging
+    console.log("Sending chat request with platform data:", requestData);
 
     // Create a controller to abort the fetch request
     const controller = new AbortController();
