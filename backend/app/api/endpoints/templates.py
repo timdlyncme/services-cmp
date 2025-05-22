@@ -3,14 +3,15 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 import uuid
+from datetime import datetime
 
 from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import User, Tenant
-from app.models.deployment import Template, Deployment
+from app.models.deployment import Template, Deployment, TemplateVersion
 from app.schemas.deployment import (
     TemplateResponse, TemplateCreate, TemplateUpdate,
-    CloudTemplateResponse
+    CloudTemplateResponse, TemplateVersionCreate
 )
 
 router = APIRouter()
@@ -137,7 +138,7 @@ def get_templates(
                 description=template.description or "",
                 type="terraform",  # Default to terraform, would need to add a type field
                 provider=template.provider,
-                code="",  # Would need to add a code field or store in a separate table
+                code=template.code or "",
                 deploymentCount=deployment_count,
                 uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
                 updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
@@ -206,85 +207,22 @@ def get_template(
         if template.category:
             categories = [cat.strip() for cat in template.category.split(",")]
         
-        # Get template code from the latest version
-        code = ""
-        latest_version = None
-        if hasattr(template, 'versions') and template.versions:
+        # Use the template's code field directly
+        code = template.code or ""
+        
+        # If no code in the template, try to get it from the latest version
+        if not code and template.versions:
             # Sort versions by created_at in descending order
             sorted_versions = sorted(template.versions, key=lambda v: v.created_at, reverse=True)
             if sorted_versions:
                 latest_version = sorted_versions[0]
                 code = latest_version.code or ""
         
-        # If no code found in versions, use a default template based on provider
-        if not code:
-            if template.provider == "azure":
-                code = """
-provider "azurerm" {
-  features {}
-}
-
-resource "azurerm_resource_group" "example" {
-  name     = "example-resources"
-  location = "East US"
-}
-
-resource "azurerm_virtual_network" "example" {
-  name                = "example-network"
-  address_space       = ["10.0.0.0/16"]
-  location            = azurerm_resource_group.example.location
-  resource_group_name = azurerm_resource_group.example.name
-}
-"""
-            elif template.provider == "aws":
-                code = """
-provider "aws" {
-  region = "us-west-2"
-}
-
-resource "aws_vpc" "example" {
-  cidr_block = "10.0.0.0/16"
-  
-  tags = {
-    Name = "example-vpc"
-  }
-}
-
-resource "aws_subnet" "example" {
-  vpc_id     = aws_vpc.example.id
-  cidr_block = "10.0.1.0/24"
-  
-  tags = {
-    Name = "example-subnet"
-  }
-}
-"""
-            elif template.provider == "gcp":
-                code = """
-provider "google" {
-  project = "my-project-id"
-  region  = "us-central1"
-}
-
-resource "google_compute_network" "vpc_network" {
-  name = "example-network"
-}
-
-resource "google_compute_subnetwork" "subnet" {
-  name          = "example-subnet"
-  ip_cidr_range = "10.0.0.0/16"
-  region        = "us-central1"
-  network       = google_compute_network.vpc_network.id
-}
-"""
-            else:
-                code = "# No template code available for this provider"
-        
         return CloudTemplateResponse(
             id=template.template_id,
             name=template.name,
             description=template.description or "",
-            type="terraform",  # Default to terraform, would need to add a type field
+            type="terraform",  # Default to terraform
             provider=template.provider,
             code=code,
             deploymentCount=deployment_count,
@@ -330,7 +268,6 @@ def create_template(
             )
         
         # Create new template
-        import uuid
         new_template = Template(
             template_id=str(uuid.uuid4()),
             name=template.name,
@@ -338,12 +275,29 @@ def create_template(
             category=template.category,
             provider=template.provider,
             is_public=template.is_public,
-            tenant_id=None if template.is_public else user_tenant.tenant_id
+            tenant_id=None if template.is_public else user_tenant.tenant_id,
+            code=template.code,  # Store the code directly in the template
+            current_version="1.0.0",  # Initial version
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
         )
         
         db.add(new_template)
         db.commit()
         db.refresh(new_template)
+        
+        # Create initial version
+        initial_version = TemplateVersion(
+            template_id=new_template.id,
+            version="1.0.0",
+            code=template.code,
+            changes="Initial version",
+            created_at=datetime.utcnow(),
+            created_by_id=current_user.id
+        )
+        
+        db.add(initial_version)
+        db.commit()
         
         # Get tenant ID for the template
         tenant_id = "public"
@@ -363,10 +317,10 @@ def create_template(
             description=new_template.description or "",
             type="terraform",  # Default to terraform
             provider=new_template.provider,
-            code="",  # Would need to add a code field
+            code=new_template.code or "",
             deploymentCount=0,
-            uploadedAt=new_template.created_at.isoformat() if hasattr(new_template, 'created_at') else "",
-            updatedAt=new_template.updated_at.isoformat() if hasattr(new_template, 'updated_at') else "",
+            uploadedAt=new_template.created_at.isoformat(),
+            updatedAt=new_template.updated_at.isoformat(),
             categories=categories,
             tenantId=tenant_id
         )
@@ -416,21 +370,56 @@ def update_template(
                     detail="Not authorized to update this template"
                 )
         
+        # Check if code has changed
+        code_changed = template_update.code is not None and template_update.code != template.code
+        
         # Update template
-        template.name = template_update.name
-        template.description = template_update.description
-        template.category = template_update.category
-        template.provider = template_update.provider
-        template.is_public = template_update.is_public
+        if template_update.name is not None:
+            template.name = template_update.name
+        if template_update.description is not None:
+            template.description = template_update.description
+        if template_update.category is not None:
+            template.category = template_update.category
+        if template_update.provider is not None:
+            template.provider = template_update.provider
+        if template_update.is_public is not None:
+            template.is_public = template_update.is_public
+        
+        # Update code if changed
+        if code_changed:
+            # Create a new version
+            current_version = template.current_version or "1.0.0"
+            version_parts = current_version.split(".")
+            new_version = f"{version_parts[0]}.{version_parts[1]}.{int(version_parts[2]) + 1}"
+            
+            # Create new version record
+            new_version_record = TemplateVersion(
+                template_id=template.id,
+                version=new_version,
+                code=template_update.code,
+                changes=f"Updated from version {current_version}",
+                created_at=datetime.utcnow(),
+                created_by_id=current_user.id
+            )
+            
+            db.add(new_version_record)
+            
+            # Update template with new code and version
+            template.code = template_update.code
+            template.current_version = new_version
         
         # Update tenant_id based on is_public
-        if template_update.is_public:
-            template.tenant_id = None
-        elif template.tenant_id is None:
-            # Get the user's tenant
-            user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
-            if user_tenant:
-                template.tenant_id = user_tenant.tenant_id
+        if template_update.is_public is not None:
+            if template_update.is_public:
+                template.tenant_id = None
+            elif template.tenant_id is None:
+                # Get the user's tenant
+                user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
+                if user_tenant:
+                    template.tenant_id = user_tenant.tenant_id
+        
+        # Update timestamp
+        template.updated_at = datetime.utcnow()
         
         db.commit()
         db.refresh(template)
@@ -458,7 +447,7 @@ def update_template(
             description=template.description or "",
             type="terraform",  # Default to terraform
             provider=template.provider,
-            code="",  # Would need to add a code field
+            code=template.code or "",
             deploymentCount=deployment_count,
             uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
@@ -521,6 +510,9 @@ def delete_template(
                 detail="Cannot delete template that is used by deployments"
             )
         
+        # Delete template versions first
+        db.query(TemplateVersion).filter(TemplateVersion.template_id == template.id).delete()
+        
         # Delete template
         db.delete(template)
         db.commit()
@@ -535,6 +527,150 @@ def delete_template(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting template: {str(e)}"
+        )
+
+
+@router.get("/{template_id}/versions", response_model=List[dict])
+def get_template_versions(
+    template_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Get all versions of a template
+    """
+    # Check if user has permission to view templates
+    has_permission = any(p.name == "view:templates" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    try:
+        template = db.query(Template).filter(Template.template_id == template_id).first()
+        
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template with ID {template_id} not found"
+            )
+        
+        # Check if user has access to this template
+        if not template.is_public and template.tenant_id != current_user.tenant_id:
+            # Admin users can view all templates
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to access this template"
+                )
+        
+        # Get all versions
+        versions = db.query(TemplateVersion).filter(TemplateVersion.template_id == template.id).all()
+        
+        # Sort versions by created_at in descending order
+        versions = sorted(versions, key=lambda v: v.created_at, reverse=True)
+        
+        # Convert to response format
+        result = []
+        for version in versions:
+            created_by = db.query(User).filter(User.id == version.created_by_id).first()
+            result.append({
+                "id": version.id,
+                "version": version.version,
+                "changes": version.changes,
+                "created_at": version.created_at.isoformat(),
+                "created_by": created_by.username if created_by else "Unknown",
+                "is_current": version.version == template.current_version
+            })
+        
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving template versions: {str(e)}"
+        )
+
+
+@router.post("/{template_id}/versions", response_model=dict)
+def create_template_version(
+    template_id: str,
+    version: TemplateVersionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Create a new version of a template
+    """
+    # Check if user has permission to update templates
+    has_permission = any(p.name == "update:templates" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    try:
+        template = db.query(Template).filter(Template.template_id == template_id).first()
+        
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template with ID {template_id} not found"
+            )
+        
+        # Check if user has access to update this template
+        if not template.is_public and template.tenant_id != current_user.tenant_id:
+            # Admin users can update all templates
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to update this template"
+                )
+        
+        # Create new version
+        new_version = TemplateVersion(
+            template_id=template.id,
+            version=version.version,
+            code=version.code,
+            changes=version.commit_message or f"Updated to version {version.version}",
+            created_at=datetime.utcnow(),
+            created_by_id=current_user.id
+        )
+        
+        db.add(new_version)
+        
+        # Update template with new code and version
+        template.code = version.code
+        template.current_version = version.version
+        template.updated_at = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(new_version)
+        
+        # Get created_by user
+        created_by = db.query(User).filter(User.id == new_version.created_by_id).first()
+        
+        return {
+            "id": new_version.id,
+            "version": new_version.version,
+            "changes": new_version.changes,
+            "created_at": new_version.created_at.isoformat(),
+            "created_by": created_by.username if created_by else "Unknown",
+            "is_current": True
+        }
+    
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating template version: {str(e)}"
         )
 
 

@@ -315,107 +315,440 @@ def create_sample_data(db: Session) -> None:
     
     # Create sample templates for each tenant
     templates = []
-    for tenant in tenants:
-        # Create templates for each cloud provider
-        for provider in ["azure", "aws", "gcp"]:
-            # Create multiple templates per provider
-            for i, category in enumerate(["Compute", "Storage", "Networking", "Database"]):
-                template = Template(
-                    template_id=generate_uuid(),
-                    name=f"{provider.capitalize()} {category}",
-                    description=f"{provider.capitalize()} {category} template for {tenant.name}",
-                    category=category,
-                    provider=provider,
-                    is_public=i % 2 == 0,  # Alternate between public and private
-                    current_version="1.0.0",
-                    tenant_id=tenant.tenant_id  # Use tenant_id (UUID) instead of id (Integer)
-                )
-                db.add(template)
-                db.flush()
-                templates.append(template)
+    
+    # Sample template code snippets for different providers
+    azure_templates = [
+        {
+            "name": "Azure Web App",
+            "description": "Deploy a web application to Azure App Service",
+            "category": "Web, App Service",
+            "code": """
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "example" {
+  name     = "example-resources"
+  location = "East US"
+}
+
+resource "azurerm_app_service_plan" "example" {
+  name                = "example-appserviceplan"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+  sku {
+    tier = "Standard"
+    size = "S1"
+  }
+}
+
+resource "azurerm_app_service" "example" {
+  name                = "example-app-service"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+  app_service_plan_id = azurerm_app_service_plan.example.id
+}
+"""
+        },
+        {
+            "name": "Azure Storage Account",
+            "description": "Create an Azure Storage Account with blob container",
+            "category": "Storage",
+            "code": """
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "example" {
+  name     = "example-resources"
+  location = "East US"
+}
+
+resource "azurerm_storage_account" "example" {
+  name                     = "examplestorageacct"
+  resource_group_name      = azurerm_resource_group.example.name
+  location                 = azurerm_resource_group.example.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+resource "azurerm_storage_container" "example" {
+  name                  = "content"
+  storage_account_name  = azurerm_storage_account.example.name
+  container_access_type = "private"
+}
+"""
+        },
+        {
+            "name": "Azure Virtual Network",
+            "description": "Deploy a virtual network with subnets",
+            "category": "Networking",
+            "code": """
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "example" {
+  name     = "example-resources"
+  location = "East US"
+}
+
+resource "azurerm_virtual_network" "example" {
+  name                = "example-network"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+}
+
+resource "azurerm_subnet" "example" {
+  name                 = "internal"
+  resource_group_name  = azurerm_resource_group.example.name
+  virtual_network_name = azurerm_virtual_network.example.name
+  address_prefixes     = ["10.0.2.0/24"]
+}
+"""
+        }
+    ]
+    
+    aws_templates = [
+        {
+            "name": "AWS S3 Bucket",
+            "description": "Create an S3 bucket with versioning enabled",
+            "category": "Storage",
+            "code": """
+provider "aws" {
+  region = "us-west-2"
+}
+
+resource "aws_s3_bucket" "example" {
+  bucket = "my-example-bucket"
+  acl    = "private"
+
+  versioning {
+    enabled = true
+  }
+
+  tags = {
+    Name        = "My Example Bucket"
+    Environment = "Dev"
+  }
+}
+"""
+        },
+        {
+            "name": "AWS EC2 Instance",
+            "description": "Deploy an EC2 instance with security group",
+            "category": "Compute",
+            "code": """
+provider "aws" {
+  region = "us-west-2"
+}
+
+resource "aws_vpc" "example" {
+  cidr_block = "10.0.0.0/16"
+  
+  tags = {
+    Name = "example-vpc"
+  }
+}
+
+resource "aws_subnet" "example" {
+  vpc_id     = aws_vpc.example.id
+  cidr_block = "10.0.1.0/24"
+  
+  tags = {
+    Name = "example-subnet"
+  }
+}
+
+resource "aws_security_group" "example" {
+  name        = "example-security-group"
+  description = "Allow SSH and HTTP"
+  vpc_id      = aws_vpc.example.id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_instance" "example" {
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.example.id
+  
+  vpc_security_group_ids = [aws_security_group.example.id]
+  
+  tags = {
+    Name = "example-instance"
+  }
+}
+"""
+        },
+        {
+            "name": "AWS EKS Cluster",
+            "description": "Deploy an Amazon EKS cluster",
+            "category": "Containers, Kubernetes",
+            "code": """
+provider "aws" {
+  region = "us-west-2"
+}
+
+resource "aws_vpc" "example" {
+  cidr_block = "10.0.0.0/16"
+  
+  tags = {
+    Name = "eks-vpc"
+  }
+}
+
+resource "aws_subnet" "example1" {
+  vpc_id     = aws_vpc.example.id
+  cidr_block = "10.0.1.0/24"
+  availability_zone = "us-west-2a"
+  
+  tags = {
+    Name = "eks-subnet-1"
+  }
+}
+
+resource "aws_subnet" "example2" {
+  vpc_id     = aws_vpc.example.id
+  cidr_block = "10.0.2.0/24"
+  availability_zone = "us-west-2b"
+  
+  tags = {
+    Name = "eks-subnet-2"
+  }
+}
+
+resource "aws_iam_role" "example" {
+  name = "eks-cluster-role"
+
+  assume_role_policy = <<POLICY
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "eks.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+POLICY
+}
+
+resource "aws_iam_role_policy_attachment" "example-AmazonEKSClusterPolicy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+  role       = aws_iam_role.example.name
+}
+
+resource "aws_eks_cluster" "example" {
+  name     = "example-eks-cluster"
+  role_arn = aws_iam_role.example.arn
+
+  vpc_config {
+    subnet_ids = [aws_subnet.example1.id, aws_subnet.example2.id]
+  }
+}
+"""
+        }
+    ]
+    
+    gcp_templates = [
+        {
+            "name": "GCP Cloud Storage",
+            "description": "Create a Google Cloud Storage bucket",
+            "category": "Storage",
+            "code": """
+provider "google" {
+  project = "my-project-id"
+  region  = "us-central1"
+}
+
+resource "google_storage_bucket" "example" {
+  name          = "my-example-bucket"
+  location      = "US"
+  force_destroy = true
+
+  versioning {
+    enabled = true
+  }
+}
+"""
+        },
+        {
+            "name": "GCP Compute Instance",
+            "description": "Deploy a Google Compute Engine instance",
+            "category": "Compute",
+            "code": """
+provider "google" {
+  project = "my-project-id"
+  region  = "us-central1"
+  zone    = "us-central1-a"
+}
+
+resource "google_compute_network" "vpc_network" {
+  name = "example-network"
+}
+
+resource "google_compute_instance" "example" {
+  name         = "example-instance"
+  machine_type = "e2-medium"
+  
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-10"
+    }
+  }
+
+  network_interface {
+    network = google_compute_network.vpc_network.name
+    access_config {
+      // Ephemeral IP
+    }
+  }
+}
+"""
+        },
+        {
+            "name": "GCP GKE Cluster",
+            "description": "Deploy a Google Kubernetes Engine cluster",
+            "category": "Containers, Kubernetes",
+            "code": """
+provider "google" {
+  project = "my-project-id"
+  region  = "us-central1"
+}
+
+resource "google_container_cluster" "example" {
+  name     = "example-gke-cluster"
+  location = "us-central1"
+
+  # We can't create a cluster with no node pool defined, but we want to only use
+  # separately managed node pools. So we create the smallest possible default
+  # node pool and immediately delete it.
+  remove_default_node_pool = true
+  initial_node_count       = 1
+}
+
+resource "google_container_node_pool" "example_nodes" {
+  name       = "example-node-pool"
+  location   = "us-central1"
+  cluster    = google_container_cluster.example.name
+  node_count = 3
+
+  node_config {
+    preemptible  = true
+    machine_type = "e2-medium"
+
+    oauth_scopes = [
+      "https://www.googleapis.com/auth/logging.write",
+      "https://www.googleapis.com/auth/monitoring",
+    ]
+  }
+}
+"""
+        }
+    ]
+    
+    # Assign different templates to different tenants
+    for i, tenant in enumerate(tenants):
+        # Determine which templates to use for this tenant
+        tenant_templates = []
+        
+        # First tenant gets all Azure templates
+        if i == 0:
+            tenant_templates.extend([(t, "azure") for t in azure_templates])
+            # Add one AWS template
+            tenant_templates.append((aws_templates[0], "aws"))
+        
+        # Second tenant gets all AWS templates
+        elif i == 1:
+            tenant_templates.extend([(t, "aws") for t in aws_templates])
+            # Add one GCP template
+            tenant_templates.append((gcp_templates[0], "gcp"))
+        
+        # Third tenant gets all GCP templates
+        elif i == 2:
+            tenant_templates.extend([(t, "gcp") for t in gcp_templates])
+            # Add one Azure template
+            tenant_templates.append((azure_templates[0], "azure"))
+        
+        # Create templates for this tenant
+        for j, (template_data, provider) in enumerate(tenant_templates):
+            # Create template with unique name for this tenant
+            template_name = f"{template_data['name']} - {tenant.name}"
             
-            # Create template versions
-            for version_num in range(1, 3):  # Create 2 versions for each template
-                template_version = Template.versions.prop.entity.class_(
-                    version=f"1.0.{version_num-1}",
-                    changes=f"Version {version_num} changes",
-                    code=f"# Sample template code for {provider.capitalize()} {category} version {version_num}",
+            template = Template(
+                template_id=generate_uuid(),
+                name=template_name,
+                description=f"{template_data['description']} for {tenant.name}",
+                category=template_data["category"],
+                provider=provider,
+                is_public=False,
+                tenant_id=tenant.tenant_id,
+                code=template_data["code"],
+                current_version="1.0.0",
+                created_at=datetime.utcnow() - timedelta(days=30 - j),
+                updated_at=datetime.utcnow() - timedelta(days=15 - j)
+            )
+            
+            db.add(template)
+            db.flush()
+            templates.append(template)
+            
+            # Create initial version
+            initial_version = TemplateVersion(
+                template_id=template.id,
+                version="1.0.0",
+                code=template_data["code"],
+                changes="Initial version",
+                created_at=template.created_at,
+                created_by_id=users_by_tenant[tenant.tenant_id][0].id if tenant.tenant_id in users_by_tenant else None
+            )
+            
+            db.add(initial_version)
+            
+            # For some templates, add a second version
+            if j % 2 == 0:
+                # Create a second version with a small change
+                updated_code = template_data["code"].replace("example", f"example-{tenant.name.lower()}")
+                second_version = TemplateVersion(
                     template_id=template.id,
-                    created_at=datetime.utcnow() - timedelta(days=30 - version_num * 10)
+                    version="1.0.1",
+                    code=updated_code,
+                    changes="Updated resource names",
+                    created_at=template.updated_at,
+                    created_by_id=users_by_tenant[tenant.tenant_id][0].id if tenant.tenant_id in users_by_tenant else None
                 )
-                db.add(template_version)
+                
+                db.add(second_version)
+                
+                # Update template with new code and version
+                template.code = updated_code
+                template.current_version = "1.0.1"
             
             db.flush()
-    
-    # Create sample deployments for each tenant
-    deployments = []
-    for tenant in tenants:
-        tenant_templates = [t for t in templates if t.tenant_id == tenant.tenant_id]
-        tenant_environments = [e for e in environments if e.tenant_id == tenant.tenant_id]
-        tenant_users = users_by_tenant.get(tenant.tenant_id, [])
-        
-        if not tenant_templates or not tenant_environments or not tenant_users:
-            continue
-        
-        # Create multiple deployments per tenant
-        for i in range(min(len(tenant_templates), len(tenant_environments))):
-            template = tenant_templates[i]
-            environment = tenant_environments[i % len(tenant_environments)]
-            user = tenant_users[i % len(tenant_users)]
-            
-            # Create 2-3 deployments per template/environment combination
-            for j in range(2 + (i % 2)):
-                status = ["running", "pending", "stopped", "failed"][j % 4]
-                
-                deployment = Deployment(
-                    deployment_id=generate_uuid(),
-                    name=f"{template.name} Deployment {j+1}",
-                    status=status,
-                    template_id=template.id,
-                    environment_id=environment.id,
-                    tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
-                    created_by_id=user.id,
-                    created_at=datetime.utcnow() - timedelta(days=j*15),
-                    updated_at=datetime.utcnow() - timedelta(days=j*10),
-                    parameters={
-                        "region": "us-east-1" if template.provider == "aws" else "eastus" if template.provider == "azure" else "us-central1",
-                        "size": ["small", "medium", "large"][j % 3],
-                        "instances": j + 1,
-                        "tags": {
-                            "environment": environment.name,
-                            "owner": user.username,
-                            "cost-center": f"cc-{tenant.tenant_id}-{j+1}"
-                        }
-                    }
-                )
-                db.add(deployment)
-                db.flush()
-                deployments.append(deployment)
-                
-                # Create deployment history
-                from app.models.deployment import DeploymentHistory
-                
-                # Add multiple history entries for each deployment
-                for k in range(3):
-                    history_status = ["pending", "in_progress", "completed", "failed"][min(k, 3)]
-                    if k == 2 and status == "failed":
-                        history_status = "failed"
-                    
-                    history = DeploymentHistory(
-                        deployment_id=deployment.id,
-                        status=history_status,
-                        message=f"Deployment {history_status} at step {k+1}",
-                        created_at=deployment.created_at + timedelta(hours=k),
-                        details={
-                            "step": k+1,
-                            "total_steps": 3,
-                            "resources_created": k,
-                            "logs": [f"Log entry {m+1} for step {k+1}" for m in range(3)]
-                        }
-                    )
-                    db.add(history)
-                
-                db.flush()
     
     # Create sample template foundry items
     from app.models.template_foundry import TemplateFoundry
