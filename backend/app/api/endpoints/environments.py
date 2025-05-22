@@ -35,23 +35,44 @@ def get_environments(
         )
     
     try:
+        # If no tenant_id is provided, check if user has a tenant
+        if not tenant_id:
+            # For admin and MSP users, require explicit tenant_id
+            if current_user.role.name in ["admin", "msp"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Please specify a valid tenant_id when fetching environment details"
+                )
+            
+            # For regular users, use their tenant
+            user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
+            if not user_tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Please specify a valid tenant_id when fetching environment details"
+                )
+            
+            tenant_id = user_tenant.tenant_id
+        
         query = db.query(Environment)
         
+        # Check if tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {tenant_id} not found"
+            )
+        
+        # Check if user has access to this tenant
+        if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view environments for this tenant"
+            )
+        
         # Filter by tenant
-        if tenant_id:
-            # Check if tenant exists
-            tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
-            if not tenant:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Tenant with ID {tenant_id} not found"
-                )
-            query = query.filter(Environment.tenant_id == tenant.tenant_id)
-        else:
-            # Default to current user's tenant
-            user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
-            if user_tenant:
-                query = query.filter(Environment.tenant_id == user_tenant.tenant_id)
+        query = query.filter(Environment.tenant_id == tenant.tenant_id)
         
         environments = query.all()
         
@@ -85,6 +106,8 @@ def get_environments(
         
         return result
     
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
