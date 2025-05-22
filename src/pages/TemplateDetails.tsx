@@ -80,7 +80,7 @@ const TemplateDetails = () => {
   const fetchEnvironments = async () => {
     try {
       setLoadingEnvironments(true);
-      const response = await fetch(`http://localhost:8000/api/environments`, {
+      const response = await fetch(`http://localhost:8000/api/environments/?tenant_id=${currentTenant?.tenant_id || ''}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -96,9 +96,11 @@ const TemplateDetails = () => {
         }
       } else {
         console.error("Failed to fetch environments");
+        toast.error("Failed to load environments");
       }
     } catch (err) {
       console.error("Error fetching environments:", err);
+      toast.error("Error loading environments");
     } finally {
       setLoadingEnvironments(false);
     }
@@ -252,6 +254,21 @@ const TemplateDetails = () => {
     });
   };
   
+  const renameParameter = (oldKey: string, newKey: string) => {
+    if (oldKey === newKey) return;
+    
+    // Check if the new key already exists
+    if (parameters[newKey]) {
+      toast.error(`Parameter with name "${newKey}" already exists`);
+      return;
+    }
+    
+    const newParams = { ...parameters };
+    newParams[newKey] = newParams[oldKey];
+    delete newParams[oldKey];
+    setParameters(newParams);
+  };
+  
   const addVariable = () => {
     const newKey = `var${Object.keys(variables).length + 1}`;
     setVariables({
@@ -278,6 +295,21 @@ const TemplateDetails = () => {
         [field]: value
       }
     });
+  };
+  
+  const renameVariable = (oldKey: string, newKey: string) => {
+    if (oldKey === newKey) return;
+    
+    // Check if the new key already exists
+    if (variables[newKey]) {
+      toast.error(`Variable with name "${newKey}" already exists`);
+      return;
+    }
+    
+    const newVars = { ...variables };
+    newVars[newKey] = newVars[oldKey];
+    delete newVars[oldKey];
+    setVariables(newVars);
   };
   
   const togglePasswordVisibility = (key: string) => {
@@ -440,11 +472,34 @@ const TemplateDetails = () => {
                               <h3 className="text-sm font-medium">Parameters</h3>
                               <div className="space-y-2">
                                 {Object.entries(parameters).map(([key, param]) => (
-                                  <div key={key} className="grid grid-cols-2 gap-2 items-center">
-                                    <div className="text-sm font-medium">{key}</div>
-                                    <div className="flex items-center space-x-2">
+                                  <div key={key} className="grid grid-cols-12 gap-2 items-start">
+                                    <div className="col-span-3">
+                                      <Label>Name</Label>
+                                      <Input 
+                                        value={key}
+                                        onChange={(e) => renameParameter(key, e.target.value)}
+                                      />
+                                    </div>
+                                    <div className="col-span-3">
+                                      <Label>Type</Label>
+                                      <Select 
+                                        value={param.type} 
+                                        onValueChange={(value) => updateParameter(key, "type", value)}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="string">String</SelectItem>
+                                          <SelectItem value="int">Integer</SelectItem>
+                                          <SelectItem value="password">Password</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="col-span-4">
+                                      <Label>Value</Label>
                                       {param.type === "password" ? (
-                                        <div className="relative w-full">
+                                        <div className="relative">
                                           <Input 
                                             type={showPasswordValues[key] ? "text" : "password"}
                                             value={param.value}
@@ -473,6 +528,15 @@ const TemplateDetails = () => {
                                         />
                                       )}
                                     </div>
+                                    <div className="col-span-1 pt-6">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => removeParameter(key)}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -485,11 +549,34 @@ const TemplateDetails = () => {
                               <h3 className="text-sm font-medium">Variables</h3>
                               <div className="space-y-2">
                                 {Object.entries(variables).map(([key, variable]) => (
-                                  <div key={key} className="grid grid-cols-2 gap-2 items-center">
-                                    <div className="text-sm font-medium">{key}</div>
-                                    <div className="flex items-center space-x-2">
+                                  <div key={key} className="grid grid-cols-12 gap-2 items-start">
+                                    <div className="col-span-3">
+                                      <Label>Name</Label>
+                                      <Input 
+                                        value={key}
+                                        onChange={(e) => renameVariable(key, e.target.value)}
+                                      />
+                                    </div>
+                                    <div className="col-span-3">
+                                      <Label>Type</Label>
+                                      <Select 
+                                        value={variable.type} 
+                                        onValueChange={(value) => updateVariable(key, "type", value)}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="string">String</SelectItem>
+                                          <SelectItem value="int">Integer</SelectItem>
+                                          <SelectItem value="password">Password</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="col-span-4">
+                                      <Label>Value</Label>
                                       {variable.type === "password" ? (
-                                        <div className="relative w-full">
+                                        <div className="relative">
                                           <Input 
                                             type={showPasswordValues[key] ? "text" : "password"}
                                             value={variable.value}
@@ -517,6 +604,15 @@ const TemplateDetails = () => {
                                           onChange={(e) => updateVariable(key, "value", e.target.value)}
                                         />
                                       )}
+                                    </div>
+                                    <div className="col-span-1 pt-6">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => removeVariable(key)}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
                                     </div>
                                   </div>
                                 ))}
@@ -561,11 +657,21 @@ const TemplateDetails = () => {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Parameters and Variables</CardTitle>
-                  <CollapsibleTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                      {paramsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  <div className="flex space-x-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleSaveTemplate}
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      Save
                     </Button>
-                  </CollapsibleTrigger>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        {paramsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </Button>
+                    </CollapsibleTrigger>
+                  </div>
                 </div>
                 <CardDescription>
                   Define parameters and variables for this template.
@@ -599,7 +705,7 @@ const TemplateDetails = () => {
                               <Label>Name</Label>
                               <Input 
                                 value={key}
-                                disabled
+                                onChange={(e) => renameParameter(key, e.target.value)}
                               />
                             </div>
                             <div className="col-span-3">
@@ -691,7 +797,7 @@ const TemplateDetails = () => {
                               <Label>Name</Label>
                               <Input 
                                 value={key}
-                                disabled
+                                onChange={(e) => renameVariable(key, e.target.value)}
                               />
                             </div>
                             <div className="col-span-3">
