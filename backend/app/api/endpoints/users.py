@@ -65,7 +65,7 @@ def get_users(
                         detail="Not authorized to view users for this tenant"
                     )
                 
-                query = query.filter(User.tenant_id == tenant.id)
+                query = query.filter(User.tenant_id == tenant.tenant_id)
             except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -75,7 +75,9 @@ def get_users(
             # Default to current user's tenant
             # MSP users can see all users
             if current_user.role.name != "msp":
-                query = query.filter(User.tenant_id == current_user.tenant_id)
+                user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+                if user_tenant:
+                    query = query.filter(User.tenant_id == user_tenant.tenant_id)
         
         users = query.all()
         
@@ -172,7 +174,14 @@ def create_user(
             )
         
         # Determine which tenant to use
-        target_tenant_id = current_user.tenant_id
+        user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        if not user_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User's tenant not found"
+            )
+        
+        target_tenant_id = user_tenant.tenant_id
         
         # If tenant_id is provided, use that instead
         if tenant_id:
@@ -207,7 +216,7 @@ def create_user(
                         detail="Not authorized to create users for this tenant"
                     )
                 
-                target_tenant_id = tenant.id
+                target_tenant_id = tenant.tenant_id
             except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -373,7 +382,7 @@ def update_user(
                         detail="Not authorized to assign users to this tenant"
                     )
                 
-                user.tenant_id = tenant.id
+                user.tenant_id = tenant.tenant_id
             except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
