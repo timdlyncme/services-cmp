@@ -51,16 +51,18 @@ def get_templates(
                 )
             
             # Check if user has access to this tenant
-            if tenant.id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+            if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to view templates for this tenant"
                 )
             
-            query = query.filter(TemplateFoundry.tenant_id == tenant.id)
+            query = query.filter(TemplateFoundry.tenant_id == tenant.tenant_id)
         else:
             # Default to current user's tenant
-            query = query.filter(TemplateFoundry.tenant_id == current_user.tenant_id)
+            user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+            if user_tenant:
+                query = query.filter(TemplateFoundry.tenant_id == user_tenant.tenant_id)
         
         templates = query.all()
         
@@ -139,7 +141,14 @@ def create_template(
     
     try:
         # Determine which tenant to use
-        target_tenant_id = current_user.tenant_id
+        user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        if not user_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User's tenant not found"
+            )
+        
+        target_tenant_id = user_tenant.tenant_id
         
         # If tenant_id is provided, use that instead
         if tenant_id:
@@ -152,13 +161,13 @@ def create_template(
                 )
             
             # Check if user has access to this tenant
-            if tenant.id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+            if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to create templates for this tenant"
                 )
             
-            target_tenant_id = tenant.id
+            target_tenant_id = tenant.tenant_id
         
         # Create new template
         import uuid

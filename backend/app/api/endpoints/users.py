@@ -59,7 +59,7 @@ def get_users(
                     )
                 
                 # Check if user has access to this tenant
-                if tenant.id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+                if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to view users for this tenant"
@@ -81,12 +81,33 @@ def get_users(
         
         users = query.all()
         
-        # Convert tenant_id to UUID string in response
+        # Convert to response format
+        result = []
         for user in users:
+            # Convert role object to role name
+            role_name = None
+            if hasattr(user, 'role') and user.role:
+                role_name = user.role.name
+            
+            # Get tenant_id from tenant object
+            tenant_id = None
             if hasattr(user, 'tenant') and user.tenant:
-                user.tenant_id = user.tenant.tenant_id
+                tenant_id = user.tenant.tenant_id
+            
+            result.append(
+                UserResponse(
+                    id=user.id,
+                    user_id=user.user_id,
+                    username=user.username,
+                    full_name=user.full_name,
+                    email=user.email,
+                    is_active=user.is_active,
+                    role=role_name,
+                    tenant_id=tenant_id
+                )
+            )
         
-        return users
+        return result
     
     except Exception as e:
         raise HTTPException(
@@ -128,11 +149,26 @@ def get_user(
                 detail="Not authorized to access this user"
             )
         
-        # Set tenant_id to UUID string in response
-        if hasattr(user, 'tenant') and user.tenant:
-            user.tenant_id = user.tenant.tenant_id
+        # Convert role object to role name
+        role_name = None
+        if hasattr(user, 'role') and user.role:
+            role_name = user.role.name
         
-        return user
+        # Get tenant_id from tenant object
+        tenant_id = None
+        if hasattr(user, 'tenant') and user.tenant:
+            tenant_id = user.tenant.tenant_id
+        
+        return UserResponse(
+            id=user.id,
+            user_id=user.user_id,
+            username=user.username,
+            full_name=user.full_name,
+            email=user.email,
+            is_active=user.is_active,
+            role=role_name,
+            tenant_id=tenant_id
+        )
     
     except HTTPException:
         raise
@@ -210,7 +246,7 @@ def create_user(
                     )
                 
                 # Check if user has access to this tenant
-                if tenant.id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+                if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to create users for this tenant"
@@ -247,11 +283,26 @@ def create_user(
         db.commit()
         db.refresh(new_user)
         
-        # Set tenant_id to UUID string in response
-        if hasattr(new_user, 'tenant') and new_user.tenant:
-            new_user.tenant_id = new_user.tenant.tenant_id
+        # Convert role object to role name
+        role_name = None
+        if hasattr(new_user, 'role') and new_user.role:
+            role_name = new_user.role.name
         
-        return new_user
+        # Get tenant_id from tenant object
+        tenant_id = None
+        if hasattr(new_user, 'tenant') and new_user.tenant:
+            tenant_id = new_user.tenant.tenant_id
+        
+        return UserResponse(
+            id=new_user.id,
+            user_id=new_user.user_id,
+            username=new_user.username,
+            full_name=new_user.full_name,
+            email=new_user.email,
+            is_active=new_user.is_active,
+            role=role_name,
+            tenant_id=tenant_id
+        )
     
     except HTTPException:
         db.rollback()
@@ -376,7 +427,7 @@ def update_user(
                     )
                 
                 # Check if user has access to this tenant
-                if tenant.id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+                if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to assign users to this tenant"
@@ -392,11 +443,26 @@ def update_user(
         db.commit()
         db.refresh(user)
         
-        # Set tenant_id to UUID string in response
-        if hasattr(user, 'tenant') and user.tenant:
-            user.tenant_id = user.tenant.tenant_id
+        # Convert role object to role name
+        role_name = None
+        if hasattr(user, 'role') and user.role:
+            role_name = user.role.name
         
-        return user
+        # Get tenant_id from tenant object
+        tenant_id = None
+        if hasattr(user, 'tenant') and user.tenant:
+            tenant_id = user.tenant.tenant_id
+        
+        return UserResponse(
+            id=user.id,
+            user_id=user.user_id,
+            username=user.username,
+            full_name=user.full_name,
+            email=user.email,
+            is_active=user.is_active,
+            role=role_name,
+            tenant_id=tenant_id
+        )
     
     except HTTPException:
         db.rollback()
@@ -465,3 +531,4 @@ def delete_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting user: {str(e)}"
         )
+

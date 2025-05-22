@@ -44,7 +44,7 @@ def get_templates(
         query = db.query(Template)
         
         # Get the user's tenant
-        user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
         if user_tenant:
             query = query.filter(
                 (Template.is_public == True) | (Template.tenant_id == user_tenant.tenant_id)
@@ -311,7 +311,7 @@ def create_template(
     
     try:
         # Get the user's tenant
-        user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
         if not user_tenant and not template.is_public:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -417,7 +417,7 @@ def update_template(
             template.tenant_id = None
         elif template.tenant_id is None:
             # Get the user's tenant
-            user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+            user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
             if user_tenant:
                 template.tenant_id = user_tenant.tenant_id
         
