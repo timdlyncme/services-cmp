@@ -218,6 +218,18 @@ def get_template(
                 latest_version = sorted_versions[0]
                 code = latest_version.code or ""
         
+        # Get the last user who updated the template
+        last_updated_by = None
+        if template.versions:
+            # Sort versions by created_at in descending order
+            sorted_versions = sorted(template.versions, key=lambda v: v.created_at, reverse=True)
+            if sorted_versions:
+                latest_version = sorted_versions[0]
+                if latest_version.created_by_id:
+                    user = db.query(User).filter(User.id == latest_version.created_by_id).first()
+                    if user:
+                        last_updated_by = user.full_name or user.username
+        
         return CloudTemplateResponse(
             id=template.template_id,
             name=template.name,
@@ -229,7 +241,8 @@ def get_template(
             uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
             categories=categories,
-            tenantId=tenant_id
+            tenantId=tenant_id,
+            lastUpdatedBy=last_updated_by
         )
     
     except HTTPException:
@@ -277,6 +290,8 @@ def create_template(
             is_public=template.is_public,
             tenant_id=None if template.is_public else user_tenant.tenant_id,
             code=template.code,  # Store the code directly in the template
+            parameters=template.parameters,  # Store parameters
+            variables=template.variables,  # Store variables
             current_version="1.0.0",  # Initial version
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
@@ -322,7 +337,10 @@ def create_template(
             uploadedAt=new_template.created_at.isoformat(),
             updatedAt=new_template.updated_at.isoformat(),
             categories=categories,
-            tenantId=tenant_id
+            tenantId=tenant_id,
+            lastUpdatedBy=current_user.full_name or current_user.username,
+            parameters=new_template.parameters,
+            variables=new_template.variables
         )
     
     except Exception as e:
@@ -384,6 +402,10 @@ def update_template(
             template.provider = template_update.provider
         if template_update.is_public is not None:
             template.is_public = template_update.is_public
+        if template_update.parameters is not None:
+            template.parameters = template_update.parameters
+        if template_update.variables is not None:
+            template.variables = template_update.variables
         
         # Update code if changed
         if code_changed:
@@ -441,6 +463,18 @@ def update_template(
         if template.category:
             categories = [cat.strip() for cat in template.category.split(",")]
         
+        # Get the last user who updated the template
+        last_updated_by = None
+        if template.versions:
+            # Sort versions by created_at in descending order
+            sorted_versions = sorted(template.versions, key=lambda v: v.created_at, reverse=True)
+            if sorted_versions:
+                latest_version = sorted_versions[0]
+                if latest_version.created_by_id:
+                    user = db.query(User).filter(User.id == latest_version.created_by_id).first()
+                    if user:
+                        last_updated_by = user.full_name or user.username
+        
         return CloudTemplateResponse(
             id=template.template_id,
             name=template.name,
@@ -452,7 +486,10 @@ def update_template(
             uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
             categories=categories,
-            tenantId=tenant_id
+            tenantId=tenant_id,
+            lastUpdatedBy=last_updated_by,
+            parameters=template.parameters,
+            variables=template.variables
         )
     
     except HTTPException:
@@ -671,6 +708,76 @@ def create_template_version(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating template version: {str(e)}"
+        )
+
+
+@router.get("/{template_id}/versions/{version_id}", response_model=dict)
+def get_template_version(
+    template_id: str,
+    version_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Get a specific version of a template
+    """
+    # Check if user has permission to view templates
+    has_permission = any(p.name == "view:templates" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    try:
+        template = db.query(Template).filter(Template.template_id == template_id).first()
+        
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template with ID {template_id} not found"
+            )
+        
+        # Check if user has access to this template
+        if not template.is_public and template.tenant_id != current_user.tenant_id:
+            # Admin users can view all templates
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to access this template"
+                )
+        
+        # Get the specific version
+        version = db.query(TemplateVersion).filter(
+            TemplateVersion.template_id == template.id,
+            TemplateVersion.id == version_id
+        ).first()
+        
+        if not version:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template version with ID {version_id} not found"
+            )
+        
+        # Get created_by user
+        created_by = db.query(User).filter(User.id == version.created_by_id).first()
+        
+        return {
+            "id": version.id,
+            "version": version.version,
+            "changes": version.changes,
+            "code": version.code,
+            "created_at": version.created_at.isoformat(),
+            "created_by": created_by.username if created_by else "Unknown",
+            "is_current": version.version == template.current_version
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving template version: {str(e)}"
         )
 
 
