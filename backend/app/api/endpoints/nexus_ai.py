@@ -72,6 +72,7 @@ class ChatRequest(BaseModel):
     max_completion_tokens: Optional[int] = 1000
     temperature: Optional[float] = 1.0
     stream: Optional[bool] = False
+    platform_data: Optional[Dict[str, Any]] = None
 
 
 class ChatResponse(BaseModel):
@@ -152,8 +153,32 @@ async def chat(
             "api-key": config.api_key
         }
         
+        # Prepare messages with platform data if available
+        messages = [{
+            "role": msg.role,
+            "content": msg.content
+        } for msg in request.messages]
+        
+        # If platform data is provided, add it to the system message
+        if request.platform_data:
+            # Find the system message or create one if it doesn't exist
+            system_message_index = next((i for i, msg in enumerate(messages) if msg["role"] == "system"), None)
+            
+            if system_message_index is not None:
+                # Append platform data to existing system message
+                platform_data_str = json.dumps(request.platform_data, indent=2)
+                messages[system_message_index]["content"] += f"\n\nHere is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```"
+            else:
+                # Create a new system message with platform data
+                platform_data_str = json.dumps(request.platform_data, indent=2)
+                system_message = {
+                    "role": "system",
+                    "content": f"You are NexusAI, an advanced AI assistant for the Cloud Management Platform. Here is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```"
+                }
+                messages.insert(0, system_message)
+        
         payload = {
-            "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
+            "messages": messages,
             "max_completion_tokens": request.max_completion_tokens,
             "temperature": request.temperature
         }
@@ -269,8 +294,32 @@ async def stream_chat(
                 "api-key": config.api_key
             }
             
+            # Prepare messages with platform data if available
+            messages = [{
+                "role": msg.role,
+                "content": msg.content
+            } for msg in request.messages]
+            
+            # If platform data is provided, add it to the system message
+            if request.platform_data:
+                # Find the system message or create one if it doesn't exist
+                system_message_index = next((i for i, msg in enumerate(messages) if msg["role"] == "system"), None)
+                
+                if system_message_index is not None:
+                    # Append platform data to existing system message
+                    platform_data_str = json.dumps(request.platform_data, indent=2)
+                    messages[system_message_index]["content"] += f"\n\nHere is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```"
+                else:
+                    # Create a new system message with platform data
+                    platform_data_str = json.dumps(request.platform_data, indent=2)
+                    system_message = {
+                        "role": "system",
+                        "content": f"You are NexusAI, an advanced AI assistant for the Cloud Management Platform. Here is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```"
+                    }
+                    messages.insert(0, system_message)
+            
             payload = {
-                "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
+                "messages": messages,
                 "max_completion_tokens": request.max_completion_tokens,
                 "temperature": request.temperature,
                 "stream": True

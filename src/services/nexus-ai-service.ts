@@ -26,6 +26,7 @@ export interface ChatRequest {
   presence_penalty?: number;
   stop?: string[];
   stream?: boolean;
+  platform_data?: any; // Platform data to provide context
 }
 
 export interface ChatResponse {

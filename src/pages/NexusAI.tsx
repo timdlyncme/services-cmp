@@ -7,34 +7,40 @@ import { ConfigDialog } from '@/components/nexus-ai/ConfigDialog';
 import { DebugLogs } from '@/components/nexus-ai/DebugLogs';
 import { ChatMessage as ChatMessageComponent } from '@/components/nexus-ai/ChatMessage';
 import { NexusAIService, ChatMessage } from '@/services/nexus-ai-service';
+import { nexusAIPlatformService } from '@/services/nexus-ai-platform-service';
 import { useAzureOpenAI } from '@/contexts/AzureOpenAIContext';
+import { useAuth } from '@/context/auth-context';
 import { Send, ChevronDown, ChevronUp, ExternalLink, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
 
-// Example prompts for users to try
+// Platform-aware example prompts for users to try
 const EXAMPLE_PROMPTS = [
   {
-    title: "Template Recommendations",
-    prompt: "What templates would you recommend for deploying a three-tier web application?"
+    title: "Tenant Deployments",
+    prompt: "What deployments has the current tenant created?"
   },
   {
-    title: "Cloud Cost Optimization",
-    prompt: "How can I optimize costs for my AWS cloud resources?"
+    title: "Azure Resources",
+    prompt: "How many Azure resources have been deployed across all customers?"
   },
   {
-    title: "Environment Setup",
-    prompt: "What's the best way to set up development, staging, and production environments?"
+    title: "Admin Users",
+    prompt: "How many users have admin role access in the platform?"
   },
   {
-    title: "Security Best Practices",
-    prompt: "What are the security best practices for cloud deployments?"
+    title: "Template Usage",
+    prompt: "Which templates are most commonly used across all tenants?"
   },
   {
-    title: "Multi-Cloud Strategy",
-    prompt: "How should I approach a multi-cloud strategy?"
+    title: "Cloud Account Status",
+    prompt: "Show me the status of all cloud accounts in the platform"
+  },
+  {
+    title: "Environment Summary",
+    prompt: "Summarize the environments across all tenants"
   }
 ];
 
@@ -56,8 +62,11 @@ export default function NexusAI() {
   const [isEditing, setIsEditing] = useState(false);
   const [statusExpanded, setStatusExpanded] = useState(true);
   const [examplesExpanded, setExamplesExpanded] = useState(true);
+  const [platformData, setPlatformData] = useState<any>(null);
+  const [isLoadingPlatformData, setIsLoadingPlatformData] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { currentTenant } = useAuth();
   const nexusAIService = new NexusAIService();
   const { 
     isConfigured, 
@@ -82,6 +91,11 @@ export default function NexusAI() {
     }
   }, [isConfigured, testConnection, connectionChecked]);
 
+  // Load platform data when the component mounts
+  useEffect(() => {
+    loadPlatformData();
+  }, [currentTenant]);
+
   // Cleanup streaming on unmount
   useEffect(() => {
     return () => {
@@ -93,6 +107,67 @@ export default function NexusAI() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Load platform data for NexusAI context
+  const loadPlatformData = async () => {
+    if (isLoadingPlatformData) return;
+    
+    setIsLoadingPlatformData(true);
+    try {
+      // Get platform statistics
+      const stats = await nexusAIPlatformService.getPlatformStats();
+      
+      // Get user role statistics
+      const roleStats = await nexusAIPlatformService.getUserRoleStats();
+      
+      // Get deployment statistics by tenant
+      const deploymentStats = await nexusAIPlatformService.getDeploymentStatsByTenant();
+      
+      // Get cloud account statistics by provider
+      const cloudAccountStats = await nexusAIPlatformService.getCloudAccountStatsByProvider();
+      
+      // Get current tenant data if available
+      let currentTenantData = null;
+      if (currentTenant) {
+        const tenantDeployments = await nexusAIPlatformService.getDeployments(currentTenant.tenant_id);
+        const tenantCloudAccounts = await nexusAIPlatformService.getCloudAccounts(currentTenant.tenant_id);
+        const tenantTemplates = await nexusAIPlatformService.getTemplates(currentTenant.tenant_id);
+        const tenantEnvironments = await nexusAIPlatformService.getEnvironments(currentTenant.tenant_id);
+        
+        currentTenantData = {
+          id: currentTenant.tenant_id,
+          name: currentTenant.name,
+          deployments: tenantDeployments.length,
+          cloudAccounts: tenantCloudAccounts.length,
+          templates: tenantTemplates.length,
+          environments: tenantEnvironments.length
+        };
+      }
+      
+      // Combine all data
+      const platformData = {
+        stats,
+        roleStats,
+        deploymentStats,
+        cloudAccountStats,
+        currentTenant: currentTenantData
+      };
+      
+      setPlatformData(platformData);
+      addLog("Platform data loaded for NexusAI", "success");
+    } catch (error) {
+      console.error("Error loading platform data:", error);
+      addLog(`Error loading platform data: ${error instanceof Error ? error.message : String(error)}`, "error");
+      
+      toast({
+        title: "Warning",
+        description: "Could not load platform data. NexusAI may not have accurate context about your environment.",
+        variant: "warning",
+      });
+    } finally {
+      setIsLoadingPlatformData(false);
+    }
   };
 
   const handleSend = async (promptText = input) => {
@@ -148,10 +223,11 @@ export default function NexusAI() {
         }
       ]);
 
-      // Use streaming API
+      // Use streaming API with platform data
       const controller = nexusAIService.streamChat(
         {
-          messages: [...messages, userMessage].filter(msg => msg.role !== 'assistant' || msg.content !== '')
+          messages: [...messages, userMessage].filter(msg => msg.role !== 'assistant' || msg.content !== ''),
+          platform_data: platformData // Include platform data in the request
         },
         // On message chunk received
         (content: string) => {
@@ -325,6 +401,15 @@ export default function NexusAI() {
     handleSend(prompt);
   };
 
+  // Refresh platform data
+  const refreshPlatformData = async () => {
+    await loadPlatformData();
+    toast({
+      title: "Platform Data Refreshed",
+      description: "NexusAI now has the latest information about your environment.",
+    });
+  };
+
   return (
     <div className="container mx-auto py-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -471,16 +556,46 @@ export default function NexusAI() {
                   <span className="text-sm">{getLastCheckedText()}</span>
                 </div>
                 
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full mt-2" 
-                  onClick={() => testConnection()}
-                  disabled={!isConfigured || connectionStatus === 'connecting'}
-                >
-                  <RefreshCw className="h-3 w-3 mr-2" />
-                  Check Connection
-                </Button>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Platform Data:</span>
+                  <Badge 
+                    variant={
+                      platformData 
+                        ? 'success' 
+                        : 'destructive'
+                    }
+                    className="ml-2"
+                  >
+                    {platformData 
+                      ? 'Loaded' 
+                      : 'Not Loaded'
+                    }
+                  </Badge>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full" 
+                    onClick={() => testConnection()}
+                    disabled={!isConfigured || connectionStatus === 'connecting'}
+                  >
+                    <RefreshCw className="h-3 w-3 mr-2" />
+                    Check Connection
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full" 
+                    onClick={refreshPlatformData}
+                    disabled={isLoadingPlatformData}
+                  >
+                    <RefreshCw className="h-3 w-3 mr-2" />
+                    Refresh Platform Data
+                  </Button>
+                </div>
               </div>
             </CollapsibleContent>
           </Collapsible>
@@ -514,9 +629,9 @@ export default function NexusAI() {
                     onClick={() => handleExampleClick(example.prompt)}
                     disabled={loading || !isConnected}
                   >
-                    <div>
+                    <div className="w-full">
                       <p className="font-medium">{example.title}</p>
-                      <p className="text-xs text-muted-foreground truncate">{example.prompt}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{example.prompt}</p>
                     </div>
                   </Button>
                 ))}
