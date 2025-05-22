@@ -48,7 +48,7 @@ export default function NexusAI() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'system',
-      content: 'You are NexusAI, an advanced AI assistant designed to support power users in managing and gaining insights from the Cloud Management Platform. Your primary role is to assist users with comprehensive management capabilities, including access to all tenants, cloud resources, templates, deployments, and more. Focus on providing clear, concise, and actionable insights that empower users to navigate and optimize the platform effectively. Always prioritize user needs and context, and ensure your responses enhance their understanding and control over their cloud resources.'
+      content: 'You are NexusAI, an advanced AI assistant designed to support power users in managing and gaining insights from the Cloud Management Platform. Your primary role is to assist users with comprehensive management capabilities, including access to all tenants, cloud resources, templates, deployments, and more. Focus on providing clear, concise, and actionable insights that empower users to navigate and optimize the platform effectively.\n\nWhen responding to questions about the platform, always refer to the platform data provided in the context. This data includes statistics about tenants, deployments, cloud accounts, templates, users, and environments. Use this data to provide accurate and specific answers.\n\nFor example:\n- When asked about templates, refer to the templateUsage data to identify the most commonly used templates\n- When asked about cloud accounts, use the cloudAccountStats to provide information about accounts by provider\n- When asked about deployments, use the deploymentStats to provide tenant-specific information\n- When asked about the current tenant, refer to the currentTenant data\n\nAlways prioritize user needs and context, and ensure your responses enhance their understanding and control over their cloud resources.'
     },
     {
       role: 'assistant',
@@ -131,6 +131,10 @@ export default function NexusAI() {
       const cloudAccountStats = await nexusAIPlatformService.getCloudAccountStatsByProvider();
       console.log("Cloud account stats loaded:", cloudAccountStats);
       
+      // Get template usage statistics
+      const templateUsageStats = await nexusAIPlatformService.getTemplateUsageStats();
+      console.log("Template usage stats loaded:", templateUsageStats);
+      
       // Get current tenant data if available
       let currentTenantData = null;
       if (currentTenant) {
@@ -150,33 +154,14 @@ export default function NexusAI() {
         console.log("Current tenant data loaded:", currentTenantData);
       }
       
-      // Get template usage data
-      const allTemplates = await nexusAIPlatformService.getAllTemplates();
-      const templateUsage = {};
-      
-      // Count template usage across all tenants
-      allTemplates.forEach(({ templates }) => {
-        templates.forEach(template => {
-          const templateName = template.name;
-          templateUsage[templateName] = (templateUsage[templateName] || 0) + 1;
-        });
-      });
-      
-      // Sort templates by usage
-      const sortedTemplateUsage = Object.entries(templateUsage)
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => ({ name, count }));
-      
-      console.log("Template usage data:", sortedTemplateUsage);
-      
       // Combine all data
       const platformData = {
         stats,
         roleStats,
         deploymentStats,
         cloudAccountStats,
-        currentTenant: currentTenantData,
-        templateUsage: sortedTemplateUsage
+        templateUsage: templateUsageStats,
+        currentTenant: currentTenantData
       };
       
       console.log("Final platform data:", platformData);

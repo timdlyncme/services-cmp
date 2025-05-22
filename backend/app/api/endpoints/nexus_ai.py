@@ -180,14 +180,14 @@ async def chat(
             if system_message_index is not None:
                 # Append platform data to existing system message
                 platform_data_str = json.dumps(request.platform_data, indent=2)
-                messages[system_message_index]["content"] += f"\n\nHere is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```"
+                messages[system_message_index]["content"] += f"\n\nHere is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```\n\nWhen answering questions about the platform, always use this data to provide accurate information. For example, if asked about template usage, refer to the templateUsage data in the platform_data."
                 add_log(f"Added platform data to existing system message", "info")
             else:
                 # Create a new system message with platform data
                 platform_data_str = json.dumps(request.platform_data, indent=2)
                 system_message = {
                     "role": "system",
-                    "content": f"You are NexusAI, an advanced AI assistant for the Cloud Management Platform. Here is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```"
+                    "content": f"You are NexusAI, an advanced AI assistant for the Cloud Management Platform. Your primary role is to assist users with comprehensive management capabilities, including access to all tenants, cloud resources, templates, deployments, and more.\n\nHere is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```\n\nWhen answering questions about the platform, always use this data to provide accurate information. For example, if asked about template usage, refer to the templateUsage data in the platform_data. If asked about cloud accounts, use the cloudAccountStats data. Always prioritize user needs and context, and ensure your responses enhance their understanding and control over their cloud resources."
                 }
                 messages.insert(0, system_message)
                 add_log(f"Created new system message with platform data", "info")
@@ -336,14 +336,14 @@ async def stream_chat(
                 if system_message_index is not None:
                     # Append platform data to existing system message
                     platform_data_str = json.dumps(request.platform_data, indent=2)
-                    messages[system_message_index]["content"] += f"\n\nHere is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```"
+                    messages[system_message_index]["content"] += f"\n\nHere is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```\n\nWhen answering questions about the platform, always use this data to provide accurate information. For example, if asked about template usage, refer to the templateUsage data in the platform_data."
                     add_log(f"Added platform data to existing system message in streaming", "info")
                 else:
                     # Create a new system message with platform data
                     platform_data_str = json.dumps(request.platform_data, indent=2)
                     system_message = {
                         "role": "system",
-                        "content": f"You are NexusAI, an advanced AI assistant for the Cloud Management Platform. Here is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```"
+                        "content": f"You are NexusAI, an advanced AI assistant for the Cloud Management Platform. Your primary role is to assist users with comprehensive management capabilities, including access to all tenants, cloud resources, templates, deployments, and more.\n\nHere is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```\n\nWhen answering questions about the platform, always use this data to provide accurate information. For example, if asked about template usage, refer to the templateUsage data in the platform_data. If asked about cloud accounts, use the cloudAccountStats data. Always prioritize user needs and context, and ensure your responses enhance their understanding and control over their cloud resources."
                     }
                     messages.insert(0, system_message)
                     add_log(f"Created new system message with platform data in streaming", "info")

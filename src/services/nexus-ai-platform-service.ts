@@ -381,8 +381,47 @@ export class NexusAIPlatformService {
       return [];
     }
   }
+
+  /**
+   * Get template usage statistics
+   */
+  async getTemplateUsageStats(): Promise<{
+    name: string;
+    count: number;
+    tenants: string[];
+  }[]> {
+    try {
+      const allTemplates = await this.getAllTemplates();
+      const templateUsage: Record<string, { count: number; tenants: string[] }> = {};
+      
+      // Count template usage across all tenants
+      allTemplates.forEach(({ tenant, templates }) => {
+        templates.forEach(template => {
+          const templateName = template.name;
+          if (!templateUsage[templateName]) {
+            templateUsage[templateName] = { count: 0, tenants: [] };
+          }
+          templateUsage[templateName].count++;
+          if (!templateUsage[templateName].tenants.includes(tenant.name)) {
+            templateUsage[templateName].tenants.push(tenant.name);
+          }
+        });
+      });
+      
+      // Sort templates by usage
+      return Object.entries(templateUsage)
+        .sort((a, b) => b[1].count - a[1].count)
+        .map(([name, data]) => ({
+          name,
+          count: data.count,
+          tenants: data.tenants
+        }));
+    } catch (error) {
+      console.error('Error fetching template usage stats for NexusAI:', error);
+      return [];
+    }
+  }
 }
 
 // Create a singleton instance
 export const nexusAIPlatformService = new NexusAIPlatformService();
-
