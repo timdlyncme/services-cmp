@@ -7,11 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/context/auth-context';
 
-// Base64 encoded SVG avatars
-const NEXUS_AI_AVATAR = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#0284c7" /><path d="M30 35 L50 25 L70 35 L70 65 L50 75 L30 65 Z" fill="#ffffff" /><path d="M50 25 L50 55 L70 45 L70 35 Z" fill="#e0f2fe" /><path d="M30 35 L30 65 L50 75 L50 55 Z" fill="#bae6fd" /><circle cx="50" cy="45" r="5" fill="#0284c7" /></svg>')}`;
-
-const USER_AVATAR = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#6b7280" /><circle cx="50" cy="35" r="15" fill="#f3f4f6" /><path d="M25 85 C25 65 75 65 75 85" fill="#f3f4f6" /></svg>')}`;
-
 interface ChatMessageProps {
   message: Message;
   isLastUserMessage?: boolean;
@@ -39,7 +34,7 @@ export function ChatMessage({
       {!isUser && (
         <div className="flex flex-col items-center">
           <Avatar className="h-10 w-10 border-2 border-primary/20">
-            <AvatarImage src="/nexus-ai-avatar.svg" alt="NexusAI" className="p-1" />
+            <AvatarImage src="/nexus-ai-avtar.png" alt="NexusAI"/>
             <AvatarFallback className="bg-primary">
               <Bot className="h-5 w-5 text-primary-foreground" />
             </AvatarFallback>
@@ -113,7 +108,7 @@ export function ChatMessage({
       {isUser && (
         <div className="flex flex-col items-center">
           <Avatar className="h-10 w-10 border-2 border-secondary/20">
-            <AvatarImage src="/user-avatar.svg" alt={userName} className="p-1" />
+            <AvatarImage src="/user-avatar.png" alt={userName} />
             <AvatarFallback className="bg-secondary">
               <User className="h-5 w-5 text-secondary-foreground" />
             </AvatarFallback>
