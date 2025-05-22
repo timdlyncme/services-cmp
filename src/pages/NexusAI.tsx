@@ -9,8 +9,35 @@ import { DebugLogs } from '@/components/nexus-ai/DebugLogs';
 import { ChatMessage as ChatMessageComponent } from '@/components/nexus-ai/ChatMessage';
 import { NexusAIService, ChatMessage } from '@/services/nexus-ai-service';
 import { useAzureOpenAI } from '@/contexts/AzureOpenAIContext';
-import { Send } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Send, ChevronDown, ChevronUp, ExternalLink, RefreshCw } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { format } from 'date-fns';
+
+// Example prompts for users to try
+const EXAMPLE_PROMPTS = [
+  {
+    title: "Template Recommendations",
+    prompt: "What templates would you recommend for deploying a three-tier web application?"
+  },
+  {
+    title: "Cloud Cost Optimization",
+    prompt: "How can I optimize costs for my AWS cloud resources?"
+  },
+  {
+    title: "Environment Setup",
+    prompt: "What's the best way to set up development, staging, and production environments?"
+  },
+  {
+    title: "Security Best Practices",
+    prompt: "What are the security best practices for cloud deployments?"
+  },
+  {
+    title: "Multi-Cloud Strategy",
+    prompt: "How should I approach a multi-cloud strategy?"
+  }
+];
 
 export default function NexusAI() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -28,6 +55,8 @@ export default function NexusAI() {
   const [streamingMessage, setStreamingMessage] = useState('');
   const [streamController, setStreamController] = useState<(() => void) | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [statusExpanded, setStatusExpanded] = useState(true);
+  const [examplesExpanded, setExamplesExpanded] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const nexusAIService = new NexusAIService();
@@ -38,7 +67,9 @@ export default function NexusAI() {
     testConnection, 
     logs, 
     addLog, 
-    connectionChecked 
+    connectionChecked,
+    config,
+    lastCheckedTime
   } = useAzureOpenAI();
 
   useEffect(() => {
@@ -65,12 +96,12 @@ export default function NexusAI() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const handleSend = async (promptText = input) => {
+    if (!promptText.trim()) return;
 
     const userMessage: ChatMessage = {
       role: 'user',
-      content: input
+      content: promptText
     };
 
     // If editing, replace the last user message
@@ -107,7 +138,7 @@ export default function NexusAI() {
     setStreamingMessage('');
 
     try {
-      addLog(`Sending message: ${input}`, 'info');
+      addLog(`Sending message: ${promptText}`, 'info');
       
       // Add a placeholder message for streaming
       setMessages((prevMessages) => [
@@ -267,94 +298,235 @@ export default function NexusAI() {
     return userMessages.length > 0 && messages[index].role === 'user' && 
            index === messages.findIndex(msg => msg === userMessages[userMessages.length - 1]);
   };
+  
+  // Format the last checked time
+  const getLastCheckedText = () => {
+    if (!lastCheckedTime) return 'Never checked';
+    
+    // Format as relative time (e.g., "2 minutes ago")
+    const now = new Date();
+    const diffMs = now.getTime() - lastCheckedTime.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    
+    if (diffSec < 10) return 'Just now';
+    if (diffSec < 60) return `${diffSec} seconds ago`;
+    
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+    
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour} hour${diffHour === 1 ? '' : 's'} ago`;
+    
+    const diffDay = Math.floor(diffHour / 24);
+    return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
+  };
+  
+  const handleExampleClick = (prompt: string) => {
+    setInput(prompt);
+    handleSend(prompt);
+  };
 
   return (
     <div className="container mx-auto py-6">
-      <Card className="w-full max-w-4xl mx-auto">
-        <CardHeader className="border-b">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl font-bold">NexusAI</CardTitle>
-            <div className="flex items-center space-x-2">
-              <ConnectionStatus />
-              <ConfigDialog />
-              <DebugLogs logs={logs.map(log => ({
-                timestamp: new Date(log.timestamp).toLocaleTimeString(),
-                level: log.level === 'success' || log.level === 'request' || log.level === 'response' 
-                  ? 'info' 
-                  : (log.level as 'info' | 'error' | 'warning'),
-                message: log.message
-              }))} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Main Chat Area */}
+        <Card className="w-full md:col-span-2">
+          <CardHeader className="border-b">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-2xl font-bold">NexusAI</CardTitle>
+              <div className="flex items-center space-x-2">
+                <ConnectionStatus />
+                <ConfigDialog onConfigUpdate={() => testConnection()} />
+                <DebugLogs logs={logs.map(log => ({
+                  timestamp: new Date(log.timestamp).toLocaleTimeString(),
+                  level: log.level === 'success' || log.level === 'request' || log.level === 'response' 
+                    ? 'info' 
+                    : (log.level as 'info' | 'error' | 'warning'),
+                  message: log.message
+                }))} />
+              </div>
             </div>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="p-0 flex flex-col h-[calc(100vh-12rem)]">
-          <ScrollArea className="flex-1 p-4 overflow-y-auto">
-            <div className="space-y-4">
-              {messages
-                .filter((message) => message.role !== 'system')
-                .map((message, index) => (
-                  <ChatMessageComponent 
-                    key={index} 
-                    message={message} 
-                    isLastUserMessage={isLastUserMessage(index)}
-                    onEdit={handleEditLastMessage}
-                    onRefresh={handleRegenerateResponse}
-                  />
-                ))}
-              <div ref={messagesEndRef} />
-            </div>
-          </ScrollArea>
+          </CardHeader>
           
-          <div className="p-4 border-t mt-auto">
-            <div className="flex items-center space-x-2">
-              <Input
-                placeholder={isEditing ? "Edit your message..." : "Type your message..."}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={loading || !isConnected}
-                className={`flex-1 ${isEditing ? 'border-amber-500' : ''}`}
-              />
-              {loading && streamController ? (
-                <Button 
-                  onClick={handleCancelStream}
-                  variant="destructive"
-                >
-                  Cancel
-                </Button>
-              ) : (
-                <Button 
-                  onClick={handleSend} 
-                  disabled={loading || !input.trim() || !isConnected}
-                  variant={isEditing ? "warning" : "default"}
-                >
-                  {loading ? (
-                    <span className="animate-spin">⏳</span>
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
+          <CardContent className="p-0 flex flex-col h-[calc(100vh-12rem)]">
+            <ScrollArea className="flex-1 p-4 overflow-y-auto">
+              <div className="space-y-4">
+                {messages
+                  .filter((message) => message.role !== 'system')
+                  .map((message, index) => (
+                    <ChatMessageComponent 
+                      key={index} 
+                      message={message} 
+                      isLastUserMessage={isLastUserMessage(index)}
+                      onEdit={handleEditLastMessage}
+                      onRefresh={handleRegenerateResponse}
+                    />
+                  ))}
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+            
+            <div className="p-4 border-t mt-auto">
+              <div className="flex items-center space-x-2">
+                <Input
+                  placeholder={isEditing ? "Edit your message..." : "Type your message..."}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={loading || !isConnected}
+                  className={`flex-1 ${isEditing ? 'border-amber-500' : ''}`}
+                />
+                {loading && streamController ? (
+                  <Button 
+                    onClick={handleCancelStream}
+                    variant="destructive"
+                  >
+                    Cancel
+                  </Button>
+                ) : (
+                  <Button 
+                    onClick={() => handleSend()}
+                    disabled={loading || !input.trim() || !isConnected}
+                    variant={isEditing ? "warning" : "default"}
+                  >
+                    {loading ? (
+                      <span className="animate-spin">⏳</span>
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
+              {isEditing && (
+                <p className="text-sm text-amber-500 mt-2">
+                  Editing message. Press send to regenerate response.
+                </p>
+              )}
+              {!isConfigured && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Please configure Azure OpenAI settings to start chatting.
+                </p>
+              )}
+              {isConfigured && !isConnected && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Connecting to Azure OpenAI...
+                </p>
               )}
             </div>
-            {isEditing && (
-              <p className="text-sm text-amber-500 mt-2">
-                Editing message. Press send to regenerate response.
-              </p>
-            )}
-            {!isConfigured && (
-              <p className="text-sm text-muted-foreground mt-2">
-                Please configure Azure OpenAI settings to start chatting.
-              </p>
-            )}
-            {isConfigured && !isConnected && (
-              <p className="text-sm text-muted-foreground mt-2">
-                Connecting to Azure OpenAI...
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        
+        {/* Right Sidebar */}
+        <div className="space-y-6">
+          {/* NexusAI Status */}
+          <Collapsible 
+            open={statusExpanded} 
+            onOpenChange={setStatusExpanded}
+            className="border rounded-lg shadow-sm"
+          >
+            <div className="border-b">
+              <CollapsibleTrigger asChild>
+                <div className="p-4 flex justify-between items-center cursor-pointer hover:bg-muted/50">
+                  <h3 className="text-lg font-semibold">NexusAI Status</h3>
+                  {statusExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </div>
+              </CollapsibleTrigger>
+            </div>
+            
+            <CollapsibleContent>
+              <div className="p-4 space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Connection Status:</span>
+                  <Badge 
+                    variant={
+                      connectionStatus === 'connected' 
+                        ? 'success' 
+                        : connectionStatus === 'connecting' 
+                          ? 'warning' 
+                          : 'destructive'
+                    }
+                    className="ml-2"
+                  >
+                    {connectionStatus === 'connected' 
+                      ? 'Connected' 
+                      : connectionStatus === 'connecting' 
+                        ? 'Connecting...' 
+                        : 'Disconnected'
+                    }
+                  </Badge>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Model:</span>
+                  <span className="text-sm">{config.deploymentName || 'Not configured'}</span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Endpoint:</span>
+                  <span className="text-sm truncate max-w-[150px]" title={config.endpoint || 'Not configured'}>
+                    {config.endpoint ? new URL(config.endpoint).hostname : 'Not configured'}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Last Checked:</span>
+                  <span className="text-sm">{getLastCheckedText()}</span>
+                </div>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full mt-2" 
+                  onClick={() => testConnection()}
+                  disabled={!isConfigured || connectionStatus === 'connecting'}
+                >
+                  <RefreshCw className="h-3 w-3 mr-2" />
+                  Check Connection
+                </Button>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+          
+          {/* Examples */}
+          <Collapsible 
+            open={examplesExpanded} 
+            onOpenChange={setExamplesExpanded}
+            className="border rounded-lg shadow-sm"
+          >
+            <div className="border-b">
+              <CollapsibleTrigger asChild>
+                <div className="p-4 flex justify-between items-center cursor-pointer hover:bg-muted/50">
+                  <h3 className="text-lg font-semibold">Examples</h3>
+                  {examplesExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </div>
+              </CollapsibleTrigger>
+            </div>
+            
+            <CollapsibleContent>
+              <div className="p-4 space-y-2">
+                <p className="text-sm text-muted-foreground mb-4">
+                  Click on an example to try it out:
+                </p>
+                
+                {EXAMPLE_PROMPTS.map((example, index) => (
+                  <Button 
+                    key={index} 
+                    variant="ghost" 
+                    className="w-full justify-start text-left h-auto py-2 px-3"
+                    onClick={() => handleExampleClick(example.prompt)}
+                    disabled={loading || !isConnected}
+                  >
+                    <div>
+                      <p className="font-medium">{example.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{example.prompt}</p>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      </div>
     </div>
   );
 }

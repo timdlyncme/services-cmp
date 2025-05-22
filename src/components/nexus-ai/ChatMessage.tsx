@@ -38,10 +38,10 @@ export function ChatMessage({
     >
       {!isUser && (
         <div className="flex flex-col items-center">
-          <Avatar className="h-8 w-8 bg-primary">
-            <AvatarImage src={NEXUS_AI_AVATAR} alt="NexusAI" />
+          <Avatar className="h-10 w-10 border-2 border-primary/20">
+            <AvatarImage src="/nexus-ai-avatar.svg" alt="NexusAI" className="p-1" />
             <AvatarFallback className="bg-primary">
-              <Bot className="h-4 w-4 text-primary-foreground" />
+              <Bot className="h-5 w-5 text-primary-foreground" />
             </AvatarFallback>
           </Avatar>
           <span className="text-xs text-muted-foreground mt-1">NexusAI</span>
@@ -57,10 +57,16 @@ export function ChatMessage({
       >
         {isUser ? (
           <p className="text-sm">{message.content}</p>
-        ) : (
+        ) : message.content ? (
           <ReactMarkdown className="text-sm prose prose-sm max-w-none">
             {message.content}
           </ReactMarkdown>
+        ) : (
+          <div className="flex items-center space-x-1 h-6">
+            <div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
         )}
         
         {/* Action buttons for last user message */}
@@ -106,10 +112,10 @@ export function ChatMessage({
       </div>
       {isUser && (
         <div className="flex flex-col items-center">
-          <Avatar className="h-8 w-8 bg-secondary">
-            <AvatarImage src={USER_AVATAR} alt={userName} />
+          <Avatar className="h-10 w-10 border-2 border-secondary/20">
+            <AvatarImage src="/user-avatar.svg" alt={userName} className="p-1" />
             <AvatarFallback className="bg-secondary">
-              <User className="h-4 w-4 text-secondary-foreground" />
+              <User className="h-5 w-5 text-secondary-foreground" />
             </AvatarFallback>
           </Avatar>
           <span className="text-xs text-muted-foreground mt-1">{userName}</span>
