@@ -40,7 +40,7 @@ def get_templates(
         )
     
     try:
-        # Get templates that are either public or belong to the user's tenant
+        # Get templates that the user has access to
         query = db.query(Template)
         
         # Get the user's tenant
@@ -72,21 +72,29 @@ def get_templates(
                         detail=f"Tenant with ID {tenant_id} not found"
                     )
                 
-                # Only return templates that are public or belong to the specified tenant
-                query = query.filter(
-                    (Template.is_public == True) | (Template.tenant_id == tenant.tenant_id)
-                )
+                # Check if user has access to this tenant
+                if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Not authorized to view templates for this tenant"
+                    )
+                
+                # Only return templates that belong to the specified tenant
+                query = query.filter(Template.tenant_id == tenant.tenant_id)
             except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid tenant ID format: {str(e)}"
                 )
         else:
-            # Default to current user's tenant
-            if user_tenant:
-                query = query.filter(
-                    (Template.is_public == True) | (Template.tenant_id == user_tenant.tenant_id)
-                )
+            # No tenant specified, show templates from all tenants the user has access to
+            if current_user.role.name == "admin" or current_user.role.name == "msp":
+                # Admin and MSP users can see all templates
+                pass
+            else:
+                # Regular users can only see templates from their tenant
+                if user_tenant:
+                    query = query.filter(Template.tenant_id == user_tenant.tenant_id)
         
         templates = query.all()
         
