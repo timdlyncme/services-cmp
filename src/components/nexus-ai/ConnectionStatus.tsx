@@ -20,11 +20,15 @@ export function ConnectionStatus({ onRefresh }: ConnectionStatusProps) {
     isConnected, 
     connectionStatus, 
     testConnection, 
-    addLog 
+    addLog,
+    connectionError,
+    setConnectionChecked
   } = useAzureOpenAI();
 
   const handleRefresh = async () => {
     addLog('Refreshing connection status', 'info');
+    // Reset the connection checked flag to force a new check
+    setConnectionChecked(false);
     await testConnection();
     if (onRefresh) {
       onRefresh();
@@ -99,7 +103,9 @@ export function ConnectionStatus({ onRefresh }: ConnectionStatusProps) {
                   ? 'Connected to Azure OpenAI'
                   : connectionStatus === 'connecting'
                     ? 'Connecting to Azure OpenAI...'
-                    : 'Failed to connect to Azure OpenAI. Check your configuration.'}
+                    : connectionError
+                      ? `Failed to connect: ${connectionError}`
+                      : 'Failed to connect to Azure OpenAI. Check your configuration.'}
             </p>
           </TooltipContent>
         </Tooltip>

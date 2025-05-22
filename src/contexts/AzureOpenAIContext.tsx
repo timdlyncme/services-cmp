@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { toast } from "sonner";
+import { NexusAIService } from "@/services/nexus-ai-service";
 
 interface AzureOpenAIConfig {
   apiKey: string;
@@ -27,6 +28,10 @@ interface AzureOpenAIContextType {
   logs: LogEntry[];
   addLog: (message: string, level: LogLevel, details?: any) => void;
   clearLogs: () => void;
+  connectionError: string | null;
+  setConnectionError: (error: string | null) => void;
+  connectionChecked: boolean;
+  setConnectionChecked: (checked: boolean) => void;
 }
 
 const defaultConfig: AzureOpenAIConfig = {
@@ -47,6 +52,8 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
   
   const [connectionStatus, setConnectionStatus] = useState<"disconnected" | "connecting" | "connected" | "error">("disconnected");
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [connectionChecked, setConnectionChecked] = useState<boolean>(false);
 
   const isConfigured = Boolean(config.apiKey && config.endpoint && config.deploymentName);
   const isConnected = connectionStatus === "connected";
@@ -76,6 +83,13 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
     if (!isConfigured) {
       toast.error("Please configure Azure OpenAI settings first");
       addLog("Connection test failed: Missing configuration", "error");
+      setConnectionChecked(true);
+      return false;
+    }
+
+    // If we've already checked the connection and it failed, don't try again
+    // unless explicitly requested via the refresh button
+    if (connectionChecked && connectionStatus === "error") {
       return false;
     }
 
@@ -88,20 +102,26 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
       const nexusAIService = new NexusAIService();
       const status = await nexusAIService.checkStatus();
       
+      setConnectionChecked(true);
+      
       if (status.status === "connected") {
         setConnectionStatus("connected");
+        setConnectionError(null);
         addLog("Connection successful", "success");
         toast.success("Successfully connected to Azure OpenAI");
         return true;
       } else {
         setConnectionStatus("error");
+        setConnectionError(status.message);
         addLog(`Connection error: ${status.message}`, "error");
         toast.error(`Failed to connect: ${status.message}`);
         return false;
       }
     } catch (error) {
       setConnectionStatus("error");
+      setConnectionChecked(true);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      setConnectionError(errorMessage);
       addLog(`Connection error: ${errorMessage}`, "error", error);
       toast.error(`Failed to connect: ${errorMessage}`);
       return false;
@@ -120,6 +140,10 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
         logs,
         addLog,
         clearLogs,
+        connectionError,
+        setConnectionError,
+        connectionChecked,
+        setConnectionChecked,
       }}
     >
       {children}

@@ -25,6 +25,7 @@ export interface ChatRequest {
   frequency_penalty?: number;
   presence_penalty?: number;
   stop?: string[];
+  stream?: boolean;
 }
 
 export interface ChatResponse {
@@ -78,6 +79,118 @@ export class NexusAIService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Stream a chat request to Azure OpenAI
+   */
+  streamChat(request: ChatRequest, onMessage: (content: string) => void, onError: (error: string) => void, onComplete: () => void): () => void {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      onError('Authentication required');
+      return () => {};
+    }
+
+    // Set up request data
+    const requestData = {
+      ...request,
+      stream: true
+    };
+
+    // Create a controller to abort the fetch request
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    // Start the streaming request
+    fetch(`${API_URL}/nexus-ai/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(requestData),
+      signal
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      // Set up the event source reader
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Response body is not readable');
+      }
+      
+      // Process the stream
+      const processStream = async () => {
+        const decoder = new TextDecoder();
+        let buffer = '';
+        
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              onComplete();
+              break;
+            }
+            
+            // Decode the chunk and add it to our buffer
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+            
+            // Process any complete SSE messages in the buffer
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop() || ''; // Keep the last incomplete chunk in the buffer
+            
+            for (const line of lines) {
+              if (line.trim() === '') continue;
+              
+              if (line.startsWith('data: ')) {
+                const data = line.substring(6); // Remove 'data: ' prefix
+                
+                if (data === '[DONE]') {
+                  onComplete();
+                  return;
+                }
+                
+                try {
+                  const parsed = JSON.parse(data);
+                  if (parsed.error) {
+                    onError(parsed.error);
+                    return;
+                  }
+                  if (parsed.content) {
+                    onMessage(parsed.content);
+                  }
+                } catch (e) {
+                  console.error('Error parsing SSE data:', e, data);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          if (error.name === 'AbortError') {
+            console.log('Fetch aborted');
+          } else {
+            console.error('Error reading stream:', error);
+            onError(error instanceof Error ? error.message : 'Error reading stream');
+          }
+        }
+      };
+      
+      processStream();
+    })
+    .catch(error => {
+      console.error('Fetch error:', error);
+      onError(error instanceof Error ? error.message : 'Failed to start streaming');
+    });
+
+    // Return a function to abort the fetch
+    return () => {
+      controller.abort();
+    };
   }
 
   /**
@@ -147,7 +260,7 @@ export class NexusAIService {
       console.error('Check status error:', error);
       return {
         status: 'error',
-        message: 'Failed to check connection status'
+        message: error instanceof Error ? error.message : 'Failed to check connection status'
       };
     }
   }

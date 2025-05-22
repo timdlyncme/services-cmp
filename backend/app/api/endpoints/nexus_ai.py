@@ -2,9 +2,11 @@ from typing import Any, Dict, List, Optional
 import logging
 import json
 import time
+import asyncio
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import requests
 
@@ -60,6 +62,7 @@ class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     max_tokens: Optional[int] = 1000
     temperature: Optional[float] = 0.7
+    stream: Optional[bool] = False
 
 
 class ChatResponse(BaseModel):
@@ -120,6 +123,10 @@ async def chat(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Azure OpenAI is not configured"
         )
+    
+    # If streaming is requested, use the streaming endpoint
+    if request.stream:
+        return await stream_chat(request, current_user)
     
     try:
         add_log(f"Sending request to Azure OpenAI: {len(request.messages)} messages")
@@ -184,6 +191,109 @@ async def chat(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error: {str(e)}"
         )
+
+
+@router.post("/chat/stream")
+async def stream_chat_endpoint(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user)
+) -> StreamingResponse:
+    """
+    Stream chat responses from Azure OpenAI
+    """
+    # Check if user has permission to use NexusAI
+    has_permission = any(p.name == "use:nexus_ai" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    # Check if Azure OpenAI is configured
+    if not AZURE_CONFIG["api_key"] or not AZURE_CONFIG["endpoint"] or not AZURE_CONFIG["deployment_name"]:
+        add_log("Azure OpenAI is not configured", "error")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Azure OpenAI is not configured"
+        )
+    
+    return await stream_chat(request, current_user)
+
+
+async def stream_chat(
+    request: ChatRequest,
+    current_user: User
+) -> StreamingResponse:
+    """
+    Stream chat responses from Azure OpenAI
+    """
+    add_log(f"Streaming request to Azure OpenAI: {len(request.messages)} messages")
+    
+    async def generate():
+        try:
+            # Prepare the request to Azure OpenAI
+            azure_url = f"{AZURE_CONFIG['endpoint']}/openai/deployments/{AZURE_CONFIG['deployment_name']}/chat/completions?api-version={AZURE_CONFIG['api_version']}"
+            
+            headers = {
+                "Content-Type": "application/json",
+                "api-key": AZURE_CONFIG["api_key"]
+            }
+            
+            payload = {
+                "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
+                "max_tokens": request.max_tokens,
+                "temperature": request.temperature,
+                "stream": True
+            }
+            
+            # Send the request to Azure OpenAI with streaming
+            with requests.post(azure_url, headers=headers, json=payload, stream=True) as response:
+                if response.status_code != 200:
+                    error_msg = f"Error from Azure OpenAI: {response.status_code} {response.text}"
+                    add_log(error_msg, "error")
+                    yield f"data: {json.dumps({'error': error_msg})}\n\n"
+                    return
+                
+                # Update connection status
+                CONNECTION_STATUS["status"] = "connected"
+                CONNECTION_STATUS["last_checked"] = datetime.now().isoformat()
+                CONNECTION_STATUS["error"] = None
+                
+                # Process the streaming response
+                for line in response.iter_lines():
+                    if line:
+                        line = line.decode('utf-8')
+                        if line.startswith('data: '):
+                            if line.startswith('data: [DONE]'):
+                                break
+                            
+                            data = line[6:]  # Remove 'data: ' prefix
+                            try:
+                                chunk = json.loads(data)
+                                if 'choices' in chunk and len(chunk['choices']) > 0:
+                                    delta = chunk['choices'][0].get('delta', {})
+                                    if 'content' in delta and delta['content']:
+                                        yield f"data: {json.dumps({'content': delta['content']})}\n\n"
+                            except json.JSONDecodeError:
+                                add_log(f"Error parsing JSON: {data}", "error")
+                
+                add_log("Successfully completed streaming response")
+                yield f"data: [DONE]\n\n"
+        
+        except Exception as e:
+            # Update connection status
+            CONNECTION_STATUS["status"] = "error"
+            CONNECTION_STATUS["last_checked"] = datetime.now().isoformat()
+            CONNECTION_STATUS["error"] = str(e)
+            
+            error_msg = f"Error in streaming chat: {str(e)}"
+            add_log(error_msg, "error")
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+    
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream"
+    )
 
 
 @router.get("/config", response_model=ConfigResponse)
@@ -335,4 +445,3 @@ async def get_logs(
     return {
         "logs": DEBUG_LOGS
     }
-
