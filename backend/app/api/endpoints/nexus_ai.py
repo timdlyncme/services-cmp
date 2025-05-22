@@ -141,8 +141,9 @@ async def chat(
         
         payload = {
             "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
-            "max_tokens": request.max_completion_tokens,
-            "temperature": request.temperature
+            "max_completion_tokens": request.max_completion_tokens,
+            "temperature": request.temperature,
+            "stream": True
         }
         
         # Send the request to Azure OpenAI
@@ -241,7 +242,7 @@ async def stream_chat(
             
             payload = {
                 "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
-                "max_tokens": request.max_completion_tokens,
+                "max_completion_tokens": request.max_completion_tokens,
                 "temperature": request.temperature,
                 "stream": True
             }
@@ -406,7 +407,7 @@ async def get_status(
         # Send a minimal request to check if the deployment exists and is accessible
         payload = {
             "messages": [{"role": "user", "content": "Hello"}],
-            "max_tokens": 5,
+            "max_completion_tokens": 5,
             "temperature": 1.0,
             "n": 1
         }
