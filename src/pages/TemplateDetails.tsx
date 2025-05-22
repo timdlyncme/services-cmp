@@ -15,18 +15,51 @@ import { ChevronLeft, Save, Play, MessagesSquare, History, FileEdit } from "luci
 import { toast } from "sonner";
 import { cmpService } from "@/services/cmp-service";
 
+interface TemplateVersion {
+  id: number;
+  version: string;
+  changes: string;
+  created_at: string;
+  created_by: string;
+  is_current: boolean;
+}
+
 const TemplateDetails = () => {
   const { templateId } = useParams();
   const { currentTenant } = useAuth();
   const navigate = useNavigate();
   const [template, setTemplate] = useState<CloudTemplate | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadingVersions, setLoadingVersions] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [aiMessage, setAiMessage] = useState("");
   const [deployDialogOpen, setDeployDialogOpen] = useState(false);
   const [deployName, setDeployName] = useState("");
   const [deployEnv, setDeployEnv] = useState("development");
+  const [versions, setVersions] = useState<TemplateVersion[]>([]);
+  
+  const fetchVersions = async (templateId: string) => {
+    try {
+      setLoadingVersions(true);
+      const response = await fetch(`http://localhost:8000/api/templates/${templateId}/versions`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setVersions(data);
+      } else {
+        console.error("Failed to fetch template versions");
+      }
+    } catch (err) {
+      console.error("Error fetching template versions:", err);
+    } finally {
+      setLoadingVersions(false);
+    }
+  };
   
   useEffect(() => {
     const fetchTemplate = async () => {
@@ -44,6 +77,9 @@ const TemplateDetails = () => {
           setTemplate(templateData);
           setCode(templateData.code || "");
           setDeployName(`${templateData.name}-${deployEnv}`);
+          
+          // Fetch template versions
+          await fetchVersions(templateId);
         } else {
           setError("Template not found");
         }
@@ -70,6 +106,11 @@ const TemplateDetails = () => {
       if (updatedTemplate) {
         setTemplate(updatedTemplate);
         toast.success("Template saved successfully");
+        
+        // Refresh versions after save
+        if (templateId) {
+          await fetchVersions(templateId);
+        }
       }
     } catch (err) {
       console.error("Error saving template:", err);
@@ -90,6 +131,43 @@ const TemplateDetails = () => {
     // In a real app, this would call an AI service
     toast.success("Message sent to AI assistant");
     setAiMessage("");
+  };
+  
+  const handleRestoreVersion = async (version: TemplateVersion) => {
+    if (!template || !templateId) return;
+    
+    try {
+      // Fetch the version's code
+      const response = await fetch(`http://localhost:8000/api/templates/${templateId}/versions/${version.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const versionData = await response.json();
+        
+        // Update the template with this version's code
+        const updatedTemplate = await cmpService.updateTemplate(template.id, {
+          ...template,
+          code: versionData.code
+        });
+        
+        if (updatedTemplate) {
+          setTemplate(updatedTemplate);
+          setCode(updatedTemplate.code || "");
+          toast.success(`Restored to version ${version.version}`);
+          
+          // Refresh versions
+          await fetchVersions(templateId);
+        }
+      } else {
+        toast.error("Failed to restore version");
+      }
+    } catch (err) {
+      console.error("Error restoring version:", err);
+      toast.error("Failed to restore version");
+    }
   };
   
   const providerColor = (provider: string) => {
@@ -350,29 +428,45 @@ const TemplateDetails = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-medium">Current version</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(template.updatedAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <Badge>Latest</Badge>
+              {loadingVersions ? (
+                <div className="text-center py-4">
+                  <p>Loading versions...</p>
                 </div>
-                
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-medium">Initial upload</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(template.uploadedAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Restore
-                  </Button>
+              ) : versions.length === 0 ? (
+                <div className="text-center py-4">
+                  <p className="text-muted-foreground">No version history available</p>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-4">
+                  {versions.map((version) => (
+                    <div key={version.id} className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-medium">Version {version.version}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(version.created_at).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {version.changes}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          By: {version.created_by}
+                        </p>
+                      </div>
+                      {version.is_current ? (
+                        <Badge>Current</Badge>
+                      ) : (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleRestoreVersion(version)}
+                        >
+                          Restore
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -77,6 +77,9 @@ class Template(Base):
     provider = Column(String)  # azure, aws, gcp
     is_public = Column(Boolean, default=False)
     current_version = Column(String, nullable=True)
+    code = Column(String, nullable=True)  # Store the template code directly
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))  # Changed to UUID type
