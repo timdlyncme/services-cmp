@@ -117,15 +117,19 @@ export default function NexusAI() {
     try {
       // Get platform statistics
       const stats = await nexusAIPlatformService.getPlatformStats();
+      console.log("Platform stats loaded:", stats);
       
       // Get user role statistics
       const roleStats = await nexusAIPlatformService.getUserRoleStats();
+      console.log("User role stats loaded:", roleStats);
       
       // Get deployment statistics by tenant
       const deploymentStats = await nexusAIPlatformService.getDeploymentStatsByTenant();
+      console.log("Deployment stats loaded:", deploymentStats);
       
       // Get cloud account statistics by provider
       const cloudAccountStats = await nexusAIPlatformService.getCloudAccountStatsByProvider();
+      console.log("Cloud account stats loaded:", cloudAccountStats);
       
       // Get current tenant data if available
       let currentTenantData = null;
@@ -143,7 +147,27 @@ export default function NexusAI() {
           templates: tenantTemplates.length,
           environments: tenantEnvironments.length
         };
+        console.log("Current tenant data loaded:", currentTenantData);
       }
+      
+      // Get template usage data
+      const allTemplates = await nexusAIPlatformService.getAllTemplates();
+      const templateUsage = {};
+      
+      // Count template usage across all tenants
+      allTemplates.forEach(({ templates }) => {
+        templates.forEach(template => {
+          const templateName = template.name;
+          templateUsage[templateName] = (templateUsage[templateName] || 0) + 1;
+        });
+      });
+      
+      // Sort templates by usage
+      const sortedTemplateUsage = Object.entries(templateUsage)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => ({ name, count }));
+      
+      console.log("Template usage data:", sortedTemplateUsage);
       
       // Combine all data
       const platformData = {
@@ -151,9 +175,11 @@ export default function NexusAI() {
         roleStats,
         deploymentStats,
         cloudAccountStats,
-        currentTenant: currentTenantData
+        currentTenant: currentTenantData,
+        templateUsage: sortedTemplateUsage
       };
       
+      console.log("Final platform data:", platformData);
       setPlatformData(platformData);
       addLog("Platform data loaded for NexusAI", "success");
     } catch (error) {
@@ -291,7 +317,7 @@ export default function NexusAI() {
         // If we already added a placeholder message, update it
         if (prevMessages[prevMessages.length - 1].role === 'assistant' && prevMessages[prevMessages.length - 1].content === '') {
           const updatedMessages = [...prevMessages];
-          updatedMessages[updatedMessages.length - 1] = {
+          updatedMessages[prevMessages.length - 1] = {
             role: 'assistant',
             content: 'I apologize, but I encountered an error processing your request. Please check the connection status and try again.'
           };

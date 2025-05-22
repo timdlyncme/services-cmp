@@ -138,6 +138,12 @@ async def chat(
             detail="Azure OpenAI is not configured"
         )
     
+    # Log the request for debugging
+    if request.platform_data:
+        add_log(f"Received platform data with request: {len(str(request.platform_data))} bytes", "info")
+    else:
+        add_log("No platform data received with request", "warning")
+    
     # If streaming is requested, use the streaming endpoint
     if request.stream:
         return await stream_chat(request, current_user, db)
@@ -159,6 +165,13 @@ async def chat(
             "content": msg.content
         } for msg in request.messages]
         
+        # Log system message if it exists
+        system_message_index = next((i for i, msg in enumerate(messages) if msg["role"] == "system"), None)
+        if system_message_index is not None:
+            add_log(f"System message found: {messages[system_message_index]['content'][:100]}...", "info")
+        else:
+            add_log("No system message found in request", "info")
+        
         # If platform data is provided, add it to the system message
         if request.platform_data:
             # Find the system message or create one if it doesn't exist
@@ -168,6 +181,7 @@ async def chat(
                 # Append platform data to existing system message
                 platform_data_str = json.dumps(request.platform_data, indent=2)
                 messages[system_message_index]["content"] += f"\n\nHere is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```"
+                add_log(f"Added platform data to existing system message", "info")
             else:
                 # Create a new system message with platform data
                 platform_data_str = json.dumps(request.platform_data, indent=2)
@@ -176,6 +190,7 @@ async def chat(
                     "content": f"You are NexusAI, an advanced AI assistant for the Cloud Management Platform. Here is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```"
                 }
                 messages.insert(0, system_message)
+                add_log(f"Created new system message with platform data", "info")
         
         payload = {
             "messages": messages,
@@ -282,6 +297,12 @@ async def stream_chat(
     # Get the configuration from the database
     config = get_config(db)
     
+    # Log the request for debugging
+    if request.platform_data:
+        add_log(f"Received platform data with request: {len(str(request.platform_data))} bytes", "info")
+    else:
+        add_log("No platform data received with request", "warning")
+    
     add_log(f"Streaming request to Azure OpenAI: {len(request.messages)} messages")
     
     async def generate():
@@ -300,6 +321,13 @@ async def stream_chat(
                 "content": msg.content
             } for msg in request.messages]
             
+            # Log system message if it exists
+            system_message_index = next((i for i, msg in enumerate(messages) if msg["role"] == "system"), None)
+            if system_message_index is not None:
+                add_log(f"System message found: {messages[system_message_index]['content'][:100]}...", "info")
+            else:
+                add_log("No system message found in request", "info")
+            
             # If platform data is provided, add it to the system message
             if request.platform_data:
                 # Find the system message or create one if it doesn't exist
@@ -309,6 +337,7 @@ async def stream_chat(
                     # Append platform data to existing system message
                     platform_data_str = json.dumps(request.platform_data, indent=2)
                     messages[system_message_index]["content"] += f"\n\nHere is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```"
+                    add_log(f"Added platform data to existing system message in streaming", "info")
                 else:
                     # Create a new system message with platform data
                     platform_data_str = json.dumps(request.platform_data, indent=2)
@@ -317,6 +346,7 @@ async def stream_chat(
                         "content": f"You are NexusAI, an advanced AI assistant for the Cloud Management Platform. Here is the current platform data to help you provide accurate responses:\n```json\n{platform_data_str}\n```"
                     }
                     messages.insert(0, system_message)
+                    add_log(f"Created new system message with platform data in streaming", "info")
             
             payload = {
                 "messages": messages,

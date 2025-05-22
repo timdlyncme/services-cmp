@@ -98,6 +98,9 @@ export class NexusAIService {
       stream: true
     };
 
+    // Log the request data for debugging
+    console.log("Sending chat request with platform data:", requestData);
+
     // Create a controller to abort the fetch request
     const controller = new AbortController();
     const { signal } = controller;
