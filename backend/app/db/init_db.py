@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models.user import User, Role, Permission, Tenant
-from app.models.deployment import CloudAccount, Environment, Template, Deployment
+from app.models.deployment import CloudAccount, Environment, Template, Deployment, TemplateVersion
 
 logger = logging.getLogger(__name__)
 
