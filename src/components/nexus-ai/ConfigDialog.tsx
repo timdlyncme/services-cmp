@@ -95,21 +95,33 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
       setConnectionStatus('connecting');
       setConnectionChecked(false);
       
-      // Test the connection
-      const success = await testConnection();
+      // Test the connection with a timeout to prevent hanging
+      const connectionPromise = testConnection();
       
-      if (success) {
-        toast({
-          title: 'Success',
-          description: 'Configuration updated and connection tested successfully',
-        });
-        
-        if (onConfigUpdate) {
-          onConfigUpdate();
-        }
-        
-        setOpen(false);
+      // Set a timeout to prevent hanging indefinitely
+      const timeoutPromise = new Promise<boolean>((resolve) => {
+        setTimeout(() => {
+          addLog('Connection test timed out, continuing anyway', 'warning');
+          resolve(false);
+        }, 10000); // 10 seconds timeout
+      });
+      
+      // Use Promise.race to handle either the connection test completing or timing out
+      const success = await Promise.race([connectionPromise, timeoutPromise]);
+      
+      // Always close the dialog after saving, even if connection test fails
+      toast({
+        title: success ? 'Success' : 'Configuration Saved',
+        description: success 
+          ? 'Configuration updated and connection tested successfully' 
+          : 'Configuration saved, but connection test was inconclusive',
+      });
+      
+      if (onConfigUpdate) {
+        onConfigUpdate();
       }
+      
+      setOpen(false);
     } catch (error) {
       console.error('Failed to update config:', error);
       addLog(`Failed to update configuration: ${error instanceof Error ? error.message : String(error)}`, 'error');

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { NexusAIService } from "@/services/nexus-ai-service";
 
@@ -33,6 +33,7 @@ interface AzureOpenAIContextType {
   setConnectionError: (error: string | null) => void;
   connectionChecked: boolean;
   setConnectionChecked: (checked: boolean) => void;
+  lastCheckedTime: Date | null;
 }
 
 const defaultConfig: AzureOpenAIConfig = {
@@ -55,6 +56,9 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [connectionChecked, setConnectionChecked] = useState<boolean>(false);
+  const [lastCheckedTime, setLastCheckedTime] = useState<Date | null>(null);
+  const connectionCheckTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isTestingConnection = useRef<boolean>(false);
 
   const isConfigured = Boolean(config.apiKey && config.endpoint && config.deploymentName);
   const isConnected = connectionStatus === "connected";
@@ -80,7 +84,8 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
     setLogs([]);
   };
 
-  const testConnection = async (): Promise<boolean> => {
+  // Memoize testConnection to avoid recreating it on every render
+  const testConnection = useCallback(async (): Promise<boolean> => {
     if (!isConfigured) {
       toast.error("Please configure Azure OpenAI settings first");
       addLog("Connection test failed: Missing configuration", "error");
@@ -88,16 +93,12 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
       return false;
     }
 
-    // If we're already connecting, don't start another connection test
-    if (connectionStatus === "connecting") {
+    // If already testing connection, don't start another test
+    if (isTestingConnection.current) {
       return false;
     }
 
-    // If we've already checked the connection and it's connected, don't check again
-    if (connectionChecked && connectionStatus === "connected") {
-      return true;
-    }
-
+    isTestingConnection.current = true;
     setConnectionStatus("connecting");
     addLog("Testing connection to Azure OpenAI...", "info");
     addLog(`Endpoint: ${config.endpoint}/openai/deployments/${config.deploymentName}`, "info");
@@ -108,27 +109,66 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
       const status = await nexusAIService.checkStatus();
       
       setConnectionChecked(true);
+      setLastCheckedTime(new Date());
       
       if (status.status === "connected") {
         setConnectionStatus("connected");
         setConnectionError(null);
         addLog("Connection successful", "success");
+        isTestingConnection.current = false;
         return true;
       } else {
         setConnectionStatus("error");
         setConnectionError(status.message);
         addLog(`Connection error: ${status.message}`, "error");
+        isTestingConnection.current = false;
         return false;
       }
     } catch (error) {
       setConnectionStatus("error");
       setConnectionChecked(true);
+      setLastCheckedTime(new Date());
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       setConnectionError(errorMessage);
       addLog(`Connection error: ${errorMessage}`, "error", error);
+      isTestingConnection.current = false;
       return false;
     }
-  };
+  }, [isConfigured, config, addLog]);
+
+  // Set up periodic connection check (every 30 seconds)
+  useEffect(() => {
+    // Clear any existing timer when component unmounts or dependencies change
+    if (connectionCheckTimerRef.current) {
+      clearInterval(connectionCheckTimerRef.current);
+      connectionCheckTimerRef.current = null;
+    }
+
+    // Only set up timer if configured
+    if (isConfigured) {
+      // Initial check if not already checked
+      if (!connectionChecked) {
+        testConnection();
+      }
+
+      // Set up periodic check every 30 seconds
+      connectionCheckTimerRef.current = setInterval(() => {
+        // Only check if not already in the process of checking
+        if (!isTestingConnection.current) {
+          addLog("Performing periodic connection check", "info");
+          testConnection();
+        }
+      }, 30000); // 30 seconds
+    }
+
+    // Cleanup function
+    return () => {
+      if (connectionCheckTimerRef.current) {
+        clearInterval(connectionCheckTimerRef.current);
+        connectionCheckTimerRef.current = null;
+      }
+    };
+  }, [isConfigured, connectionChecked, testConnection]);
 
   return (
     <AzureOpenAIContext.Provider
@@ -147,6 +187,7 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
         setConnectionError,
         connectionChecked,
         setConnectionChecked,
+        lastCheckedTime,
       }}
     >
       {children}
