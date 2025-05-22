@@ -60,7 +60,7 @@ export class AzureOpenAIService {
     messages: ChatMessage[],
     options: {
       temperature?: number;
-      max_tokens?: number;
+      max_completion_tokens?: number;
       stream?: boolean;
       onChunk?: (chunk: string) => void;
     } = {}
@@ -81,8 +81,8 @@ export class AzureOpenAIService {
       
       const requestBody = {
         messages,
-        temperature: options.temperature ?? 0.7,
-        max_tokens: options.max_tokens ?? 800,
+        temperature: options.temperature ?? 1.0,
+        max_completion_tokens: options.max_completion_tokens ?? 800,
         stream,
       };
       

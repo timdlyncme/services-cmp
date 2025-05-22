@@ -24,6 +24,8 @@ export default function NexusAI() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState('');
+  const [streamController, setStreamController] = useState<(() => void) | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const nexusAIService = new NexusAIService();
@@ -33,7 +35,8 @@ export default function NexusAI() {
     connectionStatus, 
     testConnection, 
     logs, 
-    addLog 
+    addLog, 
+    connectionChecked 
   } = useAzureOpenAI();
 
   useEffect(() => {
@@ -41,11 +44,20 @@ export default function NexusAI() {
   }, [messages]);
 
   useEffect(() => {
-    // Check connection status on component mount
-    if (isConfigured && !isConnected) {
+    // Check connection status on component mount, but only once
+    if (isConfigured && !isConnected && !connectionChecked) {
       testConnection();
     }
-  }, [isConfigured, isConnected, testConnection]);
+  }, [isConfigured, isConnected, testConnection, connectionChecked]);
+
+  // Cleanup streaming on unmount
+  useEffect(() => {
+    return () => {
+      if (streamController) {
+        streamController();
+      }
+    };
+  }, [streamController]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -62,18 +74,72 @@ export default function NexusAI() {
     setMessages((prevMessages) => [...prevMessages, userMessage]);
     setInput('');
     setLoading(true);
+    setStreamingMessage('');
 
     try {
       addLog(`Sending message: ${input}`, 'info');
       
-      const response = await nexusAIService.chat({
-        messages: [...messages, userMessage]
-      });
+      // Add a placeholder message for streaming
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        {
+          role: 'assistant',
+          content: ''
+        }
+      ]);
+
+      // Use streaming API
+      const controller = nexusAIService.streamChat(
+        {
+          messages: [...messages, userMessage]
+        },
+        // On message chunk received
+        (content: string) => {
+          setStreamingMessage((prev) => prev + content);
+          
+          // Update the last message with the accumulated content
+          setMessages((prevMessages) => {
+            const updatedMessages = [...prevMessages];
+            updatedMessages[updatedMessages.length - 1] = {
+              role: 'assistant',
+              content: updatedMessages[updatedMessages.length - 1].content + content
+            };
+            return updatedMessages;
+          });
+        },
+        // On error
+        (error: string) => {
+          console.error('Streaming error:', error);
+          addLog(`Error: ${error}`, 'error');
+          
+          toast({
+            title: 'Error',
+            description: error,
+            variant: 'destructive',
+          });
+          
+          // Update the placeholder message with an error message
+          setMessages((prevMessages) => {
+            const updatedMessages = [...prevMessages];
+            updatedMessages[updatedMessages.length - 1] = {
+              role: 'assistant',
+              content: 'I apologize, but I encountered an error processing your request. Please check the connection status and try again.'
+            };
+            return updatedMessages;
+          });
+          
+          setLoading(false);
+          setStreamController(null);
+        },
+        // On complete
+        () => {
+          addLog(`Streaming completed`, 'info');
+          setLoading(false);
+          setStreamController(null);
+        }
+      );
       
-      addLog(`Received response: ${response.message.content.substring(0, 50)}...`, 'info');
-      addLog(`Tokens used: ${response.usage.total_tokens}`, 'info');
-      
-      setMessages((prevMessages) => [...prevMessages, response.message]);
+      setStreamController(() => controller);
     } catch (error) {
       console.error('Chat error:', error);
       addLog(`Error: ${error instanceof Error ? error.message : String(error)}`, 'error');
@@ -85,15 +151,29 @@ export default function NexusAI() {
       });
       
       // Add error message from assistant
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        {
-          role: 'assistant',
-          content: 'I apologize, but I encountered an error processing your request. Please check the connection status and try again.'
+      setMessages((prevMessages) => {
+        // If we already added a placeholder message, update it
+        if (prevMessages[prevMessages.length - 1].role === 'assistant' && prevMessages[prevMessages.length - 1].content === '') {
+          const updatedMessages = [...prevMessages];
+          updatedMessages[updatedMessages.length - 1] = {
+            role: 'assistant',
+            content: 'I apologize, but I encountered an error processing your request. Please check the connection status and try again.'
+          };
+          return updatedMessages;
         }
-      ]);
-    } finally {
+        
+        // Otherwise add a new message
+        return [
+          ...prevMessages,
+          {
+            role: 'assistant',
+            content: 'I apologize, but I encountered an error processing your request. Please check the connection status and try again.'
+          }
+        ];
+      });
+      
       setLoading(false);
+      setStreamController(null);
     }
   };
 
@@ -101,6 +181,15 @@ export default function NexusAI() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const handleCancelStream = () => {
+    if (streamController) {
+      streamController();
+      setStreamController(null);
+      setLoading(false);
+      addLog('Streaming cancelled by user', 'info');
     }
   };
 
@@ -121,7 +210,7 @@ export default function NexusAI() {
         </div>
       </div>
       
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 p-4 h-[calc(100vh-10rem)] overflow-y-auto">
         <div className="space-y-4">
           {messages
             .filter((message) => message.role !== 'system')
@@ -142,16 +231,25 @@ export default function NexusAI() {
             disabled={loading || !isConnected}
             className="flex-1"
           />
-          <Button 
-            onClick={handleSend} 
-            disabled={loading || !input.trim() || !isConnected}
-          >
-            {loading ? (
-              <span className="animate-spin">⏳</span>
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
+          {loading && streamController ? (
+            <Button 
+              onClick={handleCancelStream}
+              variant="destructive"
+            >
+              Cancel
+            </Button>
+          ) : (
+            <Button 
+              onClick={handleSend} 
+              disabled={loading || !input.trim() || !isConnected}
+            >
+              {loading ? (
+                <span className="animate-spin">⏳</span>
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          )}
         </div>
         {!isConfigured && (
           <p className="text-sm text-muted-foreground mt-2">

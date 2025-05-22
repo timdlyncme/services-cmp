@@ -28,7 +28,9 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
     updateConfig, 
     testConnection, 
     connectionStatus, 
-    addLog 
+    setConnectionStatus,
+    addLog,
+    setConnectionChecked
   } = useAzureOpenAI();
   
   const [formValues, setFormValues] = useState({
@@ -82,6 +84,10 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
       });
       
       addLog('Backend configuration updated', 'success');
+      
+      // Reset connection status and checked flag
+      setConnectionStatus('connecting');
+      setConnectionChecked(false);
       
       // Test the connection
       const success = await testConnection();
@@ -196,4 +202,3 @@ export function ConfigDialog({ onConfigUpdate }: ConfigDialogProps) {
     </Dialog>
   );
 }
-
