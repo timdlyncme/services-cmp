@@ -4,7 +4,6 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/use-toast';
 import { ConfigDialog } from '@/components/nexus-ai/ConfigDialog';
-import { ConnectionStatus } from '@/components/nexus-ai/ConnectionStatus';
 import { DebugLogs } from '@/components/nexus-ai/DebugLogs';
 import { ChatMessage as ChatMessageComponent } from '@/components/nexus-ai/ChatMessage';
 import { NexusAIService, ChatMessage } from '@/services/nexus-ai-service';
@@ -43,7 +42,7 @@ export default function NexusAI() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'system',
-      content: 'I am NexusAI, your cloud management assistant. How can I help you today?'
+      content: 'You are NexusAI, an advanced AI assistant designed to support power users in managing and gaining insights from the Cloud Management Platform. Your primary role is to assist users with comprehensive management capabilities, including access to all tenants, cloud resources, templates, deployments, and more. Focus on providing clear, concise, and actionable insights that empower users to navigate and optimize the platform effectively. Always prioritize user needs and context, and ensure your responses enhance their understanding and control over their cloud resources.'
     },
     {
       role: 'assistant',
@@ -335,7 +334,6 @@ export default function NexusAI() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-2xl font-bold">NexusAI</CardTitle>
               <div className="flex items-center space-x-2">
-                <ConnectionStatus />
                 <ConfigDialog onConfigUpdate={() => testConnection()} />
                 <DebugLogs logs={logs.map(log => ({
                   timestamp: new Date(log.timestamp).toLocaleTimeString(),
