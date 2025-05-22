@@ -10,6 +10,7 @@ import { ChatMessage as ChatMessageComponent } from '@/components/nexus-ai/ChatM
 import { NexusAIService, ChatMessage } from '@/services/nexus-ai-service';
 import { useAzureOpenAI } from '@/contexts/AzureOpenAIContext';
 import { Send } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function NexusAI() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -259,106 +260,101 @@ export default function NexusAI() {
     }
   };
 
-  // Determine if a message is the last user or assistant message
+  // Determine if a message is the last user message
   const isLastUserMessage = (index: number) => {
     // Check if this is the last user message in the conversation
     const userMessages = messages.filter(msg => msg.role === 'user');
     return userMessages.length > 0 && messages[index].role === 'user' && 
            index === messages.findIndex(msg => msg === userMessages[userMessages.length - 1]);
   };
-  
-  const isLastAssistantMessage = (index: number) => {
-    // Check if this is the last assistant message in the conversation
-    const assistantMessages = messages.filter(msg => msg.role === 'assistant');
-    return assistantMessages.length > 0 && messages[index].role === 'assistant' && 
-           index === messages.findIndex(msg => msg === assistantMessages[assistantMessages.length - 1]);
-  };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between p-4 border-b">
-        <h1 className="text-2xl font-bold">NexusAI</h1>
-        <div className="flex items-center space-x-2">
-          <ConnectionStatus />
-          <ConfigDialog />
-          <DebugLogs logs={logs.map(log => ({
-            timestamp: new Date(log.timestamp).toLocaleTimeString(),
-            level: log.level === 'success' || log.level === 'request' || log.level === 'response' 
-              ? 'info' 
-              : (log.level as 'info' | 'error' | 'warning'),
-            message: log.message
-          }))} />
-        </div>
-      </div>
-      
-      <ScrollArea className="flex-1 p-4 h-[calc(100vh-10rem)] overflow-y-auto">
-        <div className="space-y-4">
-          {messages
-            .filter((message) => message.role !== 'system')
-            .map((message, index) => {
-              const filteredIndex = messages.filter(msg => msg.role !== 'system').indexOf(message);
-              return (
-                <ChatMessageComponent 
-                  key={index} 
-                  message={message} 
-                  isLastUserMessage={isLastUserMessage(index)}
-                  isLastAssistantMessage={isLastAssistantMessage(index)}
-                  onEdit={handleEditLastMessage}
-                  onRefresh={handleRegenerateResponse}
-                />
-              );
-            })}
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
-      
-      <div className="p-4 border-t">
-        <div className="flex items-center space-x-2">
-          <Input
-            placeholder={isEditing ? "Edit your message..." : "Type your message..."}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={loading || !isConnected}
-            className={`flex-1 ${isEditing ? 'border-amber-500' : ''}`}
-          />
-          {loading && streamController ? (
-            <Button 
-              onClick={handleCancelStream}
-              variant="destructive"
-            >
-              Cancel
-            </Button>
-          ) : (
-            <Button 
-              onClick={handleSend} 
-              disabled={loading || !input.trim() || !isConnected}
-              variant={isEditing ? "warning" : "default"}
-            >
-              {loading ? (
-                <span className="animate-spin">⏳</span>
+    <div className="container mx-auto py-6">
+      <Card className="w-full max-w-4xl mx-auto">
+        <CardHeader className="border-b">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-2xl font-bold">NexusAI</CardTitle>
+            <div className="flex items-center space-x-2">
+              <ConnectionStatus />
+              <ConfigDialog />
+              <DebugLogs logs={logs.map(log => ({
+                timestamp: new Date(log.timestamp).toLocaleTimeString(),
+                level: log.level === 'success' || log.level === 'request' || log.level === 'response' 
+                  ? 'info' 
+                  : (log.level as 'info' | 'error' | 'warning'),
+                message: log.message
+              }))} />
+            </div>
+          </div>
+        </CardHeader>
+        
+        <CardContent className="p-0 flex flex-col h-[calc(100vh-12rem)]">
+          <ScrollArea className="flex-1 p-4 overflow-y-auto">
+            <div className="space-y-4">
+              {messages
+                .filter((message) => message.role !== 'system')
+                .map((message, index) => (
+                  <ChatMessageComponent 
+                    key={index} 
+                    message={message} 
+                    isLastUserMessage={isLastUserMessage(index)}
+                    onEdit={handleEditLastMessage}
+                    onRefresh={handleRegenerateResponse}
+                  />
+                ))}
+              <div ref={messagesEndRef} />
+            </div>
+          </ScrollArea>
+          
+          <div className="p-4 border-t mt-auto">
+            <div className="flex items-center space-x-2">
+              <Input
+                placeholder={isEditing ? "Edit your message..." : "Type your message..."}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={loading || !isConnected}
+                className={`flex-1 ${isEditing ? 'border-amber-500' : ''}`}
+              />
+              {loading && streamController ? (
+                <Button 
+                  onClick={handleCancelStream}
+                  variant="destructive"
+                >
+                  Cancel
+                </Button>
               ) : (
-                <Send className="h-4 w-4" />
+                <Button 
+                  onClick={handleSend} 
+                  disabled={loading || !input.trim() || !isConnected}
+                  variant={isEditing ? "warning" : "default"}
+                >
+                  {loading ? (
+                    <span className="animate-spin">⏳</span>
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
               )}
-            </Button>
-          )}
-        </div>
-        {isEditing && (
-          <p className="text-sm text-amber-500 mt-2">
-            Editing message. Press send to regenerate response.
-          </p>
-        )}
-        {!isConfigured && (
-          <p className="text-sm text-muted-foreground mt-2">
-            Please configure Azure OpenAI settings to start chatting.
-          </p>
-        )}
-        {isConfigured && !isConnected && (
-          <p className="text-sm text-muted-foreground mt-2">
-            Connecting to Azure OpenAI...
-          </p>
-        )}
-      </div>
+            </div>
+            {isEditing && (
+              <p className="text-sm text-amber-500 mt-2">
+                Editing message. Press send to regenerate response.
+              </p>
+            )}
+            {!isConfigured && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Please configure Azure OpenAI settings to start chatting.
+              </p>
+            )}
+            {isConfigured && !isConnected && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Connecting to Azure OpenAI...
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
