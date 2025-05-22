@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException  
-from deployment.azure_deployer import AzureDeployer  
+from deploy.azure import AzureDeployer  
 
 app = FastAPI()  
 deployer = AzureDeployer()  
