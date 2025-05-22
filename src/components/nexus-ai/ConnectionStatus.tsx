@@ -27,6 +27,11 @@ export function ConnectionStatus({ onRefresh }: ConnectionStatusProps) {
   } = useAzureOpenAI();
 
   const handleRefresh = async () => {
+    // If already connecting, don't trigger another refresh
+    if (connectionStatus === 'connecting') {
+      return;
+    }
+    
     addLog('Refreshing connection status', 'info');
     // Reset the connection checked flag to force a new check
     setConnectionChecked(false);
