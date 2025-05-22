@@ -27,7 +27,7 @@ export function ChatMessage({
 }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const { user } = useAuth();
-  const userName = user?.name || 'User';
+  const userName = user?.full_name || 'User';
 
   return (
     <div
