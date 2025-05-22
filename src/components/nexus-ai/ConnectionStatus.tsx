@@ -23,7 +23,8 @@ export function ConnectionStatus({ onRefresh }: ConnectionStatusProps) {
     addLog,
     connectionError,
     setConnectionChecked,
-    setConnectionStatus
+    setConnectionStatus,
+    lastCheckedTime
   } = useAzureOpenAI();
 
   const handleRefresh = async () => {
@@ -32,7 +33,7 @@ export function ConnectionStatus({ onRefresh }: ConnectionStatusProps) {
       return;
     }
     
-    addLog('Refreshing connection status', 'info');
+    addLog('Manually refreshing connection status', 'info');
     // Reset the connection checked flag to force a new check
     setConnectionChecked(false);
     setConnectionStatus('connecting');
@@ -40,6 +41,28 @@ export function ConnectionStatus({ onRefresh }: ConnectionStatusProps) {
     if (onRefresh) {
       onRefresh();
     }
+  };
+
+  // Format the last checked time
+  const getLastCheckedText = () => {
+    if (!lastCheckedTime) return 'Never checked';
+    
+    // Format as relative time (e.g., "2 minutes ago")
+    const now = new Date();
+    const diffMs = now.getTime() - lastCheckedTime.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    
+    if (diffSec < 10) return 'Just now';
+    if (diffSec < 60) return `${diffSec} seconds ago`;
+    
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+    
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour} hour${diffHour === 1 ? '' : 's'} ago`;
+    
+    const diffDay = Math.floor(diffHour / 24);
+    return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
   };
 
   const getStatusBadge = () => {
@@ -103,17 +126,24 @@ export function ConnectionStatus({ onRefresh }: ConnectionStatusProps) {
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            <p>
-              {!isConfigured 
-                ? 'Azure OpenAI is not configured. Click Configure to set it up.' 
-                : connectionStatus === 'connected'
-                  ? 'Connected to Azure OpenAI'
-                  : connectionStatus === 'connecting'
-                    ? 'Connecting to Azure OpenAI...'
-                    : connectionError
-                      ? `Failed to connect: ${connectionError}`
-                      : 'Failed to connect to Azure OpenAI. Check your configuration.'}
-            </p>
+            <div className="space-y-1">
+              <p>
+                {!isConfigured 
+                  ? 'Azure OpenAI is not configured. Click Configure to set it up.' 
+                  : connectionStatus === 'connected'
+                    ? 'Connected to Azure OpenAI'
+                    : connectionStatus === 'connecting'
+                      ? 'Connecting to Azure OpenAI...'
+                      : connectionError
+                        ? `Failed to connect: ${connectionError}`
+                        : 'Failed to connect to Azure OpenAI. Check your configuration.'}
+              </p>
+              {lastCheckedTime && (
+                <p className="text-xs text-muted-foreground">
+                  Last checked: {getLastCheckedText()}
+                </p>
+              )}
+            </div>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
