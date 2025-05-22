@@ -34,7 +34,7 @@ export function ChatMessage({
       {!isUser && (
         <div className="flex flex-col items-center">
           <Avatar className="h-10 w-10 border-2 border-primary/20">
-            <AvatarImage src="/nexus-ai-avtar.png" alt="NexusAI"/>
+            <AvatarImage src="/nexus-ai-avatar.png" alt="NexusAI"/>
             <AvatarFallback className="bg-primary">
               <Bot className="h-5 w-5 text-primary-foreground" />
             </AvatarFallback>
