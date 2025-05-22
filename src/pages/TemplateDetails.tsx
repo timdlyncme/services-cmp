@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
@@ -29,7 +28,7 @@ const TemplateDetails = () => {
   useEffect(() => {
     if (templateId && currentTenant) {
       const found = mockTemplates.find(
-        t => t.id === templateId && t.tenantId === currentTenant.id
+        t => t.id === templateId && t.tenantId === currentTenant.tenant_id
       );
       
       if (found) {

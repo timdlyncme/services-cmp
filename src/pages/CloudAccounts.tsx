@@ -57,7 +57,7 @@ const CloudAccounts = () => {
     setError(null);
     
     try {
-      const accounts = await cmpService.getCloudAccounts(currentTenant.id);
+      const accounts = await cmpService.getCloudAccounts(currentTenant.tenant_id);
       setCloudAccounts(accounts);
     } catch (error) {
       console.error("Error fetching cloud accounts:", error);
@@ -115,7 +115,7 @@ const CloudAccounts = () => {
         description: newAccountDescription
       };
       
-      await cmpService.createCloudAccount(newAccount, currentTenant!.id);
+      await cmpService.createCloudAccount(newAccount, currentTenant!.tenant_id);
       
       // Refresh the list
       await fetchCloudAccounts();

@@ -25,13 +25,14 @@ const formatTenantId = (tenantId: string | number): string => {
   // Convert to string if it's not already
   const tenantIdStr = String(tenantId);
   
-  // If the ID is already in the format "tenant-X", return it as is
+  // If the ID is already in the format "tenant-X", extract the UUID part
   if (tenantIdStr.startsWith('tenant-')) {
-    return tenantIdStr;
+    console.warn('Warning: Using "tenant-" prefix is deprecated. Use raw UUID instead.');
+    return tenantIdStr.substring(7); // Remove 'tenant-' prefix
   }
   
-  // Otherwise, format it as "tenant-X"
-  return `tenant-${tenantIdStr}`;
+  // Otherwise, return as is (assuming it's already a UUID)
+  return tenantIdStr;
 };
 
 export class CMPService {

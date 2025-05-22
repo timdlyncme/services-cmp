@@ -1,4 +1,3 @@
-
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,10 +44,10 @@ export function TenantSwitcher() {
             <CommandGroup>
               {tenants.map((tenant) => (
                 <CommandItem
-                  key={tenant.id}
+                  key={tenant.tenant_id}
                   value={tenant.name}
                   onSelect={() => {
-                    switchTenant(tenant.id);
+                    switchTenant(tenant.tenant_id);
                     setOpen(false);
                   }}
                   className="text-sm"
@@ -56,7 +55,7 @@ export function TenantSwitcher() {
                   {tenant.name}
                   <Check
                     className={`ml-auto h-4 w-4 ${
-                      currentTenant.id === tenant.id ? "opacity-100" : "opacity-0"
+                      currentTenant.tenant_id === tenant.tenant_id ? "opacity-100" : "opacity-0"
                     }`}
                   />
                 </CommandItem>

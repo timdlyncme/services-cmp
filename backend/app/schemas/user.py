@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr
 
 
@@ -7,54 +7,55 @@ class Token(BaseModel):
     token_type: str
 
 
-class TokenData(BaseModel):
-    username: Optional[str] = None
-
-
 class LoginResponse(BaseModel):
-    token: str
-    token_type: str = "bearer"
     user: Dict[str, Any]
+    token: str
+    token_type: str
 
 
 class UserBase(BaseModel):
-    email: Optional[EmailStr] = None
-    username: Optional[str] = None
+    username: str
     full_name: Optional[str] = None
+    email: EmailStr
     is_active: Optional[bool] = True
-    role: Optional[str] = None
 
 
 class UserCreate(UserBase):
-    email: EmailStr
-    username: str
     password: str
     role: str
+    tenant_id: Optional[str] = None
 
 
-class UserUpdate(UserBase):
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
     password: Optional[str] = None
-
-
-class UserResponse(UserBase):
-    id: int
-    email: EmailStr
-    username: str
-    tenant_id: int
-
-    class Config:
-        from_attributes = True
-
-
-# Alias for backward compatibility
-User = UserResponse
+    is_active: Optional[bool] = None
+    role: Optional[str] = None
+    tenant_id: Optional[str] = None
 
 
 class User(BaseModel):
     id: int
     username: str
     full_name: Optional[str] = None
-    email: str
+    email: EmailStr
     role: str
     tenantId: str
     permissions: List[str]
+
+
+class UserSchema(User):
+    """Alias for User schema for backward compatibility"""
+    pass
+
+
+class UserResponse(UserBase):
+    id: int
+    user_id: str
+    role: Optional[str] = None
+    tenant_id: Optional[str] = None  # Changed to str for UUID
+    
+    class Config:
+        from_attributes = True

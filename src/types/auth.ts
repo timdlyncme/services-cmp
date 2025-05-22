@@ -2,6 +2,7 @@ export type UserRole = "user" | "admin" | "msp";
 
 export interface Tenant {
   id: string;
+  tenant_id: string;  // Added tenant_id field
   name: string;
   description?: string;
   createdAt: string;

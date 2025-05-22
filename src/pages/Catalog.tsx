@@ -37,7 +37,7 @@ const Catalog = () => {
     setError(null);
     
     try {
-      const templates = await cmpService.getTemplates(currentTenant.id);
+      const templates = await cmpService.getTemplates(currentTenant.tenant_id);
       setTemplates(templates);
       setFilteredTemplates(templates);
     } catch (error) {

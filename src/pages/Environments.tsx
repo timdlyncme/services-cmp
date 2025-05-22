@@ -16,7 +16,7 @@ interface Environment {
   environment_id: string;
   name: string;
   description: string;
-  tenant_id: number;
+  tenant_id: string;  // Changed from number to string
 }
 
 const Environments = () => {
@@ -40,7 +40,7 @@ const Environments = () => {
     setError(null);
     
     try {
-      const environments = await cmpService.getEnvironments(currentTenant.id);
+      const environments = await cmpService.getEnvironments(currentTenant.tenant_id);
       setEnvironments(environments);
       setFilteredEnvironments(environments);
     } catch (error) {
@@ -91,7 +91,7 @@ const Environments = () => {
         description: newEnvironmentDescription
       };
       
-      await cmpService.createEnvironment(newEnvironment, currentTenant!.id);
+      await cmpService.createEnvironment(newEnvironment, currentTenant!.tenant_id);
       
       // Refresh the list
       await fetchEnvironments();
@@ -278,4 +278,3 @@ const Environments = () => {
 };
 
 export default Environments;
-

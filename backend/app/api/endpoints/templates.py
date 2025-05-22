@@ -2,6 +2,7 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+import uuid
 
 from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
@@ -40,21 +41,49 @@ def get_templates(
     
     try:
         # Get templates that are either public or belong to the user's tenant
-        query = db.query(Template).filter(
-            (Template.is_public == True) | (Template.tenant_id == current_user.tenant_id)
-        )
+        query = db.query(Template)
+        
+        # Get the user's tenant
+        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
+        if user_tenant:
+            query = query.filter(
+                (Template.is_public == True) | (Template.tenant_id == user_tenant.tenant_id)
+            )
         
         # Filter by tenant if specified
         if tenant_id:
-            tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
-            if not tenant:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Tenant with ID {tenant_id} not found"
+            # Handle different tenant ID formats
+            try:
+                # Remove 'tenant-' prefix if present
+                if tenant_id.startswith('tenant-'):
+                    tenant_id = tenant_id[7:]
+                
+                # Try to parse as UUID
+                try:
+                    uuid_obj = uuid.UUID(tenant_id)
+                    tenant = db.query(Tenant).filter(Tenant.tenant_id == str(uuid_obj)).first()
+                except ValueError:
+                    # Not a valid UUID, try to find by numeric ID
+                    try:
+                        id_value = int(tenant_id)
+                        tenant = db.query(Tenant).filter(Tenant.id == id_value).first()
+                    except (ValueError, TypeError):
+                        tenant = None
+                
+                if not tenant:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Tenant with ID {tenant_id} not found"
+                    )
+                
+                query = query.filter(
+                    (Template.is_public == True) | (Template.tenant_id == tenant.tenant_id)
                 )
-            query = query.filter(
-                (Template.is_public == True) | (Template.tenant_id == tenant.id)
-            )
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid tenant ID format: {str(e)}"
+                )
         
         templates = query.all()
         
@@ -79,7 +108,7 @@ def get_templates(
             # Get tenant ID for the template
             tenant_id = "public"
             if template.tenant_id:
-                tenant = db.query(Tenant).filter(Tenant.id == template.tenant_id).first()
+                tenant = db.query(Tenant).filter(Tenant.tenant_id == template.tenant_id).first()
                 if tenant:
                     tenant_id = tenant.tenant_id
             
@@ -152,7 +181,7 @@ def get_template(
         # Get tenant ID for the template
         tenant_id = "public"
         if template.tenant_id:
-            tenant = db.query(Tenant).filter(Tenant.id == template.tenant_id).first()
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == template.tenant_id).first()
             if tenant:
                 tenant_id = tenant.tenant_id
         
@@ -166,13 +195,87 @@ def get_template(
         if template.category:
             categories = [cat.strip() for cat in template.category.split(",")]
         
+        # Get template code from the latest version
+        code = ""
+        latest_version = None
+        if hasattr(template, 'versions') and template.versions:
+            # Sort versions by created_at in descending order
+            sorted_versions = sorted(template.versions, key=lambda v: v.created_at, reverse=True)
+            if sorted_versions:
+                latest_version = sorted_versions[0]
+                code = latest_version.code or ""
+        
+        # If no code found in versions, use a default template based on provider
+        if not code:
+            if template.provider == "azure":
+                code = """
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "example" {
+  name     = "example-resources"
+  location = "East US"
+}
+
+resource "azurerm_virtual_network" "example" {
+  name                = "example-network"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+}
+"""
+            elif template.provider == "aws":
+                code = """
+provider "aws" {
+  region = "us-west-2"
+}
+
+resource "aws_vpc" "example" {
+  cidr_block = "10.0.0.0/16"
+  
+  tags = {
+    Name = "example-vpc"
+  }
+}
+
+resource "aws_subnet" "example" {
+  vpc_id     = aws_vpc.example.id
+  cidr_block = "10.0.1.0/24"
+  
+  tags = {
+    Name = "example-subnet"
+  }
+}
+"""
+            elif template.provider == "gcp":
+                code = """
+provider "google" {
+  project = "my-project-id"
+  region  = "us-central1"
+}
+
+resource "google_compute_network" "vpc_network" {
+  name = "example-network"
+}
+
+resource "google_compute_subnetwork" "subnet" {
+  name          = "example-subnet"
+  ip_cidr_range = "10.0.0.0/16"
+  region        = "us-central1"
+  network       = google_compute_network.vpc_network.id
+}
+"""
+            else:
+                code = "# No template code available for this provider"
+        
         return CloudTemplateResponse(
             id=template.template_id,
             name=template.name,
             description=template.description or "",
             type="terraform",  # Default to terraform, would need to add a type field
             provider=template.provider,
-            code="",  # Would need to add a code field or store in a separate table
+            code=code,
             deploymentCount=deployment_count,
             uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
@@ -207,6 +310,14 @@ def create_template(
         )
     
     try:
+        # Get the user's tenant
+        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
+        if not user_tenant and not template.is_public:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User's tenant not found"
+            )
+        
         # Create new template
         import uuid
         new_template = Template(
@@ -216,7 +327,7 @@ def create_template(
             category=template.category,
             provider=template.provider,
             is_public=template.is_public,
-            tenant_id=None if template.is_public else current_user.tenant_id
+            tenant_id=None if template.is_public else user_tenant.tenant_id
         )
         
         db.add(new_template)
@@ -226,7 +337,7 @@ def create_template(
         # Get tenant ID for the template
         tenant_id = "public"
         if new_template.tenant_id:
-            tenant = db.query(Tenant).filter(Tenant.id == new_template.tenant_id).first()
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == new_template.tenant_id).first()
             if tenant:
                 tenant_id = tenant.tenant_id
         
@@ -305,7 +416,10 @@ def update_template(
         if template_update.is_public:
             template.tenant_id = None
         elif template.tenant_id is None:
-            template.tenant_id = current_user.tenant_id
+            # Get the user's tenant
+            user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
+            if user_tenant:
+                template.tenant_id = user_tenant.tenant_id
         
         db.commit()
         db.refresh(template)
@@ -313,7 +427,7 @@ def update_template(
         # Get tenant ID for the template
         tenant_id = "public"
         if template.tenant_id:
-            tenant = db.query(Tenant).filter(Tenant.id == template.tenant_id).first()
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == template.tenant_id).first()
             if tenant:
                 tenant_id = tenant.tenant_id
         

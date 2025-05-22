@@ -176,7 +176,7 @@ const Tenants = () => {
               </TableHeader>
               <TableBody>
                 {filteredTenants.map((tenant) => (
-                  <TableRow key={tenant.id}>
+                  <TableRow key={tenant.tenant_id}>
                     <TableCell className="font-medium">{tenant.name}</TableCell>
                     <TableCell>{tenant.description || "No description"}</TableCell>
                     <TableCell>{new Date(tenant.createdAt).toLocaleDateString()}</TableCell>

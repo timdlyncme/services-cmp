@@ -94,7 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               // Set current tenant
               const savedTenantId = localStorage.getItem("currentTenantId");
               const tenant = userTenants.find(t => 
-                savedTenantId ? t.id === savedTenantId : t.id === authUser.tenantId
+                savedTenantId ? t.tenant_id === savedTenantId : t.tenant_id === authUser.tenantId
               );
               setCurrentTenant(tenant || userTenants[0]);
             } else {
@@ -102,6 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               // Create a default tenant if none exists
               const defaultTenant = {
                 id: authUser.tenantId || "default-tenant",
+                tenant_id: authUser.tenantId || "default-tenant",
                 name: "Default Tenant",
                 description: "Default tenant for development",
                 createdAt: new Date().toISOString()
@@ -159,24 +160,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setTenants(userTenants);
         
         // Set current tenant to user's default tenant
-        const defaultTenant = userTenants.find(t => t.id === authUser.tenantId) || userTenants[0];
+        const defaultTenant = userTenants.find(t => t.tenant_id === authUser.tenantId) || userTenants[0];
         setCurrentTenant(defaultTenant);
         
         if (defaultTenant) {
-          localStorage.setItem("currentTenantId", defaultTenant.id);
+          localStorage.setItem("currentTenantId", defaultTenant.tenant_id);
         }
       } else {
         console.warn("No tenants found for user, using default tenant");
         // Create a default tenant if none exists
         const defaultTenant = {
           id: authUser.tenantId || "default-tenant",
+          tenant_id: authUser.tenantId || "default-tenant",
           name: "Default Tenant",
           description: "Default tenant for development",
           createdAt: new Date().toISOString()
         };
         setTenants([defaultTenant]);
         setCurrentTenant(defaultTenant);
-        localStorage.setItem("currentTenantId", defaultTenant.id);
+        localStorage.setItem("currentTenantId", defaultTenant.tenant_id);
       }
       
       toast.success(`Welcome, ${authUser.name}!`);
@@ -205,7 +207,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const switchTenant = (tenantId: string) => {
-    const tenant = tenants.find(t => t.id === tenantId);
+    const tenant = tenants.find(t => t.tenant_id === tenantId);
     if (tenant) {
       setCurrentTenant(tenant);
       localStorage.setItem("currentTenantId", tenantId);

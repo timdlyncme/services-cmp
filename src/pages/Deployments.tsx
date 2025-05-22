@@ -51,7 +51,7 @@ const Deployments = () => {
       }
       
       // Fetch deployments from API
-      const deployments = await deploymentService.getDeployments(currentTenant.id);
+      const deployments = await deploymentService.getDeployments(currentTenant.tenant_id);
       setDeployments(deployments);
       setFilteredDeployments(deployments);
       setIsLoading(false);

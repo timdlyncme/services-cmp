@@ -55,7 +55,7 @@ const MSPTemplateFoundry = () => {
       // Fetch templates for each tenant
       for (const tenant of tenants) {
         try {
-          const templateFoundryItems = await cmpService.getTemplateFoundry(tenant.id);
+          const templateFoundryItems = await cmpService.getTemplateFoundry(tenant.tenant_id);
           
           // Convert API response to Template format
           const formattedTemplates = templateFoundryItems.map(item => ({
@@ -65,7 +65,7 @@ const MSPTemplateFoundry = () => {
             type: item.type,
             provider: item.provider,
             codeSnippet: item.code,
-            tenantIds: [tenant.id],
+            tenantIds: [tenant.tenant_id],
             categories: item.categories || [],
             version: item.version,
             createdAt: item.created_at,
@@ -78,7 +78,7 @@ const MSPTemplateFoundry = () => {
           
           allTemplates.push(...formattedTemplates);
         } catch (error) {
-          console.error(`Error fetching templates for tenant ${tenant.id}:`, error);
+          console.error(`Error fetching templates for tenant ${tenant.tenant_id}:`, error);
         }
       }
       
@@ -344,3 +344,4 @@ const MSPTemplateFoundry = () => {
 };
 
 export default MSPTemplateFoundry;
+

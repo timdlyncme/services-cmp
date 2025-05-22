@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -189,14 +188,14 @@ export const TemplateForm = ({
           <label className="text-sm font-medium">Assign to Tenants</label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             {availableTenants.map((tenant) => (
-              <div key={tenant.id} className="flex items-center space-x-2">
+              <div key={tenant.tenant_id} className="flex items-center space-x-2">
                 <Checkbox
-                  id={`tenant-${tenant.id}`}
-                  checked={(templateFormData.tenantIds || []).includes(tenant.id)}
-                  onCheckedChange={() => toggleTenant(tenant.id)}
+                  id={`tenant-${tenant.tenant_id}`}
+                  checked={(templateFormData.tenantIds || []).includes(tenant.tenant_id)}
+                  onCheckedChange={() => toggleTenant(tenant.tenant_id)}
                 />
                 <label
-                  htmlFor={`tenant-${tenant.id}`}
+                  htmlFor={`tenant-${tenant.tenant_id}`}
                   className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
                   {tenant.name}
