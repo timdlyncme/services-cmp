@@ -19,7 +19,7 @@ export interface ChatMessage {
 
 export interface ChatRequest {
   messages: ChatMessage[];
-  max_tokens?: number;
+  max_completion_tokens?: number;
   temperature?: number;
   top_p?: number;
   frequency_penalty?: number;

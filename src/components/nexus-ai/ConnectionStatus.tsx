@@ -22,13 +22,15 @@ export function ConnectionStatus({ onRefresh }: ConnectionStatusProps) {
     testConnection, 
     addLog,
     connectionError,
-    setConnectionChecked
+    setConnectionChecked,
+    setConnectionStatus
   } = useAzureOpenAI();
 
   const handleRefresh = async () => {
     addLog('Refreshing connection status', 'info');
     // Reset the connection checked flag to force a new check
     setConnectionChecked(false);
+    setConnectionStatus('connecting');
     await testConnection();
     if (onRefresh) {
       onRefresh();

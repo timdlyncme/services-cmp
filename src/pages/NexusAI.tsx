@@ -210,7 +210,7 @@ export default function NexusAI() {
         </div>
       </div>
       
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 p-4 h-[calc(100vh-10rem)] overflow-y-auto">
         <div className="space-y-4">
           {messages
             .filter((message) => message.role !== 'system')

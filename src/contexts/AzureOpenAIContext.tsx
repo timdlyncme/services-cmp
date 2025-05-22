@@ -24,6 +24,7 @@ interface AzureOpenAIContextType {
   isConfigured: boolean;
   isConnected: boolean;
   connectionStatus: "disconnected" | "connecting" | "connected" | "error";
+  setConnectionStatus: (status: "disconnected" | "connecting" | "connected" | "error") => void;
   testConnection: () => Promise<boolean>;
   logs: LogEntry[];
   addLog: (message: string, level: LogLevel, details?: any) => void;
@@ -136,6 +137,7 @@ export const AzureOpenAIProvider: React.FC<{ children: ReactNode }> = ({ childre
         isConfigured,
         isConnected,
         connectionStatus,
+        setConnectionStatus,
         testConnection,
         logs,
         addLog,

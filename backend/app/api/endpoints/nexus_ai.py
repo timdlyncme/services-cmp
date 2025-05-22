@@ -60,8 +60,8 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
-    max_tokens: Optional[int] = 1000
-    temperature: Optional[float] = 0.7
+    max_completion_tokens: Optional[int] = 1000
+    temperature: Optional[float] = 1.0
     stream: Optional[bool] = False
 
 
@@ -141,7 +141,7 @@ async def chat(
         
         payload = {
             "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
-            "max_tokens": request.max_tokens,
+            "max_tokens": request.max_completion_tokens,
             "temperature": request.temperature
         }
         
@@ -241,7 +241,7 @@ async def stream_chat(
             
             payload = {
                 "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
-                "max_tokens": request.max_tokens,
+                "max_tokens": request.max_completion_tokens,
                 "temperature": request.temperature,
                 "stream": True
             }
@@ -391,19 +391,28 @@ async def get_status(
         (datetime.now() - datetime.fromisoformat(CONNECTION_STATUS["last_checked"])).total_seconds() < 60):
         return CONNECTION_STATUS
     
-    # Otherwise, check the connection
+    # Otherwise, check the connection by making a simple request to the chat endpoint
     try:
         add_log("Checking connection to Azure OpenAI")
         
-        # Prepare the request to Azure OpenAI
-        azure_url = f"{AZURE_CONFIG['endpoint']}/openai/deployments/{AZURE_CONFIG['deployment_name']}?api-version={AZURE_CONFIG['api_version']}"
+        # Prepare the request to Azure OpenAI - use chat completions endpoint instead
+        azure_url = f"{AZURE_CONFIG['endpoint']}/openai/deployments/{AZURE_CONFIG['deployment_name']}/chat/completions?api-version={AZURE_CONFIG['api_version']}"
         
         headers = {
+            "Content-Type": "application/json",
             "api-key": AZURE_CONFIG["api_key"]
         }
         
+        # Send a minimal request to check if the deployment exists and is accessible
+        payload = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "max_tokens": 5,
+            "temperature": 1.0,
+            "n": 1
+        }
+        
         # Send the request to Azure OpenAI
-        response = requests.get(azure_url, headers=headers)
+        response = requests.post(azure_url, headers=headers, json=payload)
         
         # Check if the request was successful
         if response.status_code != 200:
