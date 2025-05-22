@@ -5,6 +5,7 @@ import { User, Bot, RefreshCw, Edit2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAuth } from '@/context/auth-context';
 
 // Base64 encoded SVG avatars
 const NEXUS_AI_AVATAR = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#0284c7" /><path d="M30 35 L50 25 L70 35 L70 65 L50 75 L30 65 Z" fill="#ffffff" /><path d="M50 25 L50 55 L70 45 L70 35 Z" fill="#e0f2fe" /><path d="M30 35 L30 65 L50 75 L50 55 Z" fill="#bae6fd" /><circle cx="50" cy="45" r="5" fill="#0284c7" /></svg>')}`;
@@ -14,19 +15,19 @@ const USER_AVATAR = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3
 interface ChatMessageProps {
   message: Message;
   isLastUserMessage?: boolean;
-  isLastAssistantMessage?: boolean;
   onRefresh?: () => void;
   onEdit?: () => void;
 }
 
 export function ChatMessage({ 
   message, 
-  isLastUserMessage = false, 
-  isLastAssistantMessage = false,
+  isLastUserMessage = false,
   onRefresh,
   onEdit
 }: ChatMessageProps) {
   const isUser = message.role === 'user';
+  const { user } = useAuth();
+  const userName = user?.name || 'User';
 
   return (
     <div
@@ -63,8 +64,8 @@ export function ChatMessage({
         )}
         
         {/* Action buttons for last user message */}
-        {isLastUserMessage && (
-          <div className="absolute -top-3 -left-3 flex space-x-1">
+        {isUser && isLastUserMessage && (
+          <div className="absolute -top-3 -right-3 flex space-x-1">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -82,12 +83,7 @@ export function ChatMessage({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-          </div>
-        )}
-        
-        {/* Action buttons for last assistant message */}
-        {isLastAssistantMessage && isLastUserMessage && (
-          <div className="absolute -top-3 -left-12 flex space-x-1">
+            
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -111,12 +107,12 @@ export function ChatMessage({
       {isUser && (
         <div className="flex flex-col items-center">
           <Avatar className="h-8 w-8 bg-secondary">
-            <AvatarImage src={USER_AVATAR} alt="User" />
+            <AvatarImage src={USER_AVATAR} alt={userName} />
             <AvatarFallback className="bg-secondary">
               <User className="h-4 w-4 text-secondary-foreground" />
             </AvatarFallback>
           </Avatar>
-          <span className="text-xs text-muted-foreground mt-1">User</span>
+          <span className="text-xs text-muted-foreground mt-1">{userName}</span>
         </div>
       )}
     </div>
