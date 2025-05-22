@@ -1,7 +1,25 @@
-fastapi  
-uvicorn  
-azure-identity  
-azure-mgmt-resource  
-azure-mgmt-compute  
-azure-mgmt-storage  
+fastapi
+uvicorn
+pydantic
+python-jose[cryptography]
+python-multipart
+requests
+
+# Azure dependencies
+azure-identity
+azure-mgmt-resource
+azure-mgmt-compute
+azure-mgmt-storage
 azure-mgmt-network
+
+# AWS dependencies
+boto3
+
+# GCP dependencies
+google-cloud-deployment-manager
+google-cloud-storage
+google-auth
+
+# For JWT token validation
+pyjwt
+

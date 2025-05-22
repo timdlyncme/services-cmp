@@ -32,6 +32,22 @@ services:
     volumes:
       - ./backend:/app
     restart: always
+    
+  deployment-engine:
+    build: ./deployment_engine
+    ports:
+      - "5000:5000"
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=HS256
+      - API_URL=http://api:8000
+    depends_on:
+      - api
+    volumes:
+      - ./deployment_engine:/app
+      - deployment_data:/data
+    restart: always
 
 volumes:
   postgres_data:
+  deployment_data:
