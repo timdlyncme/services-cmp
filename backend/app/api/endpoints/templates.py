@@ -45,10 +45,6 @@ def get_templates(
         
         # Get the user's tenant
         user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
-        if user_tenant:
-            query = query.filter(
-                (Template.is_public == True) | (Template.tenant_id == user_tenant.tenant_id)
-            )
         
         # Filter by tenant if specified
         if tenant_id:
@@ -76,6 +72,7 @@ def get_templates(
                         detail=f"Tenant with ID {tenant_id} not found"
                     )
                 
+                # Only return templates that are public or belong to the specified tenant
                 query = query.filter(
                     (Template.is_public == True) | (Template.tenant_id == tenant.tenant_id)
                 )
@@ -83,6 +80,12 @@ def get_templates(
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid tenant ID format: {str(e)}"
+                )
+        else:
+            # Default to current user's tenant
+            if user_tenant:
+                query = query.filter(
+                    (Template.is_public == True) | (Template.tenant_id == user_tenant.tenant_id)
                 )
         
         templates = query.all()
