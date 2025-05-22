@@ -26,6 +26,7 @@ export default function NexusAI() {
   const [loading, setLoading] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState('');
   const [streamController, setStreamController] = useState<(() => void) | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const nexusAIService = new NexusAIService();
@@ -71,7 +72,35 @@ export default function NexusAI() {
       content: input
     };
 
-    setMessages((prevMessages) => [...prevMessages, userMessage]);
+    // If editing, replace the last user message
+    if (isEditing) {
+      // Find the index of the last user message
+      const lastUserMessageIndex = [...messages].reverse().findIndex(msg => msg.role === 'user');
+      if (lastUserMessageIndex !== -1) {
+        // Convert from reverse index to actual index
+        const actualIndex = messages.length - 1 - lastUserMessageIndex;
+        
+        // Create a new messages array with the edited message
+        const newMessages = [...messages];
+        newMessages[actualIndex] = userMessage;
+        
+        // Remove the last assistant message (which will be regenerated)
+        if (actualIndex < newMessages.length - 1 && newMessages[actualIndex + 1].role === 'assistant') {
+          newMessages.splice(actualIndex + 1, 1);
+        }
+        
+        setMessages(newMessages);
+      } else {
+        // If no user message found (unlikely), just append
+        setMessages((prevMessages) => [...prevMessages, userMessage]);
+      }
+      
+      setIsEditing(false);
+    } else {
+      // Normal flow - append the new message
+      setMessages((prevMessages) => [...prevMessages, userMessage]);
+    }
+    
     setInput('');
     setLoading(true);
     setStreamingMessage('');
@@ -91,7 +120,7 @@ export default function NexusAI() {
       // Use streaming API
       const controller = nexusAIService.streamChat(
         {
-          messages: [...messages, userMessage]
+          messages: [...messages, userMessage].filter(msg => msg.role !== 'assistant' || msg.content !== '')
         },
         // On message chunk received
         (content: string) => {
@@ -192,6 +221,58 @@ export default function NexusAI() {
       addLog('Streaming cancelled by user', 'info');
     }
   };
+  
+  const handleEditLastMessage = () => {
+    // Find the last user message
+    const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
+    if (lastUserMessage) {
+      setInput(lastUserMessage.content);
+      setIsEditing(true);
+      
+      toast({
+        title: 'Editing message',
+        description: 'Edit your message and press send to regenerate the response.',
+      });
+    }
+  };
+  
+  const handleRegenerateResponse = () => {
+    // Find the last user message
+    const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
+    if (lastUserMessage && !loading) {
+      // Remove the last assistant message
+      setMessages(prevMessages => {
+        const newMessages = [...prevMessages];
+        if (newMessages[newMessages.length - 1].role === 'assistant') {
+          return newMessages.slice(0, -1);
+        }
+        return newMessages;
+      });
+      
+      // Set the input to the last user message and trigger send
+      setInput(lastUserMessage.content);
+      
+      // Use setTimeout to ensure state updates before sending
+      setTimeout(() => {
+        handleSend();
+      }, 0);
+    }
+  };
+
+  // Determine if a message is the last user or assistant message
+  const isLastUserMessage = (index: number) => {
+    // Check if this is the last user message in the conversation
+    const userMessages = messages.filter(msg => msg.role === 'user');
+    return userMessages.length > 0 && messages[index].role === 'user' && 
+           index === messages.findIndex(msg => msg === userMessages[userMessages.length - 1]);
+  };
+  
+  const isLastAssistantMessage = (index: number) => {
+    // Check if this is the last assistant message in the conversation
+    const assistantMessages = messages.filter(msg => msg.role === 'assistant');
+    return assistantMessages.length > 0 && messages[index].role === 'assistant' && 
+           index === messages.findIndex(msg => msg === assistantMessages[assistantMessages.length - 1]);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -214,9 +295,19 @@ export default function NexusAI() {
         <div className="space-y-4">
           {messages
             .filter((message) => message.role !== 'system')
-            .map((message, index) => (
-              <ChatMessageComponent key={index} message={message} />
-            ))}
+            .map((message, index) => {
+              const filteredIndex = messages.filter(msg => msg.role !== 'system').indexOf(message);
+              return (
+                <ChatMessageComponent 
+                  key={index} 
+                  message={message} 
+                  isLastUserMessage={isLastUserMessage(index)}
+                  isLastAssistantMessage={isLastAssistantMessage(index)}
+                  onEdit={handleEditLastMessage}
+                  onRefresh={handleRegenerateResponse}
+                />
+              );
+            })}
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
@@ -224,12 +315,12 @@ export default function NexusAI() {
       <div className="p-4 border-t">
         <div className="flex items-center space-x-2">
           <Input
-            placeholder="Type your message..."
+            placeholder={isEditing ? "Edit your message..." : "Type your message..."}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={loading || !isConnected}
-            className="flex-1"
+            className={`flex-1 ${isEditing ? 'border-amber-500' : ''}`}
           />
           {loading && streamController ? (
             <Button 
@@ -242,6 +333,7 @@ export default function NexusAI() {
             <Button 
               onClick={handleSend} 
               disabled={loading || !input.trim() || !isConnected}
+              variant={isEditing ? "warning" : "default"}
             >
               {loading ? (
                 <span className="animate-spin">⏳</span>
@@ -251,6 +343,11 @@ export default function NexusAI() {
             </Button>
           )}
         </div>
+        {isEditing && (
+          <p className="text-sm text-amber-500 mt-2">
+            Editing message. Press send to regenerate response.
+          </p>
+        )}
         {!isConfigured && (
           <p className="text-sm text-muted-foreground mt-2">
             Please configure Azure OpenAI settings to start chatting.
