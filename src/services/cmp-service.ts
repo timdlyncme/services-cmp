@@ -782,6 +782,53 @@ export class CMPService {
       throw error;
     }
   }
+
+  /**
+   * Get all Azure credentials for the tenant
+   */
+  async getAzureCredentials(tenantId: string): Promise<any[]> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return [];
+      }
+
+      const response = await api.get('/deployments/azure_credentials', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        params: {
+          tenant_id: formatTenantId(tenantId)
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get Azure credentials error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Azure subscriptions for a specific credential
+   */
+  async getAzureSubscriptions(settingsId: string): Promise<any[]> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return [];
+      }
+
+      const response = await api.get(`/deployments/azure_credentials/${settingsId}/subscriptions`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get Azure subscriptions error:', error);
+      throw error;
+    }
+  }
 }
 
 // Create a singleton instance
