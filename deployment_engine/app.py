@@ -1,441 +1,304 @@
-from fastapi import FastAPI, HTTPException, Depends, Header, Body, Query, Path
-from fastapi.security import OAuth2PasswordBearer
-from typing import Optional, Dict, Any, List, Union
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, Depends, HTTPException, Header, Request
+from fastapi.middleware.cors import CORSMiddleware
+from typing import Dict, List, Optional, Any
 import jwt
-import json
 import os
-from enum import Enum
-import uuid
+import json
 from datetime import datetime
-
-# Import Azure deployer
+import uuid
 from deploy.azure import AzureDeployer
 
-# Create FastAPI app
-app = FastAPI(title="Azure Deployment Engine API", 
-              description="API for deploying Azure ARM and Bicep templates",
-              version="1.0.0")
+app = FastAPI(title="Deployment Engine API")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Initialize Azure deployer
 azure_deployer = AzureDeployer()
 
-# JWT Secret - should be loaded from environment variable in production
+# JWT settings
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
-# In-memory storage for deployment details (replace with database in production)
-deployment_store = {}
-
-# Enums for validation
-class DeploymentType(str, Enum):
-    ARM = "arm"
-    BICEP = "bicep"
-
-class TemplateSource(str, Enum):
-    URL = "url"
-    CODE = "code"
-
-class DeploymentStatus(str, Enum):
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-# Pydantic models for request/response validation
-class AzureCredentials(BaseModel):
-    client_id: str
-    client_secret: str
-    tenant_id: str
-    subscription_id: str
-
-class TemplateData(BaseModel):
-    source: TemplateSource
-    url: Optional[str] = None
-    code: Optional[str] = None
-
-class DeploymentRequest(BaseModel):
-    name: str
-    description: Optional[str] = None
-    deployment_type: DeploymentType
-    resource_group: str
-    location: str
-    template: TemplateData
-    parameters: Optional[Dict[str, Any]] = None
-
-class DeploymentResponse(BaseModel):
-    deployment_id: str
-    status: DeploymentStatus
-    deployment_type: DeploymentType
-    azure_deployment_id: Optional[str] = None
-    created_at: datetime
-    message: Optional[str] = None
-
-class DeploymentDetails(BaseModel):
-    deployment_id: str
-    name: str
-    description: Optional[str] = None
-    status: DeploymentStatus
-    deployment_type: DeploymentType
-    template_source: TemplateSource
-    template_url: Optional[str] = None
-    azure_deployment_id: Optional[str] = None
-    resource_group: str
-    location: str
-    resources: Optional[List[Dict[str, Any]]] = None
-    outputs: Optional[Dict[str, Any]] = None
-    logs: Optional[str] = None
-    error_details: Optional[Dict[str, Any]] = None
-    created_at: datetime
-    updated_at: datetime
-    completed_at: Optional[datetime] = None
-
-class UpdateDeploymentRequest(BaseModel):
-    template: Optional[TemplateData] = None
-    parameters: Optional[Dict[str, Any]] = None
-
-class UpdateDeploymentResponse(BaseModel):
-    deployment_id: str
-    status: DeploymentStatus
-    message: Optional[str] = None
-
-class DeleteDeploymentResponse(BaseModel):
-    deployment_id: str
-    status: DeploymentStatus
-    message: Optional[str] = None
+# In-memory storage for deployments (would be replaced with a database in production)
+deployments = {}
 
 # Authentication dependency
-async def verify_token(authorization: str = Header(...)):
+def get_current_user(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+    
     try:
-        # Extract token from Authorization header
-        if not authorization.startswith("Bearer "):
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
             raise HTTPException(status_code=401, detail="Invalid authentication scheme")
         
-        token = authorization.replace("Bearer ", "")
-        
-        # Verify token
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         
-        # Check permissions (simplified - in production, check against database)
-        if "permissions" not in payload or "deployment:manage" not in payload["permissions"]:
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        # Check if token has required permissions
+        permissions = payload.get("permissions", [])
         
-        return payload
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        return {
+            "user_id": payload.get("sub"),
+            "username": payload.get("name"),
+            "tenant_id": payload.get("tenant_id"),
+            "permissions": permissions
+        }
+    except jwt.PyJWTError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Authentication error: {str(e)}")
 
-# API endpoints
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+# Permission check dependency
+def check_permission(required_permission: str):
+    def check(user: dict = Depends(get_current_user)):
+        if required_permission not in user["permissions"]:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user
+    return check
 
-@app.post("/credentials", response_model=Dict[str, str])
-async def set_azure_credentials(
-    credentials: AzureCredentials,
-    user_data: dict = Depends(verify_token)
+# Routes
+@app.get("/")
+def read_root():
+    return {"message": "Deployment Engine API"}
+
+# Credentials endpoints
+@app.post("/credentials")
+def set_credentials(
+    credentials: Dict[str, str],
+    user: dict = Depends(check_permission("deployment:manage"))
 ):
-    """
-    Set Azure credentials for deployments
-    """
     try:
-        # Update Azure deployer with new credentials
+        # Set Azure credentials
         azure_deployer.set_credentials(
-            client_id=credentials.client_id,
-            client_secret=credentials.client_secret,
-            tenant_id=credentials.tenant_id,
-            subscription_id=credentials.subscription_id
+            client_id=credentials["client_id"],
+            client_secret=credentials["client_secret"],
+            tenant_id=credentials["tenant_id"],
+            subscription_id=credentials["subscription_id"]
         )
         
-        return {"message": "Azure credentials updated successfully"}
+        return {"message": "Credentials set successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/credentials", response_model=Dict[str, Any])
-async def get_azure_credentials(
-    user_data: dict = Depends(verify_token)
-):
-    """
-    Get Azure credentials status (without exposing secrets)
-    """
+@app.get("/credentials")
+def get_credentials(user: dict = Depends(check_permission("deployment:read"))):
     try:
-        # Get credential status from Azure deployer
-        creds = azure_deployer.get_credential_status()
-        return creds
+        # Get Azure credentials status
+        status = azure_deployer.get_credential_status()
+        return status
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/deployments", response_model=DeploymentResponse)
-async def create_deployment(
-    request: DeploymentRequest,
-    user_data: dict = Depends(verify_token)
+# Deployment endpoints
+@app.post("/deployments")
+def create_deployment(
+    deployment: Dict[str, Any],
+    user: dict = Depends(check_permission("deployment:create"))
 ):
-    """
-    Create a new Azure deployment
-    """
-    # Generate a unique deployment ID
-    deployment_id = str(uuid.uuid4())
-    
-    # Prepare template data for the deployer
-    template_data = {}
-    if request.template.source == TemplateSource.URL:
-        template_data["template_url"] = request.template.url
-    else:
-        template_data["template_body"] = request.template.code
-    
-    # Initialize deployment record
-    deployment_record = {
-        "deployment_id": deployment_id,
-        "name": request.name,
-        "description": request.description,
-        "status": DeploymentStatus.PENDING,
-        "deployment_type": request.deployment_type,
-        "template_source": request.template.source,
-        "template_url": request.template.url if request.template.source == TemplateSource.URL else None,
-        "resource_group": request.resource_group,
-        "location": request.location,
-        "parameters": request.parameters,
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
-        "user_id": user_data.get("sub")
-    }
-    
-    # Store the deployment record
-    deployment_store[deployment_id] = deployment_record
-    
     try:
+        # Generate deployment ID
+        deployment_id = str(uuid.uuid4())
+        
+        # Extract deployment details
+        name = deployment.get("name", "Unnamed deployment")
+        description = deployment.get("description", "")
+        deployment_type = deployment.get("deployment_type", "arm")
+        resource_group = deployment.get("resource_group", f"rg-{name.lower()}")
+        location = deployment.get("location", "eastus")
+        template = deployment.get("template", {})
+        parameters = deployment.get("parameters", {})
+        
+        # Prepare template data
+        template_data = {}
+        if template.get("source") == "url" and template.get("url"):
+            template_data["template_url"] = template["url"]
+        elif template.get("source") == "code" and template.get("code"):
+            template_data["template_body"] = template["code"]
+        else:
+            raise HTTPException(status_code=400, detail="Invalid template data")
+        
         # Deploy to Azure
         result = azure_deployer.deploy(
-            resource_group=request.resource_group,
-            deployment_name=f"deploy-{deployment_id[:8]}",
-            location=request.location,
+            resource_group=resource_group,
+            deployment_name=name,
+            location=location,
             template_data=template_data,
-            parameters=request.parameters,
-            deployment_type=request.deployment_type
+            parameters=parameters,
+            deployment_type=deployment_type
         )
         
-        # Update deployment record with result
-        deployment_store[deployment_id].update({
-            "status": result.get("status", DeploymentStatus.IN_PROGRESS),
+        # Store deployment details
+        deployments[deployment_id] = {
+            "deployment_id": deployment_id,
+            "name": name,
+            "description": description,
+            "resource_group": resource_group,
+            "location": location,
+            "deployment_type": deployment_type,
+            "status": result.get("status", "unknown"),
             "azure_deployment_id": result.get("azure_deployment_id"),
-            "resources": result.get("resources"),
-            "outputs": result.get("outputs"),
-            "logs": result.get("logs"),
-            "error_details": result.get("error_details"),
-            "updated_at": datetime.utcnow()
-        })
-        
-        if result.get("status") == "completed":
-            deployment_store[deployment_id]["completed_at"] = datetime.utcnow()
+            "tenant_id": user["tenant_id"],
+            "created_by": user["user_id"],
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat()
+        }
         
         return {
             "deployment_id": deployment_id,
-            "status": deployment_store[deployment_id]["status"],
-            "deployment_type": request.deployment_type,
+            "status": result.get("status", "unknown"),
             "azure_deployment_id": result.get("azure_deployment_id"),
-            "created_at": deployment_store[deployment_id]["created_at"],
-            "message": "Deployment initiated successfully"
+            "created_at": deployments[deployment_id]["created_at"]
         }
-    
     except Exception as e:
-        # Update deployment record with error
-        deployment_store[deployment_id].update({
-            "status": DeploymentStatus.FAILED,
-            "error_details": {"message": str(e)},
-            "updated_at": datetime.utcnow()
-        })
-        
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/deployments", response_model=List[DeploymentResponse])
-async def list_deployments(
-    status: Optional[DeploymentStatus] = None,
-    limit: int = Query(10, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    user_data: dict = Depends(verify_token)
+@app.get("/deployments")
+def list_deployments(
+    status: Optional[str] = None,
+    limit: int = 10,
+    offset: int = 0,
+    user: dict = Depends(check_permission("deployment:read"))
 ):
-    """
-    List all deployments
-    """
-    # Filter deployments based on query parameters
-    filtered_deployments = []
-    
-    for deployment_id, deployment in deployment_store.items():
-        if status and deployment["status"] != status:
-            continue
-        
-        # Add to filtered list
-        filtered_deployments.append({
-            "deployment_id": deployment_id,
-            "status": deployment["status"],
-            "deployment_type": deployment["deployment_type"],
-            "azure_deployment_id": deployment.get("azure_deployment_id"),
-            "created_at": deployment["created_at"],
-            "name": deployment["name"]
-        })
-    
-    # Apply pagination
-    paginated_deployments = filtered_deployments[offset:offset + limit]
-    
-    return paginated_deployments
-
-@app.get("/deployments/{deployment_id}", response_model=DeploymentDetails)
-async def get_deployment(
-    deployment_id: str = Path(..., description="The ID of the deployment to retrieve"),
-    user_data: dict = Depends(verify_token)
-):
-    """
-    Get details of a specific deployment
-    """
-    # Check if deployment exists
-    if deployment_id not in deployment_store:
-        raise HTTPException(status_code=404, detail="Deployment not found")
-    
-    deployment = deployment_store[deployment_id]
-    
-    # If deployment is in progress, check the current status
-    if deployment["status"] in [DeploymentStatus.PENDING, DeploymentStatus.IN_PROGRESS]:
-        try:
-            # Get status from Azure
-            if "azure_deployment_id" in deployment:
-                result = azure_deployer.get_deployment_status(
-                    resource_group=deployment["resource_group"],
-                    deployment_name=deployment["azure_deployment_id"]
-                )
-                
-                # Update deployment record with result
-                deployment.update({
-                    "status": result.get("status", deployment["status"]),
-                    "resources": result.get("resources", deployment.get("resources")),
-                    "outputs": result.get("outputs", deployment.get("outputs")),
-                    "error_details": result.get("error_details", deployment.get("error_details")),
-                    "updated_at": datetime.utcnow()
-                })
-                
-                if result.get("status") == "completed" and not deployment.get("completed_at"):
-                    deployment["completed_at"] = datetime.utcnow()
-        
-        except Exception as e:
-            # Log the error but don't update the deployment status
-            print(f"Error checking deployment status: {e}")
-    
-    return deployment
-
-@app.put("/deployments/{deployment_id}", response_model=UpdateDeploymentResponse)
-async def update_deployment(
-    request: UpdateDeploymentRequest,
-    deployment_id: str = Path(..., description="The ID of the deployment to update"),
-    user_data: dict = Depends(verify_token)
-):
-    """
-    Update an existing deployment
-    """
-    # Check if deployment exists
-    if deployment_id not in deployment_store:
-        raise HTTPException(status_code=404, detail="Deployment not found")
-    
-    deployment = deployment_store[deployment_id]
-    
-    # Check if deployment can be updated
-    if deployment["status"] == DeploymentStatus.FAILED:
-        raise HTTPException(status_code=400, detail="Failed deployments cannot be updated")
-    
-    # Prepare template data for the deployer
-    template_data = None
-    if request.template:
-        template_data = {}
-        if request.template.source == TemplateSource.URL:
-            template_data["template_url"] = request.template.url
-        else:
-            template_data["template_body"] = request.template.code
-    
     try:
-        # Update Azure deployment
-        if "azure_deployment_id" not in deployment:
-            raise HTTPException(status_code=400, detail="Azure deployment ID not found")
+        # Filter deployments by tenant
+        tenant_deployments = [
+            d for d in deployments.values()
+            if d["tenant_id"] == user["tenant_id"]
+        ]
         
+        # Filter by status if provided
+        if status:
+            tenant_deployments = [d for d in tenant_deployments if d["status"] == status]
+        
+        # Sort by created_at in descending order
+        tenant_deployments.sort(key=lambda x: x["created_at"], reverse=True)
+        
+        # Apply pagination
+        paginated_deployments = tenant_deployments[offset:offset + limit]
+        
+        return paginated_deployments
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/deployments/{deployment_id}")
+def get_deployment(
+    deployment_id: str,
+    user: dict = Depends(check_permission("deployment:read"))
+):
+    try:
+        # Check if deployment exists
+        if deployment_id not in deployments:
+            raise HTTPException(status_code=404, detail="Deployment not found")
+        
+        # Check if user has access to this deployment
+        deployment = deployments[deployment_id]
+        if deployment["tenant_id"] != user["tenant_id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Get deployment status from Azure
+        if deployment.get("azure_deployment_id") and deployment.get("resource_group"):
+            azure_status = azure_deployer.get_deployment_status(
+                resource_group=deployment["resource_group"],
+                deployment_name=deployment["azure_deployment_id"]
+            )
+            
+            # Update deployment status
+            deployment["status"] = azure_status.get("status", deployment["status"])
+            deployment["resources"] = azure_status.get("resources", [])
+            deployment["outputs"] = azure_status.get("outputs", {})
+            deployment["updated_at"] = datetime.utcnow().isoformat()
+        
+        return deployment
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/deployments/{deployment_id}")
+def update_deployment(
+    deployment_id: str,
+    update_data: Dict[str, Any],
+    user: dict = Depends(check_permission("deployment:update"))
+):
+    try:
+        # Check if deployment exists
+        if deployment_id not in deployments:
+            raise HTTPException(status_code=404, detail="Deployment not found")
+        
+        # Check if user has access to this deployment
+        deployment = deployments[deployment_id]
+        if deployment["tenant_id"] != user["tenant_id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Extract update details
+        template = update_data.get("template")
+        parameters = update_data.get("parameters")
+        
+        # Prepare template data
+        template_data = None
+        if template:
+            template_data = {}
+            if template.get("source") == "url" and template.get("url"):
+                template_data["template_url"] = template["url"]
+            elif template.get("source") == "code" and template.get("code"):
+                template_data["template_body"] = template["code"]
+        
+        # Update deployment in Azure
         result = azure_deployer.update_deployment(
             resource_group=deployment["resource_group"],
             deployment_name=deployment["azure_deployment_id"],
             template_data=template_data,
-            parameters=request.parameters
+            parameters=parameters
         )
         
-        # Update deployment record with result
-        deployment.update({
-            "status": result.get("status", DeploymentStatus.IN_PROGRESS),
-            "resources": result.get("resources", deployment.get("resources")),
-            "outputs": result.get("outputs", deployment.get("outputs")),
-            "logs": result.get("logs", deployment.get("logs")),
-            "error_details": result.get("error_details", deployment.get("error_details")),
-            "updated_at": datetime.utcnow()
-        })
-        
-        if result.get("status") == "completed" and not deployment.get("completed_at"):
-            deployment["completed_at"] = datetime.utcnow()
+        # Update deployment status
+        deployment["status"] = result.get("status", deployment["status"])
+        deployment["updated_at"] = datetime.utcnow().isoformat()
         
         return {
             "deployment_id": deployment_id,
             "status": deployment["status"],
-            "message": result.get("message", "Update initiated successfully")
+            "message": result.get("message", "Deployment update initiated")
         }
-    
     except Exception as e:
-        # Update deployment record with error
-        deployment.update({
-            "status": DeploymentStatus.FAILED,
-            "error_details": {"message": str(e)},
-            "updated_at": datetime.utcnow()
-        })
-        
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/deployments/{deployment_id}", response_model=DeleteDeploymentResponse)
-async def delete_deployment(
-    deployment_id: str = Path(..., description="The ID of the deployment to delete"),
-    user_data: dict = Depends(verify_token)
+@app.delete("/deployments/{deployment_id}")
+def delete_deployment(
+    deployment_id: str,
+    user: dict = Depends(check_permission("deployment:delete"))
 ):
-    """
-    Delete a deployment
-    """
-    # Check if deployment exists
-    if deployment_id not in deployment_store:
-        raise HTTPException(status_code=404, detail="Deployment not found")
-    
-    deployment = deployment_store[deployment_id]
-    
     try:
-        # Delete Azure deployment
-        if "azure_deployment_id" not in deployment:
-            raise HTTPException(status_code=400, detail="Azure deployment ID not found")
+        # Check if deployment exists
+        if deployment_id not in deployments:
+            raise HTTPException(status_code=404, detail="Deployment not found")
         
+        # Check if user has access to this deployment
+        deployment = deployments[deployment_id]
+        if deployment["tenant_id"] != user["tenant_id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Delete deployment from Azure
         result = azure_deployer.delete_deployment(
             resource_group=deployment["resource_group"],
             deployment_name=deployment["azure_deployment_id"]
         )
         
-        # Update deployment record with result
-        deployment.update({
-            "status": DeploymentStatus.IN_PROGRESS if result.get("status") == "in_progress" else DeploymentStatus.COMPLETED,
-            "updated_at": datetime.utcnow()
-        })
-        
-        if result.get("status") == "completed":
-            deployment["completed_at"] = datetime.utcnow()
+        # Update deployment status
+        deployment["status"] = "deleting"
+        deployment["updated_at"] = datetime.utcnow().isoformat()
         
         return {
             "deployment_id": deployment_id,
-            "status": deployment["status"],
-            "message": result.get("message", "Deletion initiated successfully")
+            "status": "deleting",
+            "message": result.get("message", "Deployment deletion initiated")
         }
-    
     except Exception as e:
-        # Update deployment record with error
-        deployment.update({
-            "status": DeploymentStatus.FAILED,
-            "error_details": {"message": str(e)},
-            "updated_at": datetime.utcnow()
-        })
-        
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

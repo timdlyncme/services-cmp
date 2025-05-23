@@ -33,6 +33,7 @@ services:
       - ./backend:/app
     restart: always
     
+  # Deployment Engine Container
   deployment-engine:
     build:
       context: ./deployment_engine
@@ -49,8 +50,8 @@ services:
     networks:
       - app-network
     depends_on:
-      - postgres
-      - redis
+      - db
+      - api
     restart: always
 
 volumes:
