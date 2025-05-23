@@ -17,7 +17,7 @@ class AzureDeployer:
         self.credential = None
         self.resource_client = None
         
-    def set_credentials(self, client_id, client_secret, tenant_id, subscription_id):
+    def set_credentials(self, client_id, client_secret, tenant_id, subscription_id=None):
         """
         Set Azure credentials for deployments
         
@@ -25,27 +25,29 @@ class AzureDeployer:
             client_id (str): Azure AD Application (client) ID
             client_secret (str): Azure AD Application secret
             tenant_id (str): Azure AD Tenant ID
-            subscription_id (str): Azure Subscription ID
+            subscription_id (str, optional): Azure Subscription ID
         """
         self.client_id = client_id
         self.client_secret = client_secret
         self.tenant_id = tenant_id
         self.subscription_id = subscription_id
         
-        # Create credential and client
+        # Create credential
         self.credential = ClientSecretCredential(
             tenant_id=self.tenant_id,
             client_id=self.client_id,
             client_secret=self.client_secret
         )
         
-        self.resource_client = ResourceManagementClient(
-            credential=self.credential,
-            subscription_id=self.subscription_id
-        )
-        
-        # Test the credentials
-        self._test_credentials()
+        # Create resource client if subscription_id is provided
+        if subscription_id:
+            self.resource_client = ResourceManagementClient(
+                credential=self.credential,
+                subscription_id=self.subscription_id
+            )
+            
+            # Test the credentials
+            self._test_credentials()
         
     def get_credential_status(self):
         """
@@ -61,7 +63,18 @@ class AzureDeployer:
             }
         
         try:
-            # Test the credentials
+            # If no subscription_id, just check if we can get a token
+            if not self.subscription_id:
+                # Just check if the credential is valid
+                token = self.credential.get_token("https://management.azure.com/.default")
+                return {
+                    "configured": True,
+                    "client_id": self.client_id,
+                    "tenant_id": self.tenant_id,
+                    "message": "Azure credentials are valid"
+                }
+            
+            # If subscription_id is provided, test the resource client
             self._test_credentials()
             
             return {
@@ -76,7 +89,7 @@ class AzureDeployer:
                 "configured": True,
                 "client_id": self.client_id,
                 "tenant_id": self.tenant_id,
-                "subscription_id": self.subscription_id,
+                "subscription_id": self.subscription_id if self.subscription_id else None,
                 "valid": False,
                 "message": f"Azure credentials are invalid: {str(e)}"
             }
@@ -84,11 +97,65 @@ class AzureDeployer:
     def _test_credentials(self):
         """Test Azure credentials by listing resource groups"""
         if not self.resource_client:
-            raise ValueError("Azure credentials not configured")
+            raise ValueError("Azure credentials not configured with subscription_id")
         
         # Try to list resource groups
         self.resource_client.resource_groups.list()
     
+    def set_subscription(self, subscription_id):
+        """
+        Set the Azure subscription ID
+        
+        Args:
+            subscription_id (str): Azure Subscription ID
+        """
+        if not self.credential:
+            raise ValueError("Azure credentials not configured")
+        
+        self.subscription_id = subscription_id
+        self.resource_client = ResourceManagementClient(
+            credential=self.credential,
+            subscription_id=self.subscription_id
+        )
+        
+        # Test the credentials
+        self._test_credentials()
+        
+        return {
+            "message": "Subscription set successfully",
+            "subscription_id": subscription_id
+        }
+    
+    def list_subscriptions(self):
+        """
+        List available Azure subscriptions
+        
+        Returns:
+            list: List of available subscriptions
+        """
+        if not self.credential:
+            raise ValueError("Azure credentials not configured")
+        
+        from azure.mgmt.subscription import SubscriptionClient
+        
+        # Create subscription client
+        subscription_client = SubscriptionClient(self.credential)
+        
+        # List subscriptions
+        subscriptions = list(subscription_client.subscriptions.list())
+        
+        # Format response
+        result = []
+        for sub in subscriptions:
+            result.append({
+                "id": sub.subscription_id,
+                "name": sub.display_name,
+                "state": sub.state,
+                "tenant_id": sub.tenant_id
+            })
+        
+        return result
+
     def deploy(self, resource_group, deployment_name, location, template_data, parameters=None, deployment_type="arm"):
         """
         Deploy an Azure ARM or Bicep template
@@ -430,4 +497,3 @@ class AzureDeployer:
             return "failed"
         else:
             return "unknown"
-

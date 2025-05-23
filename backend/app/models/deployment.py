@@ -25,9 +25,16 @@ class CloudAccount(Base):
     status = Column(String)  # connected, disconnected, error
     description = Column(String, nullable=True)
     
+    # Provider-specific fields
+    subscription_id = Column(String, nullable=True)  # Azure Subscription ID
+    
     # Relationships
     tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))  # Changed to UUID type
     tenant = relationship("Tenant", back_populates="cloud_accounts")
+    
+    # Link to cloud settings/credentials
+    settings_id = Column(Integer, ForeignKey("cloud_settings.id"), nullable=True)
+    cloud_settings = relationship("CloudSettings", back_populates="cloud_accounts")
     
     # Many-to-many relationship with Environment
     environments = relationship(

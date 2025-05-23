@@ -13,12 +13,12 @@ class CloudSettings(Base):
     
     # Provider information
     provider = Column(String)  # azure, aws, gcp - we'll only use azure for now
+    name = Column(String, nullable=True)  # Friendly name for the credentials
     
     # Azure credentials
     client_id = Column(String, nullable=True)  # Service Principal Client ID
     client_secret = Column(String, nullable=True)  # Service Principal Secret
     tenant_id = Column(String, nullable=True)  # Azure AD Tenant ID
-    subscription_id = Column(String, nullable=True)  # Azure Subscription ID
     
     # Status and metadata
     is_active = Column(Boolean, default=True)
@@ -28,8 +28,10 @@ class CloudSettings(Base):
     # Relationships
     organization_tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))
     organization_tenant = relationship("Tenant", back_populates="cloud_settings")
+    
+    # Relationship with CloudAccount
+    cloud_accounts = relationship("CloudAccount", back_populates="cloud_settings")
 
 # Add relationship to Tenant model
 from app.models.user import Tenant
 Tenant.cloud_settings = relationship("CloudSettings", back_populates="organization_tenant")
-

@@ -23,20 +23,22 @@ router = APIRouter()
 DEPLOYMENT_ENGINE_URL = os.getenv("DEPLOYMENT_ENGINE_URL", "http://deployment-engine:5000")
 
 # Cloud Settings Schemas
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class AzureCredentialsCreate(BaseModel):
+    name: str = Field(..., description="Friendly name for the credentials")
     client_id: str
     client_secret: str
     tenant_id: str
-    subscription_id: str
 
 class AzureCredentialsResponse(BaseModel):
+    id: int
+    settings_id: str
+    name: str
     client_id: str
     tenant_id: str
-    subscription_id: str
-    configured: bool
-    message: str
+    configured: bool = False
+    message: str = ""
 
 @router.post("/azure_credentials", response_model=Dict[str, str])
 def set_azure_credentials(
@@ -53,106 +55,189 @@ def set_azure_credentials(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
-        # Check if credentials already exist for this tenant
-        existing_creds = db.query(CloudSettings).filter(
-            CloudSettings.organization_tenant_id == current_user.tenant_id,
-            CloudSettings.provider == "azure"
-        ).first()
-        
-        if existing_creds:
-            # Update existing credentials
-            existing_creds.client_id = credentials.client_id
-            existing_creds.client_secret = credentials.client_secret
-            existing_creds.tenant_id = credentials.tenant_id
-            existing_creds.subscription_id = credentials.subscription_id
-            existing_creds.updated_at = datetime.utcnow()
-            db.commit()
-        else:
-            # Create new credentials
-            new_creds = CloudSettings(
-                provider="azure",
-                client_id=credentials.client_id,
-                client_secret=credentials.client_secret,
-                tenant_id=credentials.tenant_id,
-                subscription_id=credentials.subscription_id,
-                organization_tenant_id=current_user.tenant_id
-            )
-            db.add(new_creds)
-            db.commit()
+        # Create new credentials
+        new_creds = CloudSettings(
+            provider="azure",
+            name=credentials.name,
+            client_id=credentials.client_id,
+            client_secret=credentials.client_secret,
+            tenant_id=credentials.tenant_id,
+            organization_tenant_id=current_user.tenant.tenant_id
+        )
+        db.add(new_creds)
+        db.commit()
+        db.refresh(new_creds)
         
         # Forward credentials to deployment engine
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
         response = requests.post(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
             headers=headers,
-            json=credentials.dict()
+            json={
+                "client_id": credentials.client_id,
+                "client_secret": credentials.client_secret,
+                "tenant_id": credentials.tenant_id
+            }
         )
         
         if response.status_code != 200:
             raise Exception(f"Deployment engine error: {response.text}")
         
-        return {"message": "Azure credentials updated successfully"}
+        return {"message": "Azure credentials added successfully", "settings_id": str(new_creds.settings_id)}
     
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/azure_credentials", response_model=AzureCredentialsResponse)
+@router.get("/azure_credentials", response_model=List[AzureCredentialsResponse])
 def get_azure_credentials(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get Azure credentials status
+    Get all Azure credentials for the tenant
     """
     # Check if user has permission to view credentials
     if not current_user.role or "deployment:read" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
-        # Get credentials from database
-        creds = db.query(CloudSettings).filter(
-            CloudSettings.organization_tenant_id == current_user.tenant_id,
+        # Get all credentials from database
+        creds_list = db.query(CloudSettings).filter(
+            CloudSettings.organization_tenant_id == current_user.tenant.tenant_id,
             CloudSettings.provider == "azure"
-        ).first()
+        ).all()
         
-        if not creds:
-            return {
-                "client_id": "",
-                "tenant_id": "",
-                "subscription_id": "",
-                "configured": False,
-                "message": "Azure credentials not configured"
-            }
+        if not creds_list:
+            return []
         
-        # Forward request to deployment engine
+        # Forward request to deployment engine to check status
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
             headers=headers
         )
         
-        if response.status_code != 200:
-            return {
+        engine_status = {"configured": False, "message": "Unknown status"}
+        if response.status_code == 200:
+            engine_status = response.json()
+        
+        # Format response
+        result = []
+        for creds in creds_list:
+            result.append({
+                "id": creds.id,
+                "settings_id": str(creds.settings_id),
+                "name": creds.name or "Azure Credentials",
                 "client_id": creds.client_id,
                 "tenant_id": creds.tenant_id,
-                "subscription_id": creds.subscription_id,
-                "configured": True,
-                "message": f"Error checking credentials: {response.text}"
-            }
+                "configured": engine_status.get("configured", False),
+                "message": engine_status.get("message", "")
+            })
         
-        result = response.json()
-        
-        return {
-            "client_id": creds.client_id,
-            "tenant_id": creds.tenant_id,
-            "subscription_id": creds.subscription_id,
-            "configured": result.get("configured", False),
-            "message": result.get("message", "")
-        }
+        return result
     
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/azure_credentials/{settings_id}", response_model=AzureCredentialsResponse)
+def get_azure_credential(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    settings_id: str
+):
+    """
+    Get a specific Azure credential by settings_id
+    """
+    # Check if user has permission to view credentials
+    if not current_user.role or "deployment:read" not in [p.name for p in current_user.role.permissions]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    try:
+        # Get credential from database
+        creds = db.query(CloudSettings).filter(
+            CloudSettings.organization_tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.provider == "azure",
+            CloudSettings.settings_id == settings_id
+        ).first()
+        
+        if not creds:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        
+        # Forward request to deployment engine to check status
+        headers = {"Authorization": f"Bearer {current_user.access_token}"}
+        response = requests.get(
+            f"{DEPLOYMENT_ENGINE_URL}/credentials",
+            headers=headers
+        )
+        
+        engine_status = {"configured": False, "message": "Unknown status"}
+        if response.status_code == 200:
+            engine_status = response.json()
+        
+        return {
+            "id": creds.id,
+            "settings_id": str(creds.settings_id),
+            "name": creds.name or "Azure Credentials",
+            "client_id": creds.client_id,
+            "tenant_id": creds.tenant_id,
+            "configured": engine_status.get("configured", False),
+            "message": engine_status.get("message", "")
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/azure_credentials/{settings_id}", response_model=Dict[str, str])
+def delete_azure_credential(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    settings_id: str
+):
+    """
+    Delete a specific Azure credential by settings_id
+    """
+    # Check if user has permission to manage credentials
+    if not current_user.role or "deployment:manage" not in [p.name for p in current_user.role.permissions]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    try:
+        # Get credential from database
+        creds = db.query(CloudSettings).filter(
+            CloudSettings.organization_tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.provider == "azure",
+            CloudSettings.settings_id == settings_id
+        ).first()
+        
+        if not creds:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        
+        # Check if credential is in use by any cloud accounts
+        in_use = db.query(CloudAccount).filter(
+            CloudAccount.settings_id == creds.id
+        ).first()
+        
+        if in_use:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot delete credential that is in use by cloud accounts"
+            )
+        
+        # Delete credential
+        db.delete(creds)
+        db.commit()
+        
+        return {"message": "Azure credential deleted successfully"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 # Template Deployment Schemas
@@ -778,3 +863,182 @@ def options_deployment_by_id():
     response.headers["Access-Control-Allow-Methods"] = "GET, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
+
+# Azure Subscription Schemas
+class AzureSubscriptionResponse(BaseModel):
+    id: str
+    name: str
+    state: str
+    tenant_id: str
+
+@router.get("/azure_credentials/{settings_id}/subscriptions", response_model=List[AzureSubscriptionResponse])
+def list_azure_subscriptions(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    settings_id: str
+):
+    """
+    List available Azure subscriptions for a specific credential
+    """
+    # Check if user has permission to view credentials
+    if not current_user.role or "deployment:read" not in [p.name for p in current_user.role.permissions]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    try:
+        # Get credential from database
+        creds = db.query(CloudSettings).filter(
+            CloudSettings.organization_tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.provider == "azure",
+            CloudSettings.settings_id == settings_id
+        ).first()
+        
+        if not creds:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        
+        # Forward request to deployment engine
+        headers = {"Authorization": f"Bearer {current_user.access_token}"}
+        
+        # First set the credentials
+        set_response = requests.post(
+            f"{DEPLOYMENT_ENGINE_URL}/credentials",
+            headers=headers,
+            json={
+                "client_id": creds.client_id,
+                "client_secret": creds.client_secret,
+                "tenant_id": creds.tenant_id
+            }
+        )
+        
+        if set_response.status_code != 200:
+            raise Exception(f"Error setting credentials: {set_response.text}")
+        
+        # Then list subscriptions
+        response = requests.get(
+            f"{DEPLOYMENT_ENGINE_URL}/credentials/subscriptions",
+            headers=headers
+        )
+        
+        if response.status_code != 200:
+            raise Exception(f"Error listing subscriptions: {response.text}")
+        
+        return response.json()
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Cloud Account Schemas
+class CloudAccountCreate(BaseModel):
+    name: str
+    provider: str = "azure"
+    subscription_id: str
+    settings_id: str
+    description: Optional[str] = None
+
+class CloudAccountResponse(BaseModel):
+    id: int
+    account_id: str
+    name: str
+    provider: str
+    subscription_id: Optional[str] = None
+    status: str
+    description: Optional[str] = None
+    settings_id: Optional[int] = None
+
+@router.post("/cloud-accounts", response_model=CloudAccountResponse)
+def create_cloud_account(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    cloud_account: CloudAccountCreate
+):
+    """
+    Create a new cloud account
+    """
+    # Check if user has permission to manage cloud accounts
+    if not current_user.role or "deployment:manage" not in [p.name for p in current_user.role.permissions]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    try:
+        # Get credential from database
+        creds = db.query(CloudSettings).filter(
+            CloudSettings.organization_tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.provider == "azure",
+            CloudSettings.settings_id == cloud_account.settings_id
+        ).first()
+        
+        if not creds:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        
+        # Create new cloud account
+        new_account = CloudAccount(
+            name=cloud_account.name,
+            provider=cloud_account.provider,
+            subscription_id=cloud_account.subscription_id,
+            status="connected",
+            description=cloud_account.description,
+            tenant_id=current_user.tenant.tenant_id,
+            settings_id=creds.id
+        )
+        
+        db.add(new_account)
+        db.commit()
+        db.refresh(new_account)
+        
+        return {
+            "id": new_account.id,
+            "account_id": str(new_account.account_id),
+            "name": new_account.name,
+            "provider": new_account.provider,
+            "subscription_id": new_account.subscription_id,
+            "status": new_account.status,
+            "description": new_account.description,
+            "settings_id": new_account.settings_id
+        }
+    
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/cloud-accounts", response_model=List[CloudAccountResponse])
+def list_cloud_accounts(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    List all cloud accounts for the tenant
+    """
+    # Check if user has permission to view cloud accounts
+    if not current_user.role or "deployment:read" not in [p.name for p in current_user.role.permissions]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    try:
+        # Get all cloud accounts from database
+        accounts = db.query(CloudAccount).filter(
+            CloudAccount.tenant_id == current_user.tenant.tenant_id
+        ).all()
+        
+        # Format response
+        result = []
+        for account in accounts:
+            result.append({
+                "id": account.id,
+                "account_id": str(account.account_id),
+                "name": account.name,
+                "provider": account.provider,
+                "subscription_id": account.subscription_id,
+                "status": account.status,
+                "description": account.description,
+                "settings_id": account.settings_id
+            })
+        
+        return result
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

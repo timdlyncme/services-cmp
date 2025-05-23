@@ -147,8 +147,7 @@ def set_credentials(
         azure_deployer.set_credentials(
             client_id=credentials["client_id"],
             client_secret=credentials["client_secret"],
-            tenant_id=credentials["tenant_id"],
-            subscription_id=credentials["subscription_id"]
+            tenant_id=credentials["tenant_id"]
         )
         
         return {"message": "Credentials set successfully"}
@@ -165,6 +164,33 @@ def get_credentials(user: dict = Depends(check_permission("deployment:read"))):
         return status
     except Exception as e:
         logger.error(f"Error getting credentials: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/credentials/subscription")
+def set_subscription(
+    subscription: Dict[str, str],
+    user: dict = Depends(check_permission("deployment:manage"))
+):
+    try:
+        logger.debug(f"Setting subscription for user: {user['username']}")
+        # Set Azure subscription
+        result = azure_deployer.set_subscription(
+            subscription_id=subscription["subscription_id"]
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error setting subscription: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/credentials/subscriptions")
+def list_subscriptions(user: dict = Depends(check_permission("deployment:read"))):
+    try:
+        logger.debug(f"Listing subscriptions for user: {user['username']}")
+        # List Azure subscriptions
+        subscriptions = azure_deployer.list_subscriptions()
+        return subscriptions
+    except Exception as e:
+        logger.error(f"Error listing subscriptions: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Deployment endpoints
