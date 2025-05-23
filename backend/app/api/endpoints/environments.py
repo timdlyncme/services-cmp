@@ -7,6 +7,7 @@ from app.db.session import get_db
 from app.models.user import User, Tenant
 from app.models.deployment import Environment, CloudAccount
 from app.schemas.deployment import EnvironmentResponse, EnvironmentCreate, EnvironmentUpdate, CloudAccountResponse
+from app.core.utils import format_error_response
 
 router = APIRouter()
 
@@ -35,26 +36,9 @@ def get_environments(
         )
     
     try:
-        # If no tenant_id is provided, check if user has a tenant
+        # If no tenant_id is provided, use the user's tenant
         if not tenant_id:
-            # For admin and MSP users, require explicit tenant_id
-            if current_user.role.name in ["admin", "msp"]:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Please specify a valid tenant_id when fetching environment details"
-                )
-            
-            # For regular users, use their tenant
-            user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
-            if not user_tenant:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Please specify a valid tenant_id when fetching environment details"
-                )
-            
-            tenant_id = user_tenant.tenant_id
-        
-        query = db.query(Environment)
+            tenant_id = current_user.tenant.tenant_id
         
         # Check if tenant exists
         tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
@@ -64,54 +48,41 @@ def get_environments(
                 detail=f"Tenant with ID {tenant_id} not found"
             )
         
-        # Check if user has access to this tenant
-        if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to view environments for this tenant"
-            )
+        # Get all environments for the tenant
+        environments = db.query(Environment).filter(Environment.tenant_id == tenant_id).all()
         
-        # Filter by tenant
-        query = query.filter(Environment.tenant_id == tenant.tenant_id)
-        
-        environments = query.all()
-        
+        # Format response
         result = []
         for env in environments:
-            # Get associated cloud accounts for response
+            # Get cloud accounts
             cloud_accounts = []
             for account in env.cloud_accounts:
-                cloud_accounts.append(
-                    CloudAccountResponse(
-                        id=account.id,
-                        account_id=account.account_id,
-                        name=account.name,
-                        provider=account.provider,
-                        status=account.status,
-                        description=account.description,
-                        tenant_id=account.tenant_id
-                    )
-                )
+                cloud_accounts.append({
+                    "id": account.account_id,
+                    "name": account.name,
+                    "provider": account.provider,
+                    "status": account.status
+                })
             
-            result.append(
-                EnvironmentResponse(
-                    id=env.id,
-                    environment_id=env.environment_id,
-                    name=env.name,
-                    description=env.description,
-                    tenant_id=env.tenant_id,
-                    cloud_accounts=cloud_accounts
-                )
-            )
+            result.append({
+                "id": env.id,
+                "environment_id": env.environment_id,
+                "name": env.name,
+                "description": env.description,
+                "update_strategy": env.update_strategy,
+                "cloud_accounts": cloud_accounts
+            })
         
         return result
     
     except HTTPException:
         raise
     except Exception as e:
+        # Use format_error_response to avoid exposing sensitive information
+        error_response = format_error_response(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving environments: {str(e)}"
+            detail=error_response["detail"]
         )
 
 
@@ -185,10 +156,10 @@ def get_environment(
 
 @router.post("/", response_model=EnvironmentResponse)
 def create_environment(
-    environment: EnvironmentCreate,
-    tenant_id: Optional[str] = None,
+    *,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    environment_in: EnvironmentCreate
 ) -> Any:
     """
     Create a new environment
@@ -202,92 +173,65 @@ def create_environment(
         )
     
     try:
-        # Determine which tenant to use
-        user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
-        if not user_tenant:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User's tenant not found"
-            )
-        
-        target_tenant_id = user_tenant.tenant_id
-        
-        # If tenant_id is provided, use that instead
-        if tenant_id:
-            # Check if tenant exists
-            tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
-            if not tenant:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Tenant with ID {tenant_id} not found"
-                )
-            
-            # Check if user has access to this tenant
-            if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to create environments for this tenant"
-                )
-            
-            target_tenant_id = tenant.tenant_id
-        
         # Create new environment
-        import uuid
-        new_environment = Environment(
-            environment_id=str(uuid.uuid4()),
-            name=environment.name,
-            description=environment.description,
-            tenant_id=target_tenant_id,
-            update_strategy=environment.update_strategy,
-            scaling_policies=environment.scaling_policies,
-            environment_variables=environment.environment_variables,
-            logging_config=environment.logging_config,
-            monitoring_integration=environment.monitoring_integration
+        environment = Environment(
+            name=environment_in.name,
+            description=environment_in.description,
+            update_strategy=environment_in.update_strategy,
+            scaling_policies=environment_in.scaling_policies,
+            environment_variables=environment_in.environment_variables,
+            logging_config=environment_in.logging_config,
+            monitoring_integration=environment_in.monitoring_integration,
+            tenant_id=current_user.tenant.tenant_id
         )
         
-        db.add(new_environment)
+        db.add(environment)
         db.commit()
-        db.refresh(new_environment)
+        db.refresh(environment)
         
-        # Add cloud account associations if provided
-        if environment.cloud_account_ids:
-            for account_id in environment.cloud_account_ids:
-                cloud_account = db.query(CloudAccount).filter(CloudAccount.id == account_id).first()
+        # Link cloud accounts if provided
+        if environment_in.cloud_account_ids:
+            for account_id in environment_in.cloud_account_ids:
+                # Get cloud account
+                cloud_account = db.query(CloudAccount).filter(
+                    CloudAccount.id == account_id,
+                    CloudAccount.tenant_id == current_user.tenant.tenant_id
+                ).first()
+                
                 if cloud_account:
-                    new_environment.cloud_accounts.append(cloud_account)
+                    environment.cloud_accounts.append(cloud_account)
             
             db.commit()
-            db.refresh(new_environment)
+            db.refresh(environment)
         
-        # Get associated cloud accounts for response
+        # Format response
         cloud_accounts = []
-        for account in new_environment.cloud_accounts:
-            cloud_accounts.append(
-                CloudAccountResponse(
-                    id=account.id,
-                    account_id=account.account_id,
-                    name=account.name,
-                    provider=account.provider,
-                    status=account.status,
-                    description=account.description,
-                    tenant_id=account.tenant_id
-                )
-            )
+        for account in environment.cloud_accounts:
+            cloud_accounts.append({
+                "id": account.account_id,
+                "name": account.name,
+                "provider": account.provider,
+                "status": account.status
+            })
         
-        return EnvironmentResponse(
-            id=new_environment.id,
-            environment_id=new_environment.environment_id,
-            name=new_environment.name,
-            description=new_environment.description,
-            tenant_id=new_environment.tenant_id,
-            cloud_accounts=cloud_accounts
-        )
+        return {
+            "id": environment.id,
+            "environment_id": environment.environment_id,
+            "name": environment.name,
+            "description": environment.description,
+            "update_strategy": environment.update_strategy,
+            "cloud_accounts": cloud_accounts
+        }
     
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
+        # Use format_error_response to avoid exposing sensitive information
+        error_response = format_error_response(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating environment: {str(e)}"
+            detail=error_response["detail"]
         )
 
 

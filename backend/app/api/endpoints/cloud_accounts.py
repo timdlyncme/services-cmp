@@ -1,15 +1,18 @@
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.orm import Session
+import json
 
 from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import User, Tenant
 from app.models.deployment import CloudAccount
+from app.models.cloud_settings import CloudSettings
 from app.schemas.deployment import (
     CloudAccountResponse, CloudAccountCreate, CloudAccountUpdate,
     CloudAccountFrontendResponse
 )
+from app.core.utils import format_error_response
 import requests
 
 router = APIRouter()
@@ -42,79 +45,70 @@ def get_cloud_accounts(
         query = db.query(CloudAccount).join(Tenant, CloudAccount.tenant_id == Tenant.tenant_id)
         
         # Filter by tenant
-        if tenant_id:
-            # Check if tenant exists
-            tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
-            if not tenant:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Tenant with ID {tenant_id} not found"
-                )
-            
-            # Check if user has access to this tenant
-            if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to view cloud accounts for this tenant"
-                )
-            
-            query = query.filter(Tenant.tenant_id == tenant_id)
-        else:
-            # Default to current user's tenant
-            user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
-            if user_tenant:
-                query = query.filter(Tenant.tenant_id == user_tenant.tenant_id)
+        if not tenant_id:
+            # Use the user's tenant if no tenant_id is provided
+            tenant_id = current_user.tenant.tenant_id
         
+        # Check if tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {tenant_id} not found"
+            )
+        
+        # Filter by tenant
+        query = query.filter(CloudAccount.tenant_id == tenant_id)
+        
+        # Get all cloud accounts
         cloud_accounts = query.all()
         
-        # Get tenant for each account
+        # Format response
         result = []
         for account in cloud_accounts:
-            # Get the tenant associated with this account
-            tenant = db.query(Tenant).filter(Tenant.tenant_id == account.tenant_id).first()
+            # Get cloud settings if available
+            connection_details = {}
+            if account.cloud_settings:
+                connection_details = {
+                    "client_id": account.cloud_settings.client_id,
+                    "tenant_id": account.cloud_settings.tenant_id,
+                }
             
-            # Debug log to see what's happening
-            print(f"Account {account.account_id} has tenant_id {account.tenant_id}")
-            if tenant:
-                print(f"Found tenant with ID {tenant.id} and tenant_id {tenant.tenant_id}")
-            else:
-                print(f"No tenant found for tenant_id {account.tenant_id}")
+            # Format subscription IDs
+            subscription_ids = []
+            if account.subscription_ids:
+                if isinstance(account.subscription_ids, str):
+                    try:
+                        subscription_ids = json.loads(account.subscription_ids)
+                    except:
+                        subscription_ids = [account.subscription_ids]
+                else:
+                    subscription_ids = account.subscription_ids
+            elif account.subscription_id:
+                subscription_ids = [account.subscription_id]
             
-            # Use the tenant_id from the tenant record, not the numeric ID
-            tenant_id_for_response = None
-            if tenant:
-                tenant_id_for_response = tenant.tenant_id
-            else:
-                # Fallback to current user's tenant if no tenant found
-                tenant_id_for_response = current_user.tenant.tenant_id
-            
-            # Get settings_id string if available
-            settings_id_str = None
-            if account.settings_id:
-                from app.models.cloud_settings import CloudSettings
-                settings = db.query(CloudSettings).filter(CloudSettings.id == account.settings_id).first()
-                if settings:
-                    settings_id_str = str(settings.settings_id)
-            
-            result.append(
-                CloudAccountFrontendResponse(
-                    id=account.account_id,
-                    name=account.name,
-                    provider=account.provider,
-                    status=account.status,
-                    tenantId=tenant.tenant_id if tenant else account.tenant_id,
-                    subscription_id=account.subscription_id,
-                    settings_id=settings_id_str,
-                    connectionDetails={}  # Would need to add a connection_details field
-                )
-            )
+            result.append({
+                "id": account.account_id,
+                "name": account.name,
+                "provider": account.provider,
+                "status": account.status,
+                "tenantId": account.tenant_id,
+                "subscription_id": account.subscription_id,
+                "subscription_ids": subscription_ids,
+                "settings_id": account.cloud_settings.settings_id if account.cloud_settings else None,
+                "connectionDetails": connection_details
+            })
         
         return result
     
+    except HTTPException:
+        raise
     except Exception as e:
+        # Use format_error_response to avoid exposing sensitive information
+        error_response = format_error_response(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving cloud accounts: {str(e)}"
+            detail=error_response["detail"]
         )
 
 
@@ -194,12 +188,12 @@ def get_cloud_account(
         )
 
 
-@router.post("/", response_model=CloudAccountFrontendResponse)
+@router.post("/", response_model=CloudAccountResponse)
 def create_cloud_account(
-    account: CloudAccountCreate,
-    tenant_id: Optional[str] = None,
+    *,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    cloud_account_in: CloudAccountCreate
 ) -> Any:
     """
     Create a new cloud account
@@ -213,91 +207,50 @@ def create_cloud_account(
         )
     
     try:
-        # Determine which tenant to use
-        user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
-        if not user_tenant:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User's tenant not found"
-            )
-        
-        target_tenant_id = user_tenant.tenant_id
-        
-        # If tenant_id is provided, use that instead
-        if tenant_id:
-            # Check if tenant exists
-            tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
-            if not tenant:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Tenant with ID {tenant_id} not found"
-                )
-            
-            # Check if user has access to this tenant
-            if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to create cloud accounts for this tenant"
-                )
-            
-            target_tenant_id = tenant.tenant_id
-        
-        # If settings_id is provided, verify it exists
-        settings_id = None
-        if account.settings_id:
-            # Get credential from database
-            from app.models.cloud_settings import CloudSettings
-            creds = db.query(CloudSettings).filter(
-                CloudSettings.organization_tenant_id == target_tenant_id,
-                CloudSettings.provider == account.provider,
-                CloudSettings.settings_id == account.settings_id
+        # Get cloud settings if settings_id is provided
+        cloud_settings = None
+        if cloud_account_in.settings_id:
+            cloud_settings = db.query(CloudSettings).filter(
+                CloudSettings.settings_id == cloud_account_in.settings_id,
+                CloudSettings.organization_tenant_id == current_user.tenant.tenant_id
             ).first()
             
-            if not creds:
+            if not cloud_settings:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Credential not found"
+                    detail=f"Cloud settings with ID {cloud_account_in.settings_id} not found"
                 )
-            
-            settings_id = creds.id
         
         # Create new cloud account
-        import uuid
-        new_account = CloudAccount(
-            account_id=str(uuid.uuid4()),
-            name=account.name,
-            provider=account.provider,
-            status=account.status,
-            description=account.description,
-            subscription_id=account.subscription_id,
-            settings_id=settings_id,
-            tenant_id=target_tenant_id
+        cloud_account = CloudAccount(
+            name=cloud_account_in.name,
+            provider=cloud_account_in.provider,
+            status=cloud_account_in.status,
+            description=cloud_account_in.description,
+            tenant_id=current_user.tenant.tenant_id,
+            settings_id=cloud_settings.id if cloud_settings else None,
+            subscription_ids=cloud_account_in.subscription_ids
         )
         
-        db.add(new_account)
+        # If there's only one subscription ID, also set it in the legacy field
+        if cloud_account_in.subscription_ids and len(cloud_account_in.subscription_ids) == 1:
+            cloud_account.subscription_id = cloud_account_in.subscription_ids[0]
+        
+        db.add(cloud_account)
         db.commit()
-        db.refresh(new_account)
+        db.refresh(cloud_account)
         
-        # Get the tenant associated with this account
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == new_account.tenant_id).first()
-        
-        # Return frontend-compatible response
-        return CloudAccountFrontendResponse(
-            id=new_account.account_id,
-            name=new_account.name,
-            provider=new_account.provider,
-            status=new_account.status,
-            tenantId=tenant.tenant_id if tenant else new_account.tenant_id,
-            subscription_id=new_account.subscription_id,
-            settings_id=account.settings_id,
-            connectionDetails={}
-        )
+        return cloud_account
     
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
+        # Use format_error_response to avoid exposing sensitive information
+        error_response = format_error_response(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating cloud account: {str(e)}"
+            detail=error_response["detail"]
         )
 
 

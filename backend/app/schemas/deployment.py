@@ -20,24 +20,25 @@ class EnvironmentBase(BaseModel):
 class CloudAccountBase(BaseModel):
     name: str
     provider: str
-    status: str
+    status: str = "connected"
     description: Optional[str] = None
-    subscription_id: Optional[str] = None
     settings_id: Optional[str] = None
 
 class CloudAccountCreate(CloudAccountBase):
-    pass
+    subscription_ids: List[str] = []
 
-class CloudAccountUpdate(CloudAccountBase):
+class CloudAccountUpdate(BaseModel):
     name: Optional[str] = None
     provider: Optional[str] = None
     status: Optional[str] = None
-    subscription_id: Optional[str] = None
+    description: Optional[str] = None
     settings_id: Optional[str] = None
+    subscription_ids: Optional[List[str]] = None
 
 class CloudAccountResponse(CloudAccountBase):
     id: str
     tenant_id: str
+    subscription_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -52,6 +53,7 @@ class CloudAccountFrontendResponse(BaseModel):
     status: str
     tenantId: str
     subscription_id: Optional[str] = None
+    subscription_ids: List[str] = []
     settings_id: Optional[str] = None
     connectionDetails: Dict[str, Any] = {}
 
