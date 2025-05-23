@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Any
 import jwt
 import os
 import json
+import requests
 from datetime import datetime
 import uuid
 import logging
@@ -27,9 +28,8 @@ app.add_middleware(
 # Initialize Azure deployer
 azure_deployer = AzureDeployer()
 
-# JWT settings
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+# API settings
+API_URL = os.getenv("API_URL", "http://api:8000")
 
 # In-memory storage for deployments (would be replaced with a database in production)
 deployments = {}
@@ -44,35 +44,32 @@ def get_current_user(authorization: str = Header(None)):
         if scheme.lower() != "bearer":
             raise HTTPException(status_code=401, detail="Invalid authentication scheme")
         
-        logger.debug(f"Decoding token with secret: {JWT_SECRET[:3]}...")
+        logger.debug(f"Validating token via backend API")
         
-        # Try to decode the token
-        try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            logger.debug(f"Token payload: {payload}")
-        except Exception as e:
-            logger.error(f"Token decode error: {str(e)}")
-            # Try with verification disabled to see what's in the token
-            try:
-                payload = jwt.decode(token, options={"verify_signature": False}, algorithms=[JWT_ALGORITHM])
-                logger.debug(f"Unverified token payload: {payload}")
-            except:
-                pass
-            raise
+        # Use the backend API to validate the token
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{API_URL}/api/auth/me", headers=headers)
         
-        # Check if token has required permissions
-        permissions = payload.get("permissions", [])
-        logger.debug(f"Token permissions: {permissions}")
+        if response.status_code != 200:
+            logger.error(f"Token validation failed: {response.text}")
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        user_data = response.json()
+        logger.debug(f"User data from API: {user_data}")
+        
+        # Extract permissions from user data
+        permissions = []
+        if "role" in user_data and "permissions" in user_data["role"]:
+            permissions = [p["name"] for p in user_data["role"]["permissions"]]
+        
+        logger.debug(f"Extracted permissions: {permissions}")
         
         return {
-            "user_id": payload.get("sub"),
-            "username": payload.get("name"),
-            "tenant_id": payload.get("tenant_id"),
+            "user_id": user_data.get("user_id"),
+            "username": user_data.get("username"),
+            "tenant_id": user_data.get("tenant_id"),
             "permissions": permissions
         }
-    except jwt.PyJWTError as e:
-        logger.error(f"JWT error: {str(e)}")
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
     except Exception as e:
         logger.error(f"Authentication error: {str(e)}")
         raise HTTPException(status_code=401, detail=f"Authentication error: {str(e)}")
@@ -85,6 +82,18 @@ def check_permission(required_permission: str):
         
         # Accept both old and new permission formats
         if required_permission in user["permissions"] or required_permission.replace(":", "-") in user["permissions"]:
+            return user
+        
+        # Check for deployment-specific permissions
+        deployment_mapping = {
+            "deployment:read": "view:deployments",
+            "deployment:create": "create:deployments",
+            "deployment:update": "update:deployments",
+            "deployment:delete": "delete:deployments",
+            "deployment:manage": "deployment:manage"
+        }
+        
+        if required_permission in deployment_mapping and deployment_mapping[required_permission] in user["permissions"]:
             return user
         
         raise HTTPException(status_code=403, detail=f"Insufficient permissions. Required: {required_permission}")
