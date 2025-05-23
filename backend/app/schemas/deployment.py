@@ -16,6 +16,43 @@ class EnvironmentBase(BaseModel):
     name: str
     description: Optional[str] = None
 
+# Cloud Account schemas
+class CloudAccountBase(BaseModel):
+    name: str
+    provider: str
+    status: str
+    description: Optional[str] = None
+
+class CloudAccountCreate(CloudAccountBase):
+    pass
+
+class CloudAccountUpdate(CloudAccountBase):
+    name: Optional[str] = None
+    provider: Optional[str] = None
+    status: Optional[str] = None
+
+class CloudAccountResponse(CloudAccountBase):
+    id: str
+    tenant_id: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+class CloudAccountFrontendResponse(BaseModel):
+    id: str
+    name: str
+    provider: str
+    status: str
+    tenantId: str
+    connectionDetails: Dict[str, Any] = {}
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
 # Cloud Deployment Response schema
 class CloudDeploymentResponse(BaseModel):
     id: str
