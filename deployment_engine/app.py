@@ -6,7 +6,12 @@ import os
 import json
 from datetime import datetime
 import uuid
+import logging
 from deploy.azure import AzureDeployer
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Deployment Engine API")
 
@@ -39,10 +44,25 @@ def get_current_user(authorization: str = Header(None)):
         if scheme.lower() != "bearer":
             raise HTTPException(status_code=401, detail="Invalid authentication scheme")
         
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        logger.debug(f"Decoding token with secret: {JWT_SECRET[:3]}...")
+        
+        # Try to decode the token
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            logger.debug(f"Token payload: {payload}")
+        except Exception as e:
+            logger.error(f"Token decode error: {str(e)}")
+            # Try with verification disabled to see what's in the token
+            try:
+                payload = jwt.decode(token, options={"verify_signature": False}, algorithms=[JWT_ALGORITHM])
+                logger.debug(f"Unverified token payload: {payload}")
+            except:
+                pass
+            raise
         
         # Check if token has required permissions
         permissions = payload.get("permissions", [])
+        logger.debug(f"Token permissions: {permissions}")
         
         return {
             "user_id": payload.get("sub"),
@@ -51,22 +71,39 @@ def get_current_user(authorization: str = Header(None)):
             "permissions": permissions
         }
     except jwt.PyJWTError as e:
+        logger.error(f"JWT error: {str(e)}")
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
     except Exception as e:
+        logger.error(f"Authentication error: {str(e)}")
         raise HTTPException(status_code=401, detail=f"Authentication error: {str(e)}")
 
 # Permission check dependency
 def check_permission(required_permission: str):
     def check(user: dict = Depends(get_current_user)):
-        if required_permission not in user["permissions"]:
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
-        return user
+        logger.debug(f"Checking permission: {required_permission}")
+        logger.debug(f"User permissions: {user['permissions']}")
+        
+        # Accept both old and new permission formats
+        if required_permission in user["permissions"] or required_permission.replace(":", "-") in user["permissions"]:
+            return user
+        
+        raise HTTPException(status_code=403, detail=f"Insufficient permissions. Required: {required_permission}")
     return check
 
 # Routes
 @app.get("/")
 def read_root():
     return {"message": "Deployment Engine API"}
+
+# Debug endpoint to check token
+@app.get("/debug-token")
+def debug_token(user: dict = Depends(get_current_user)):
+    return {
+        "user_id": user["user_id"],
+        "username": user["username"],
+        "tenant_id": user["tenant_id"],
+        "permissions": user["permissions"]
+    }
 
 # Credentials endpoints
 @app.post("/credentials")
@@ -75,6 +112,7 @@ def set_credentials(
     user: dict = Depends(check_permission("deployment:manage"))
 ):
     try:
+        logger.debug(f"Setting credentials for user: {user['username']}")
         # Set Azure credentials
         azure_deployer.set_credentials(
             client_id=credentials["client_id"],
@@ -85,15 +123,18 @@ def set_credentials(
         
         return {"message": "Credentials set successfully"}
     except Exception as e:
+        logger.error(f"Error setting credentials: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/credentials")
 def get_credentials(user: dict = Depends(check_permission("deployment:read"))):
     try:
+        logger.debug(f"Getting credentials for user: {user['username']}")
         # Get Azure credentials status
         status = azure_deployer.get_credential_status()
         return status
     except Exception as e:
+        logger.error(f"Error getting credentials: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Deployment endpoints
@@ -157,6 +198,7 @@ def create_deployment(
             "created_at": deployments[deployment_id]["created_at"]
         }
     except Exception as e:
+        logger.error(f"Error creating deployment: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/deployments")
@@ -185,6 +227,7 @@ def list_deployments(
         
         return paginated_deployments
     except Exception as e:
+        logger.error(f"Error listing deployments: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/deployments/{deployment_id}")
@@ -217,6 +260,7 @@ def get_deployment(
         
         return deployment
     except Exception as e:
+        logger.error(f"Error getting deployment: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/deployments/{deployment_id}")
@@ -266,6 +310,7 @@ def update_deployment(
             "message": result.get("message", "Deployment update initiated")
         }
     except Exception as e:
+        logger.error(f"Error updating deployment: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/deployments/{deployment_id}")
@@ -299,9 +344,9 @@ def delete_deployment(
             "message": result.get("message", "Deployment deletion initiated")
         }
     except Exception as e:
+        logger.error(f"Error deleting deployment: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=5000)
-
