@@ -39,15 +39,21 @@ def login_for_access_token(
         subject=str(user.user_id), expires_delta=access_token_expires
     )
     
+    # Get permissions from user role
+    permissions = []
+    if user.role:
+        permissions = [p.name for p in user.role.permissions]
+    
     # Convert user to UserSchema
     user_schema = UserSchema(
         id=user.id,
+        user_id=user.user_id,
         username=user.username,
         full_name=user.full_name,
         email=user.email,
         role=user.role.name,
         tenantId=user.tenant.tenant_id,
-        permissions=[p.name for p in user.role.permissions]
+        permissions=permissions
     )
     
     return {
@@ -74,15 +80,21 @@ def read_users_me(current_user: User = Depends(get_current_user)) -> Any:
     """
     Get current user
     """
+    # Get permissions from user role
+    permissions = []
+    if current_user.role:
+        permissions = [p.name for p in current_user.role.permissions]
+    
     # Convert user to UserSchema
     user_schema = UserSchema(
         id=current_user.id,
+        user_id=current_user.user_id,
         username=current_user.username,
         full_name=current_user.full_name,
         email=current_user.email,
         role=current_user.role.name,
         tenantId=current_user.tenant.tenant_id,
-        permissions=[p.name for p in current_user.role.permissions]
+        permissions=permissions
     )
     
     return user_schema.model_dump()

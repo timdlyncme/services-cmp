@@ -1,10 +1,9 @@
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, List, Optional, Any
-import jwt
+import requests
 import os
 import json
-import requests
 from datetime import datetime
 import uuid
 import logging
@@ -57,18 +56,31 @@ def get_current_user(authorization: str = Header(None)):
         user_data = response.json()
         logger.debug(f"User data from API: {user_data}")
         
-        # Extract permissions from user data
-        permissions = []
-        if "role" in user_data and "permissions" in user_data["role"]:
-            permissions = [p["name"] for p in user_data["role"]["permissions"]]
+        # Extract user information
+        user_id = user_data.get("id")
+        username = user_data.get("username")
+        tenant_id = user_data.get("tenantId")
         
+        # Extract permissions from user data
+        permissions = user_data.get("permissions", [])
+        if not isinstance(permissions, list):
+            permissions = []
+        
+        # Get role information
+        role = user_data.get("role")
+        
+        logger.debug(f"Extracted user_id: {user_id}")
+        logger.debug(f"Extracted username: {username}")
+        logger.debug(f"Extracted tenant_id: {tenant_id}")
         logger.debug(f"Extracted permissions: {permissions}")
+        logger.debug(f"Extracted role: {role}")
         
         return {
-            "user_id": user_data.get("user_id"),
-            "username": user_data.get("username"),
-            "tenant_id": user_data.get("tenant_id"),
-            "permissions": permissions
+            "user_id": user_id,
+            "username": username,
+            "tenant_id": tenant_id,
+            "permissions": permissions,
+            "role": role
         }
     except Exception as e:
         logger.error(f"Authentication error: {str(e)}")
@@ -80,20 +92,28 @@ def check_permission(required_permission: str):
         logger.debug(f"Checking permission: {required_permission}")
         logger.debug(f"User permissions: {user['permissions']}")
         
-        # Accept both old and new permission formats
-        if required_permission in user["permissions"] or required_permission.replace(":", "-") in user["permissions"]:
+        # Check if user has the required permission
+        if required_permission in user["permissions"]:
             return user
         
-        # Check for deployment-specific permissions
-        deployment_mapping = {
-            "deployment:read": "view:deployments",
-            "deployment:create": "create:deployments",
-            "deployment:update": "update:deployments",
-            "deployment:delete": "delete:deployments",
-            "deployment:manage": "deployment:manage"
-        }
+        # Check for view:deployments permission for deployment:read
+        if required_permission == "deployment:read" and "view:deployments" in user["permissions"]:
+            return user
         
-        if required_permission in deployment_mapping and deployment_mapping[required_permission] in user["permissions"]:
+        # Check for create:deployments permission for deployment:create
+        if required_permission == "deployment:create" and "create:deployments" in user["permissions"]:
+            return user
+        
+        # Check for update:deployments permission for deployment:update
+        if required_permission == "deployment:update" and "update:deployments" in user["permissions"]:
+            return user
+        
+        # Check for delete:deployments permission for deployment:delete
+        if required_permission == "deployment:delete" and "delete:deployments" in user["permissions"]:
+            return user
+        
+        # Check for admin or msp role for deployment:manage
+        if required_permission == "deployment:manage" and user["role"] in ["admin", "msp"]:
             return user
         
         raise HTTPException(status_code=403, detail=f"Insufficient permissions. Required: {required_permission}")
@@ -111,7 +131,8 @@ def debug_token(user: dict = Depends(get_current_user)):
         "user_id": user["user_id"],
         "username": user["username"],
         "tenant_id": user["tenant_id"],
-        "permissions": user["permissions"]
+        "permissions": user["permissions"],
+        "role": user["role"]
     }
 
 # Credentials endpoints
