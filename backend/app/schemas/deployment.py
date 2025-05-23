@@ -53,6 +53,74 @@ class CloudAccountFrontendResponse(BaseModel):
         orm_mode = True
         from_attributes = True
 
+# Template schemas
+class TemplateCreate(TemplateBase):
+    provider: str
+    code: Optional[str] = None
+    is_public: bool = False
+    category: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
+
+class TemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    provider: Optional[str] = None
+    code: Optional[str] = None
+    is_public: Optional[bool] = None
+    category: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
+
+class TemplateResponse(TemplateBase):
+    id: int
+    template_id: str
+    provider: str
+    code: Optional[str] = None
+    is_public: bool
+    category: Optional[str] = None
+    current_version: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    tenant_id: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+class TemplateDetailResponse(TemplateResponse):
+    code: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
+    versions: List[Dict[str, Any]] = []
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+class CloudTemplateResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    type: str
+    provider: str
+    code: str
+    deploymentCount: int
+    uploadedAt: str
+    updatedAt: str
+    categories: List[str] = []
+    tenantId: str
+    lastUpdatedBy: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+class TemplateVersionCreate(BaseModel):
+    version: str
+    code: str
+    commit_message: Optional[str] = None
+
 # Cloud Deployment Response schema
 class CloudDeploymentResponse(BaseModel):
     id: str
@@ -169,46 +237,6 @@ class DeploymentDetailResponse(DeploymentResponse):
     error_details: Optional[Dict[str, Any]] = None
     completed_at: Optional[datetime] = None
     history: List[DeploymentHistoryItem] = []
-
-    class Config:
-        orm_mode = True
-
-# Template schemas
-class TemplateCreate(TemplateBase):
-    provider: str
-    category: Optional[str] = None
-    is_public: bool = False
-    code: Optional[str] = None
-    parameters: Optional[Dict[str, Any]] = None
-    variables: Optional[Dict[str, Any]] = None
-
-class TemplateUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    category: Optional[str] = None
-    is_public: Optional[bool] = None
-    code: Optional[str] = None
-    parameters: Optional[Dict[str, Any]] = None
-    variables: Optional[Dict[str, Any]] = None
-
-class TemplateResponse(TemplateBase):
-    id: int
-    template_id: str
-    provider: str
-    category: Optional[str] = None
-    is_public: bool
-    current_version: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        orm_mode = True
-
-class TemplateDetailResponse(TemplateResponse):
-    code: Optional[str] = None
-    parameters: Optional[Dict[str, Any]] = None
-    variables: Optional[Dict[str, Any]] = None
-    versions: List[Dict[str, Any]] = []
 
     class Config:
         orm_mode = True
