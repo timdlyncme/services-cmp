@@ -22,6 +22,8 @@ class CloudAccountBase(BaseModel):
     provider: str
     status: str
     description: Optional[str] = None
+    subscription_id: Optional[str] = None
+    settings_id: Optional[str] = None
 
 class CloudAccountCreate(CloudAccountBase):
     pass
@@ -30,6 +32,8 @@ class CloudAccountUpdate(CloudAccountBase):
     name: Optional[str] = None
     provider: Optional[str] = None
     status: Optional[str] = None
+    subscription_id: Optional[str] = None
+    settings_id: Optional[str] = None
 
 class CloudAccountResponse(CloudAccountBase):
     id: str
@@ -47,6 +51,8 @@ class CloudAccountFrontendResponse(BaseModel):
     provider: str
     status: str
     tenantId: str
+    subscription_id: Optional[str] = None
+    settings_id: Optional[str] = None
     connectionDetails: Dict[str, Any] = {}
 
     class Config:

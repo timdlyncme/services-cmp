@@ -10,6 +10,7 @@ from app.schemas.deployment import (
     CloudAccountResponse, CloudAccountCreate, CloudAccountUpdate,
     CloudAccountFrontendResponse
 )
+import requests
 
 router = APIRouter()
 
@@ -87,6 +88,14 @@ def get_cloud_accounts(
                 # Fallback to current user's tenant if no tenant found
                 tenant_id_for_response = current_user.tenant.tenant_id
             
+            # Get settings_id string if available
+            settings_id_str = None
+            if account.settings_id:
+                from app.models.cloud_settings import CloudSettings
+                settings = db.query(CloudSettings).filter(CloudSettings.id == account.settings_id).first()
+                if settings:
+                    settings_id_str = str(settings.settings_id)
+            
             result.append(
                 CloudAccountFrontendResponse(
                     id=account.account_id,
@@ -94,6 +103,8 @@ def get_cloud_accounts(
                     provider=account.provider,
                     status=account.status,
                     tenantId=tenant.tenant_id if tenant else account.tenant_id,
+                    subscription_id=account.subscription_id,
+                    settings_id=settings_id_str,
                     connectionDetails={}  # Would need to add a connection_details field
                 )
             )
@@ -154,6 +165,14 @@ def get_cloud_account(
             # Fallback to current user's tenant if no tenant found
             tenant_id_for_response = current_user.tenant.tenant_id
         
+        # Get settings_id string if available
+        settings_id_str = None
+        if account.settings_id:
+            from app.models.cloud_settings import CloudSettings
+            settings = db.query(CloudSettings).filter(CloudSettings.id == account.settings_id).first()
+            if settings:
+                settings_id_str = str(settings.settings_id)
+        
         # Return frontend-compatible response
         return CloudAccountFrontendResponse(
             id=account.account_id,
@@ -161,6 +180,8 @@ def get_cloud_account(
             provider=account.provider,
             status=account.status,
             tenantId=tenant.tenant_id if tenant else account.tenant_id,
+            subscription_id=account.subscription_id,
+            settings_id=settings_id_str,
             connectionDetails={}
         )
     
@@ -221,6 +242,25 @@ def create_cloud_account(
             
             target_tenant_id = tenant.tenant_id
         
+        # If settings_id is provided, verify it exists
+        settings_id = None
+        if account.settings_id:
+            # Get credential from database
+            from app.models.cloud_settings import CloudSettings
+            creds = db.query(CloudSettings).filter(
+                CloudSettings.organization_tenant_id == target_tenant_id,
+                CloudSettings.provider == account.provider,
+                CloudSettings.settings_id == account.settings_id
+            ).first()
+            
+            if not creds:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Credential not found"
+                )
+            
+            settings_id = creds.id
+        
         # Create new cloud account
         import uuid
         new_account = CloudAccount(
@@ -229,6 +269,8 @@ def create_cloud_account(
             provider=account.provider,
             status=account.status,
             description=account.description,
+            subscription_id=account.subscription_id,
+            settings_id=settings_id,
             tenant_id=target_tenant_id
         )
         
@@ -246,6 +288,8 @@ def create_cloud_account(
             provider=new_account.provider,
             status=new_account.status,
             tenantId=tenant.tenant_id if tenant else new_account.tenant_id,
+            subscription_id=new_account.subscription_id,
+            settings_id=account.settings_id,
             connectionDetails={}
         )
     
@@ -294,17 +338,52 @@ def update_cloud_account(
                     detail="Not authorized to update this cloud account"
                 )
         
+        # If settings_id is provided, verify it exists
+        settings_id = account.settings_id
+        if account_update.settings_id:
+            # Get credential from database
+            from app.models.cloud_settings import CloudSettings
+            creds = db.query(CloudSettings).filter(
+                CloudSettings.organization_tenant_id == account.tenant_id,
+                CloudSettings.provider == account.provider,
+                CloudSettings.settings_id == account_update.settings_id
+            ).first()
+            
+            if not creds:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Credential not found"
+                )
+            
+            settings_id = creds.id
+        
         # Update account
-        account.name = account_update.name
-        account.provider = account_update.provider
-        account.status = account_update.status
-        account.description = account_update.description
+        if account_update.name is not None:
+            account.name = account_update.name
+        if account_update.provider is not None:
+            account.provider = account_update.provider
+        if account_update.status is not None:
+            account.status = account_update.status
+        if account_update.description is not None:
+            account.description = account_update.description
+        if account_update.subscription_id is not None:
+            account.subscription_id = account_update.subscription_id
+        if settings_id is not None:
+            account.settings_id = settings_id
         
         db.commit()
         db.refresh(account)
         
         # Get the tenant associated with this account
         tenant = db.query(Tenant).filter(Tenant.id == account.tenant_id).first()
+        
+        # Get settings_id string if available
+        settings_id_str = None
+        if account.settings_id:
+            from app.models.cloud_settings import CloudSettings
+            settings = db.query(CloudSettings).filter(CloudSettings.id == account.settings_id).first()
+            if settings:
+                settings_id_str = str(settings.settings_id)
         
         # Return frontend-compatible response
         return CloudAccountFrontendResponse(
@@ -313,6 +392,8 @@ def update_cloud_account(
             provider=account.provider,
             status=account.status,
             tenantId=tenant.tenant_id if tenant else current_user.tenant.tenant_id,
+            subscription_id=account.subscription_id,
+            settings_id=settings_id_str,
             connectionDetails={}
         )
     
@@ -410,3 +491,83 @@ def options_cloud_account_by_id():
     response.headers["Access-Control-Allow-Methods"] = "GET, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
+
+
+# Azure Subscription Schemas
+from pydantic import BaseModel
+
+class AzureSubscriptionResponse(BaseModel):
+    id: str
+    name: str
+    state: str
+    tenant_id: str
+
+@router.get("/azure-credentials/{settings_id}/subscriptions", response_model=List[AzureSubscriptionResponse])
+def list_azure_subscriptions(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    settings_id: str
+):
+    """
+    List available Azure subscriptions for a specific credential
+    """
+    # Check if user has permission to view cloud accounts
+    has_permission = any(p.name == "view:cloud-accounts" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    try:
+        # Get credential from database
+        from app.models.cloud_settings import CloudSettings
+        creds = db.query(CloudSettings).filter(
+            CloudSettings.organization_tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.provider == "azure",
+            CloudSettings.settings_id == settings_id
+        ).first()
+        
+        if not creds:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Credential not found"
+            )
+        
+        # Forward request to deployment engine
+        headers = {"Authorization": f"Bearer {current_user.access_token}"}
+        
+        # First set the credentials
+        from app.api.endpoints.deployments import DEPLOYMENT_ENGINE_URL
+        set_response = requests.post(
+            f"{DEPLOYMENT_ENGINE_URL}/credentials",
+            headers=headers,
+            json={
+                "client_id": creds.client_id,
+                "client_secret": creds.client_secret,
+                "tenant_id": creds.tenant_id
+            }
+        )
+        
+        if set_response.status_code != 200:
+            raise Exception(f"Error setting credentials: {set_response.text}")
+        
+        # Then list subscriptions
+        response = requests.get(
+            f"{DEPLOYMENT_ENGINE_URL}/credentials/subscriptions",
+            headers=headers
+        )
+        
+        if response.status_code != 200:
+            raise Exception(f"Error listing subscriptions: {response.text}")
+        
+        return response.json()
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error listing subscriptions: {str(e)}"
+        )
