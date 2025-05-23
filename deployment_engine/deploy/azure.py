@@ -151,7 +151,7 @@ class AzureDeployer:
                 "id": sub.subscription_id,
                 "name": sub.display_name,
                 "state": sub.state,
-                "tenant_id": sub.tenant_id
+                "tenant_id": self.tenant_id  # Use the tenant_id from credentials
             })
         
         return result
