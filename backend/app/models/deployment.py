@@ -119,6 +119,8 @@ class Deployment(Base):
     description = Column(String, nullable=True)
     status = Column(String)  # pending, running, completed, failed
     parameters = Column(JSON, nullable=True)
+    resources = Column(JSON, nullable=True)  # Store deployment resources
+    region = Column(String, nullable=True)  # Store deployment region
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

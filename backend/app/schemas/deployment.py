@@ -16,6 +16,26 @@ class EnvironmentBase(BaseModel):
     name: str
     description: Optional[str] = None
 
+# Cloud Deployment Response schema
+class CloudDeploymentResponse(BaseModel):
+    id: str
+    name: str
+    templateId: str
+    templateName: str
+    provider: str
+    status: str
+    environment: str
+    createdAt: str
+    updatedAt: str
+    parameters: Dict[str, Any] = {}
+    resources: List[Dict[str, Any]] = []
+    tenantId: str
+    region: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
 # Deployment schemas
 class DeploymentCreate(DeploymentBase):
     environment_id: int
@@ -55,10 +75,15 @@ class DeploymentCreate(DeploymentBase):
         return v
 
 class DeploymentUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    resources: Optional[List[Dict[str, Any]]] = None
+    region: Optional[str] = None
     template_source: Optional[str] = None
     template_url: Optional[str] = None
     template_code: Optional[str] = None
-    parameters: Optional[Dict[str, Any]] = None
 
     @validator('template_source')
     def validate_template_source(cls, v, values):
@@ -188,4 +213,3 @@ class EnvironmentDetailResponse(EnvironmentResponse):
 
     class Config:
         orm_mode = True
-
