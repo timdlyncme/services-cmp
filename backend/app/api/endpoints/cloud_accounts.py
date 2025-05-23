@@ -84,8 +84,8 @@ def get_cloud_accounts(
                         subscription_ids = [account.subscription_ids]
                 else:
                     subscription_ids = account.subscription_ids
-            elif account.subscription_id:
-                subscription_ids = [account.subscription_id]
+            elif account.cloud_id:
+                subscription_ids = [account.cloud_id]
             
             result.append({
                 "id": account.account_id,
@@ -93,7 +93,7 @@ def get_cloud_accounts(
                 "provider": account.provider,
                 "status": account.status,
                 "tenantId": account.tenant_id,
-                "subscription_id": account.subscription_id,
+                "subscription_id": account.cloud_id,  # Use cloud_id for backward compatibility
                 "subscription_ids": subscription_ids,
                 "settings_id": account.cloud_settings.settings_id if account.cloud_settings else None,
                 "connectionDetails": connection_details
@@ -121,6 +121,12 @@ def get_cloud_account(
     """
     Get a specific cloud account by ID
     """
+    # Add CORS headers
+    response = Response()
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    
     # Check if user has permission to view cloud accounts
     has_permission = any(p.name == "view:cloud-accounts" for p in current_user.role.permissions)
     if not has_permission:
@@ -167,6 +173,19 @@ def get_cloud_account(
             if settings:
                 settings_id_str = str(settings.settings_id)
         
+        # Format subscription IDs
+        subscription_ids = []
+        if account.subscription_ids:
+            if isinstance(account.subscription_ids, str):
+                try:
+                    subscription_ids = json.loads(account.subscription_ids)
+                except:
+                    subscription_ids = [account.subscription_ids]
+            else:
+                subscription_ids = account.subscription_ids
+        elif account.cloud_id:
+            subscription_ids = [account.cloud_id]
+        
         # Return frontend-compatible response
         return CloudAccountFrontendResponse(
             id=account.account_id,
@@ -174,7 +193,8 @@ def get_cloud_account(
             provider=account.provider,
             status=account.status,
             tenantId=tenant.tenant_id if tenant else account.tenant_id,
-            subscription_id=account.subscription_id,
+            subscription_id=account.cloud_id,  # Use cloud_id for backward compatibility
+            subscription_ids=subscription_ids,
             settings_id=settings_id_str,
             connectionDetails={}
         )
@@ -198,6 +218,12 @@ def create_cloud_account(
     """
     Create a new cloud account
     """
+    # Add CORS headers
+    response = Response()
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    
     # Check if user has permission to create cloud accounts
     has_permission = any(p.name == "create:cloud-accounts" for p in current_user.role.permissions)
     if not has_permission:
@@ -232,9 +258,9 @@ def create_cloud_account(
             subscription_ids=cloud_account_in.subscription_ids
         )
         
-        # If there's only one subscription ID, also set it in the legacy field
+        # If there's only one subscription ID, also set it in the cloud_id field
         if cloud_account_in.subscription_ids and len(cloud_account_in.subscription_ids) == 1:
-            cloud_account.subscription_id = cloud_account_in.subscription_ids[0]
+            cloud_account.cloud_id = cloud_account_in.subscription_ids[0]
         
         db.add(cloud_account)
         db.commit()
@@ -264,6 +290,12 @@ def update_cloud_account(
     """
     Update a cloud account
     """
+    # Add CORS headers
+    response = Response()
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "PUT, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    
     # Check if user has permission to update cloud accounts
     has_permission = any(p.name == "update:cloud-accounts" for p in current_user.role.permissions)
     if not has_permission:
@@ -319,8 +351,11 @@ def update_cloud_account(
             account.status = account_update.status
         if account_update.description is not None:
             account.description = account_update.description
-        if account_update.subscription_id is not None:
-            account.subscription_id = account_update.subscription_id
+        if account_update.subscription_ids is not None:
+            account.subscription_ids = account_update.subscription_ids
+            # If there's only one subscription ID, also set it in the cloud_id field
+            if account_update.subscription_ids and len(account_update.subscription_ids) == 1:
+                account.cloud_id = account_update.subscription_ids[0]
         if settings_id is not None:
             account.settings_id = settings_id
         
@@ -338,6 +373,19 @@ def update_cloud_account(
             if settings:
                 settings_id_str = str(settings.settings_id)
         
+        # Format subscription IDs
+        subscription_ids = []
+        if account.subscription_ids:
+            if isinstance(account.subscription_ids, str):
+                try:
+                    subscription_ids = json.loads(account.subscription_ids)
+                except:
+                    subscription_ids = [account.subscription_ids]
+            else:
+                subscription_ids = account.subscription_ids
+        elif account.cloud_id:
+            subscription_ids = [account.cloud_id]
+        
         # Return frontend-compatible response
         return CloudAccountFrontendResponse(
             id=account.account_id,
@@ -345,7 +393,8 @@ def update_cloud_account(
             provider=account.provider,
             status=account.status,
             tenantId=tenant.tenant_id if tenant else current_user.tenant.tenant_id,
-            subscription_id=account.subscription_id,
+            subscription_id=account.cloud_id,  # Use cloud_id for backward compatibility
+            subscription_ids=subscription_ids,
             settings_id=settings_id_str,
             connectionDetails={}
         )
@@ -432,7 +481,6 @@ def options_cloud_accounts():
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
-
 
 @router.options("/{account_id}")
 def options_cloud_account_by_id():

@@ -32,7 +32,8 @@ class CloudAccount(Base):
     description = Column(String, nullable=True)
     
     # Provider-specific fields
-    subscription_id = Column(String, nullable=True)  # Legacy field for backward compatibility
+    cloud_id = Column(String, nullable=True)  # For multi-cloud support (replaces subscription_id)
+    subscription_ids = Column(JSON, nullable=True)  # Store as JSON array
     
     # Relationships
     tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))
@@ -48,9 +49,6 @@ class CloudAccount(Base):
         secondary=environment_cloud_account,
         back_populates="cloud_accounts"
     )
-    
-    # Store subscription IDs in a separate table
-    subscription_ids = Column(JSON, nullable=True)  # Store as JSON array for quick access
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
