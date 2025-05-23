@@ -1,12 +1,7 @@
 """
 Utility functions for the application.
 """
-import uuid
 from typing import Any, Dict, List, Optional
-
-def generate_uuid() -> str:
-    """Generate a UUID string for use as an ID"""
-    return str(uuid.uuid4())
 
 def format_error_response(error: Exception) -> Dict[str, Any]:
     """
@@ -38,4 +33,3 @@ def format_error_response(error: Exception) -> Dict[str, Any]:
     
     # For other errors, return a generic message
     return {"detail": f"An error occurred: {error_message}"}
-

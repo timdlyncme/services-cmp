@@ -3,8 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 
-from app.db.base_class import Base
-from app.core.utils import generate_uuid
+from app.models.base_models import Base, generate_uuid
 
 # Association tables
 environment_cloud_account = Table(
