@@ -1,25 +1,8 @@
-fastapi
-uvicorn
-pydantic
-python-jose[cryptography]
-python-multipart
-requests
-
-# Azure dependencies
-azure-identity
-azure-mgmt-resource
-azure-mgmt-compute
-azure-mgmt-storage
-azure-mgmt-network
-
-# AWS dependencies
-boto3
-
-# GCP dependencies
-google-cloud-deployment-manager
-google-cloud-storage
-google-auth
-
-# For JWT token validation
-pyjwt
+fastapi==0.104.1
+uvicorn==0.23.2
+pydantic==2.4.2
+pyjwt==2.8.0
+requests==2.31.0
+azure-identity==1.14.1
+azure-mgmt-resource==23.0.1
 

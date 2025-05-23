@@ -34,20 +34,28 @@ services:
     restart: always
     
   deployment-engine:
-    build: ./deployment_engine
-    ports:
-      - "5000:5000"
-    environment:
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_ALGORITHM=HS256
-      - API_URL=http://api:8000
-    depends_on:
-      - api
+    build:
+      context: ./deployment_engine
+      dockerfile: Dockerfile
     volumes:
       - ./deployment_engine:/app
       - deployment_data:/data
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - API_URL=http://api:8000
+    ports:
+      - "5000:5000"
+    networks:
+      - app-network
+    depends_on:
+      - postgres
+      - redis
     restart: always
 
 volumes:
   postgres_data:
   deployment_data:
+
+networks:
+  app-network:

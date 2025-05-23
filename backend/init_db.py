@@ -11,6 +11,7 @@ import os
 from app.models.user import User, Role, Permission, Tenant
 from app.models.deployment import CloudAccount, Environment, Template, TemplateVersion, Deployment, DeploymentHistory
 from app.models.deployment_details import DeploymentDetails
+from app.models.cloud_settings import CloudSettings
 from app.models.integration import IntegrationConfig
 from app.models.template_foundry import TemplateFoundry
 from app.db.session import Base
