@@ -26,7 +26,6 @@ const CloudAccounts = () => {
   const [isNewAccountDialogOpen, setIsNewAccountDialogOpen] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountDescription, setNewAccountDescription] = useState("");
-  const [newAccountProvider, setNewAccountProvider] = useState("azure");
   const [selectedSubscriptions, setSelectedSubscriptions] = useState<string[]>([]);
   const [tagKey, setTagKey] = useState("");
   const [tagValue, setTagValue] = useState("");
@@ -153,10 +152,10 @@ const CloudAccounts = () => {
       // Create the new cloud account
       const newAccount = {
         name: newAccountName,
-        provider: newAccountProvider as any,
+        provider: "azure", // Default to azure since that's all we support for now
         status: "connected",
         description: newAccountDescription,
-        settings_id: parseInt(selectedCredential),
+        settings_id: selectedCredential, // Pass as string, not number
         subscription_ids: selectedSubscriptions
       };
       
@@ -168,7 +167,6 @@ const CloudAccounts = () => {
       // Reset form and close dialog
       setNewAccountName("");
       setNewAccountDescription("");
-      setNewAccountProvider("azure");
       setSelectedCredential(null);
       setSelectedSubscriptions([]);
       setAccountTags({});
@@ -300,17 +298,6 @@ const CloudAccounts = () => {
                       placeholder="Describe this cloud account"
                     />
                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Select Cloud Provider</label>
-                  <Tabs defaultValue="azure" onValueChange={setNewAccountProvider}>
-                    <TabsList className="grid grid-cols-3 mb-2">
-                      <TabsTrigger value="azure">Azure</TabsTrigger>
-                      <TabsTrigger value="aws" disabled>AWS (Not Implemented)</TabsTrigger>
-                      <TabsTrigger value="gcp" disabled>GCP (Not Implemented)</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
                 </div>
                 
                 <div className="space-y-2">
