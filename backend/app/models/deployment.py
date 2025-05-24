@@ -156,6 +156,9 @@ class Deployment(Base):
     
     # Relationship with DeploymentHistory
     history = relationship("DeploymentHistory", back_populates="deployment")
+    
+    # New relationship to deployment details
+    deployment_details = relationship("DeploymentDetails", back_populates="deployment")
 
 
 class DeploymentHistory(Base):

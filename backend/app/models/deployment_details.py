@@ -1,43 +1,34 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, JSON
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Text
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import UUID
 
-from app.models.base_models import Base, generate_uuid
+from app.models.base_models import Base
 
 class DeploymentDetails(Base):
+    """
+    Deployment details model for storing cloud deployment information
+    """
     __tablename__ = "deployment_details"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    detail_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
-    
-    # Deployment status and metadata
-    status = Column(String)  # pending, in_progress, completed, failed
-    provider = Column(String)  # azure, aws, gcp
-    deployment_type = Column(String)  # native, terraform
-    template_source = Column(String)  # url, code
-    template_url = Column(String, nullable=True)
-    
-    # Cloud-specific details
-    cloud_deployment_id = Column(String, nullable=True)  # ID from the cloud provider
-    cloud_region = Column(String, nullable=True)
-    cloud_resources = Column(JSON, nullable=True)  # List of resources created
-    
-    # Deployment logs and outputs
-    logs = Column(JSON, nullable=True)  # Deployment logs
-    outputs = Column(JSON, nullable=True)  # Deployment outputs
-    error_details = Column(JSON, nullable=True)  # Error details if failed
-    
-    # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    completed_at = Column(DateTime, nullable=True)
-    
-    # Relationships
-    deployment_id = Column(Integer, ForeignKey("deployments.id"))
-    deployment = relationship("Deployment", back_populates="details")
+    deployment_id = Column(UUID(as_uuid=False), ForeignKey("deployments.deployment_id"), nullable=False)
+    provider = Column(String, nullable=False)  # azure, aws, gcp
+    status = Column(String, nullable=False)  # running, failed, pending, etc.
+    resource_id = Column(String, nullable=True)  # Cloud provider resource ID
+    resource_name = Column(String, nullable=True)  # Cloud provider resource name
+    resource_type = Column(String, nullable=True)  # VM, Storage, etc.
+    region = Column(String, nullable=True)  # Region/location
+    subscription_id = Column(String, nullable=True)  # Azure subscription ID, AWS account ID, GCP project ID
+    resource_group = Column(String, nullable=True)  # Azure resource group, AWS VPC, GCP folder
+    tags = Column(JSON, nullable=True)  # Resource tags
+    metadata = Column(JSON, nullable=True)  # Additional metadata
+    logs = Column(Text, nullable=True)  # Deployment logs
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-# Add relationship to Deployment model
-from app.models.deployment import Deployment
-Deployment.details = relationship("DeploymentDetails", back_populates="deployment", uselist=False)
+    # Relationship to the deployment
+    deployment = relationship("Deployment", back_populates="deployment_details")
 
+    def __repr__(self):
+        return f"<DeploymentDetails(id={self.id}, deployment_id={self.deployment_id}, provider={self.provider}, status={self.status})>"
