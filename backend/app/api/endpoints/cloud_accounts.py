@@ -266,7 +266,17 @@ def create_cloud_account(
         db.commit()
         db.refresh(cloud_account)
         
-        return cloud_account
+        # Create a response with the correct format
+        return CloudAccountResponse(
+            id=str(cloud_account.account_id),
+            name=cloud_account.name,
+            provider=cloud_account.provider,
+            status=cloud_account.status,
+            tenant_id=str(cloud_account.tenant_id),
+            subscription_id=cloud_account.cloud_id,
+            created_at=cloud_account.created_at,
+            updated_at=cloud_account.updated_at
+        )
     
     except HTTPException:
         raise
