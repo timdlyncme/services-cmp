@@ -18,6 +18,7 @@ import Tenants from "@/pages/Tenants";
 import TemplateManagement from "@/pages/TemplateManagement";
 import MSPTemplateFoundry from "@/pages/MSPTemplateFoundry";
 import Environments from "@/pages/Environments";
+import EnvironmentDetails from "@/pages/EnvironmentDetails";
 import UsersAndGroups from "@/pages/UsersAndGroups";
 import CloudAccounts from "@/pages/CloudAccounts";
 import NexusAI from "@/pages/NexusAI";
@@ -70,6 +71,11 @@ const App = () => (
                 <Route path="/environments" element={
                   <ProtectedRoute requiredPermission="view:environments">
                     <Environments />
+                  </ProtectedRoute>
+                } />
+                <Route path="/environments/:environmentId" element={
+                  <ProtectedRoute requiredPermission="view:environments">
+                    <EnvironmentDetails />
                   </ProtectedRoute>
                 } />
                 <Route path="/users-and-groups" element={

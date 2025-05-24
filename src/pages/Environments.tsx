@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, Layers, Server, Settings, Terminal, Activity } from "lucide-react";
+import { Search, Plus, Eye, Trash, RefreshCw, AlertCircle, Layers, Server, Settings, Terminal, Activity } from "lucide-react";
 import { cmpService } from "@/services/cmp-service";
 import { CloudAccount } from "@/types/cloud";
 
@@ -35,6 +36,7 @@ interface Environment {
 
 const Environments = () => {
   const { currentTenant } = useAuth();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [filteredEnvironments, setFilteredEnvironments] = useState<Environment[]>([]);
@@ -226,6 +228,10 @@ const Environments = () => {
   };
   
   const handleDeleteEnvironment = async (environmentId: string) => {
+    if (!confirm("Are you sure you want to delete this environment? This action cannot be undone.")) {
+      return;
+    }
+    
     try {
       setIsLoading(true);
       
@@ -261,6 +267,10 @@ const Environments = () => {
     } else {
       setSelectedCloudAccounts([...selectedCloudAccounts, accountId]);
     }
+  };
+  
+  const handleViewEnvironment = (environmentId: string) => {
+    navigate(`/environments/${environmentId}`);
   };
   
   return (
@@ -478,7 +488,7 @@ const Environments = () => {
               </TableHeader>
               <TableBody>
                 {filteredEnvironments.map((environment) => (
-                  <TableRow key={environment.environment_id}>
+                  <TableRow key={environment.id}>
                     <TableCell className="font-medium">{environment.name}</TableCell>
                     <TableCell>{environment.description || "No description"}</TableCell>
                     <TableCell>
@@ -504,11 +514,21 @@ const Environments = () => {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteEnvironment(environment.environment_id)}>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleDeleteEnvironment(environment.id)}
+                        title="Delete environment"
+                      >
                         <Trash className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon">
-                        <Edit className="h-4 w-4" />
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleViewEnvironment(environment.id)}
+                        title="View environment details"
+                      >
+                        <Eye className="h-4 w-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
