@@ -91,6 +91,7 @@ class Template(Base):
     description = Column(String, nullable=True)
     category = Column(String, nullable=True)
     provider = Column(String)  # azure, aws, gcp
+    type = Column(String, default="terraform")  # terraform, arm, cloudformation
     is_public = Column(Boolean, default=False)
     current_version = Column(String, nullable=True)
     code = Column(String, nullable=True)  # Store the template code directly

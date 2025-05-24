@@ -136,7 +136,7 @@ def get_templates(
                 id=template.template_id,
                 name=template.name,
                 description=template.description or "",
-                type="terraform",  # Default to terraform, would need to add a type field
+                type=template.type,  # Use the actual template type from the database
                 provider=template.provider,
                 code=template.code or "",
                 deploymentCount=deployment_count,
@@ -234,7 +234,7 @@ def get_template(
             id=template.template_id,
             name=template.name,
             description=template.description or "",
-            type="terraform",  # Default to terraform
+            type=template.type,  # Use the actual template type from the database
             provider=template.provider,
             code=code,
             deploymentCount=deployment_count,
@@ -287,6 +287,7 @@ def create_template(
             description=template.description,
             category=template.category,
             provider=template.provider,
+            type=template.type if template.type else "terraform",  # Use the provided type or default to terraform
             is_public=template.is_public,
             tenant_id=None if template.is_public else user_tenant.tenant_id,
             code=template.code,  # Store the code directly in the template
@@ -330,7 +331,7 @@ def create_template(
             id=new_template.template_id,
             name=new_template.name,
             description=new_template.description or "",
-            type="terraform",  # Default to terraform
+            type=new_template.type,  # Use the actual template type from the database
             provider=new_template.provider,
             code=new_template.code or "",
             deploymentCount=0,
@@ -370,7 +371,6 @@ def update_template(
         )
     
     try:
-        # Get the template
         template = db.query(Template).filter(Template.template_id == template_id).first()
         
         if not template:
@@ -388,59 +388,47 @@ def update_template(
                     detail="Not authorized to update this template"
                 )
         
-        # Check if code has changed
-        code_changed = template_update.code is not None and template_update.code != template.code
-        
-        # Update template
+        # Update template fields
         if template_update.name is not None:
             template.name = template_update.name
+        
         if template_update.description is not None:
             template.description = template_update.description
-        if template_update.category is not None:
-            template.category = template_update.category
+        
         if template_update.provider is not None:
             template.provider = template_update.provider
+        
+        if template_update.type is not None:
+            template.type = template_update.type
+        
         if template_update.is_public is not None:
             template.is_public = template_update.is_public
+        
+        if template_update.category is not None:
+            template.category = template_update.category
+        
         if template_update.parameters is not None:
             template.parameters = template_update.parameters
+        
         if template_update.variables is not None:
             template.variables = template_update.variables
         
-        # Update code if changed
-        if code_changed:
-            # Create a new version
-            current_version = template.current_version or "1.0.0"
-            version_parts = current_version.split(".")
-            new_version = f"{version_parts[0]}.{version_parts[1]}.{int(version_parts[2]) + 1}"
+        # Only update code if it's provided
+        if template_update.code is not None:
+            template.code = template_update.code
             
-            # Create new version record
-            new_version_record = TemplateVersion(
+            # Create new version
+            new_version = TemplateVersion(
                 template_id=template.id,
-                version=new_version,
+                version=template.current_version or "1.0.0",  # Use current version or default
                 code=template_update.code,
-                changes=f"Updated from version {current_version}",
+                changes="Updated template code",
                 created_at=datetime.utcnow(),
                 created_by_id=current_user.id
             )
             
-            db.add(new_version_record)
-            
-            # Update template with new code and version
-            template.code = template_update.code
-            template.current_version = new_version
+            db.add(new_version)
         
-        # Update tenant_id based on is_public
-        if template_update.is_public is not None:
-            if template_update.is_public:
-                template.tenant_id = None
-            elif template.tenant_id is None:
-                # Get the user's tenant
-                user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
-                if user_tenant:
-                    template.tenant_id = user_tenant.tenant_id
-        
-        # Update timestamp
         template.updated_at = datetime.utcnow()
         
         db.commit()
@@ -464,22 +452,13 @@ def update_template(
             categories = [cat.strip() for cat in template.category.split(",")]
         
         # Get the last user who updated the template
-        last_updated_by = None
-        if template.versions:
-            # Sort versions by created_at in descending order
-            sorted_versions = sorted(template.versions, key=lambda v: v.created_at, reverse=True)
-            if sorted_versions:
-                latest_version = sorted_versions[0]
-                if latest_version.created_by_id:
-                    user = db.query(User).filter(User.id == latest_version.created_by_id).first()
-                    if user:
-                        last_updated_by = user.full_name or user.username
+        last_updated_by = current_user.full_name or current_user.username
         
         return CloudTemplateResponse(
             id=template.template_id,
             name=template.name,
             description=template.description or "",
-            type="terraform",  # Default to terraform
+            type=template.type,  # Use the actual template type from the database
             provider=template.provider,
             code=template.code or "",
             deploymentCount=deployment_count,
@@ -487,9 +466,7 @@ def update_template(
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
             categories=categories,
             tenantId=tenant_id,
-            lastUpdatedBy=last_updated_by,
-            parameters=template.parameters,
-            variables=template.variables
+            lastUpdatedBy=last_updated_by
         )
     
     except HTTPException:
