@@ -182,18 +182,34 @@ const TemplateDetails = () => {
     }
     
     try {
+      // Find the selected environment to get its name
+      const selectedEnvironment = environments.find(env => env.id === deployEnv);
+      if (!selectedEnvironment) {
+        toast.error("Selected environment not found");
+        return;
+      }
+      
+      // Map ARM template type to 'native' for the backend
+      const backendDeploymentType = template.type === 'arm' ? 'native' : template.type;
+      
+      // Ensure template code is a string, not undefined or null
+      const templateCode = template.code || "";
+      
       // Prepare the deployment data
       const deploymentData = {
         name: deployName,
         description: `Deployment of ${template.name}`,
         template_id: parseInt(template.id),
         environment_id: parseInt(deployEnv),
+        environment_name: selectedEnvironment.name,
         provider: template.provider,
-        deployment_type: template.type,
+        deployment_type: backendDeploymentType,
         template_source: "code",
-        template_code: template.code,
-        parameters: parameters
+        template_code: templateCode,
+        parameters: parameters || {}
       };
+      
+      console.log("Deployment data:", JSON.stringify(deploymentData));
       
       // Use the deployment service to create the deployment
       await deploymentService.createDeployment(deploymentData, currentTenant?.tenant_id || "");
