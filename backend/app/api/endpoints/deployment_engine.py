@@ -11,6 +11,13 @@ from app.models.user import User
 from app.models.cloud_settings import CloudSettings
 from app.schemas.deployment import DeploymentResponse
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("deployment_engine")
+
 router = APIRouter()
 
 # Deployment engine API URL
@@ -179,18 +186,37 @@ def create_deployment(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
+        # Debug: Log the deployment request
+        logger.info(f"Creating deployment: {deployment_in.name}")
+        logger.debug(f"Deployment data: {deployment_in.dict(exclude={'template': {'code'}})}")
+        logger.debug(f"Template code length: {len(deployment_in.template.code) if deployment_in.template and deployment_in.template.code else 0}")
+        
+        # Ensure template code is not None
+        if deployment_in.template and deployment_in.template.source == 'code':
+            if deployment_in.template.code is None:
+                deployment_in.template.code = ""
+                logger.warning("Template code was None, setting to empty string")
+        
         # Forward request to deployment engine
         headers = {"Authorization": f"Bearer {get_token_for_deployment_engine(current_user)}"}
+        
+        # Debug: Log the request to deployment engine
+        logger.info(f"Sending request to deployment engine: {DEPLOYMENT_ENGINE_URL}/deployments")
+        
         response = requests.post(
             f"{DEPLOYMENT_ENGINE_URL}/deployments",
             headers=headers,
             json=deployment_in.dict()
         )
         
+        # Debug: Log the response from deployment engine
+        logger.info(f"Deployment engine response status: {response.status_code}")
         if response.status_code != 200:
+            logger.error(f"Deployment engine error: {response.text}")
             raise Exception(f"Deployment engine error: {response.text}")
         
         result = response.json()
+        logger.info(f"Deployment created successfully: {result.get('deployment_id')}")
         
         return {
             "id": result["deployment_id"],
@@ -201,6 +227,7 @@ def create_deployment(
         }
     
     except Exception as e:
+        logger.error(f"Error creating deployment: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/deployments", response_model=List[DeploymentResponse])
@@ -220,11 +247,16 @@ def list_deployments(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
+        # Debug: Log the request
+        logger.info(f"Listing deployments: status={status}, limit={limit}, offset={offset}")
+        
         # Forward request to deployment engine
         headers = {"Authorization": f"Bearer {get_token_for_deployment_engine(current_user)}"}
         params = {"limit": limit, "offset": offset}
         if status:
             params["status"] = status
+        
+        logger.info(f"Sending request to deployment engine: {DEPLOYMENT_ENGINE_URL}/deployments")
         
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/deployments",
@@ -232,10 +264,15 @@ def list_deployments(
             params=params
         )
         
+        # Debug: Log the response
+        logger.info(f"Deployment engine response status: {response.status_code}")
+        
         if response.status_code != 200:
+            logger.error(f"Deployment engine error: {response.text}")
             raise Exception(f"Deployment engine error: {response.text}")
         
         result = response.json()
+        logger.info(f"Retrieved {len(result)} deployments")
         
         # Format response
         deployments = []
@@ -251,6 +288,7 @@ def list_deployments(
         return deployments
     
     except Exception as e:
+        logger.error(f"Error listing deployments: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/deployments/{deployment_id}", response_model=Dict[str, Any])
@@ -268,19 +306,33 @@ def get_deployment(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
+        # Debug: Log the request
+        logger.info(f"Getting deployment details: {deployment_id}")
+        
         # Forward request to deployment engine
         headers = {"Authorization": f"Bearer {get_token_for_deployment_engine(current_user)}"}
+        
+        logger.info(f"Sending request to deployment engine: {DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}")
+        
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}",
             headers=headers
         )
         
+        # Debug: Log the response
+        logger.info(f"Deployment engine response status: {response.status_code}")
+        
         if response.status_code != 200:
+            logger.error(f"Deployment engine error: {response.text}")
             raise Exception(f"Deployment engine error: {response.text}")
         
-        return response.json()
+        result = response.json()
+        logger.info(f"Retrieved deployment details for: {deployment_id}")
+        
+        return result
     
     except Exception as e:
+        logger.error(f"Error getting deployment details: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class DeploymentUpdate(BaseModel):
@@ -303,20 +355,41 @@ def update_deployment(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
+        # Debug: Log the request
+        logger.info(f"Updating deployment: {deployment_id}")
+        logger.debug(f"Update data: {deployment_in.dict(exclude_none=True, exclude={'template': {'code'}})}")
+        
+        # Ensure template code is not None if present
+        if deployment_in.template and deployment_in.template.source == 'code':
+            if deployment_in.template.code is None:
+                deployment_in.template.code = ""
+                logger.warning("Template code was None, setting to empty string")
+        
         # Forward request to deployment engine
         headers = {"Authorization": f"Bearer {get_token_for_deployment_engine(current_user)}"}
+        
+        logger.info(f"Sending request to deployment engine: {DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}")
+        
         response = requests.put(
             f"{DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}",
             headers=headers,
             json=deployment_in.dict(exclude_none=True)
         )
         
+        # Debug: Log the response
+        logger.info(f"Deployment engine response status: {response.status_code}")
+        
         if response.status_code != 200:
+            logger.error(f"Deployment engine error: {response.text}")
             raise Exception(f"Deployment engine error: {response.text}")
         
-        return response.json()
+        result = response.json()
+        logger.info(f"Deployment updated successfully: {deployment_id}")
+        
+        return result
     
     except Exception as e:
+        logger.error(f"Error updating deployment: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/deployments/{deployment_id}", response_model=Dict[str, Any])
@@ -334,19 +407,33 @@ def delete_deployment(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
+        # Debug: Log the request
+        logger.info(f"Deleting deployment: {deployment_id}")
+        
         # Forward request to deployment engine
         headers = {"Authorization": f"Bearer {get_token_for_deployment_engine(current_user)}"}
+        
+        logger.info(f"Sending request to deployment engine: {DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}")
+        
         response = requests.delete(
             f"{DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}",
             headers=headers
         )
         
+        # Debug: Log the response
+        logger.info(f"Deployment engine response status: {response.status_code}")
+        
         if response.status_code != 200:
+            logger.error(f"Deployment engine error: {response.text}")
             raise Exception(f"Deployment engine error: {response.text}")
         
-        return response.json()
+        result = response.json()
+        logger.info(f"Deployment deleted successfully: {deployment_id}")
+        
+        return result
     
     except Exception as e:
+        logger.error(f"Error deleting deployment: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 def get_token_for_deployment_engine(user: User) -> str:
@@ -400,11 +487,18 @@ def get_token_for_deployment_engine(user: User) -> str:
         "exp": int(time.time()) + 3600  # 1 hour expiration
     }
     
+    logger.debug(f"Token payload: {payload}")
+    
     # Sign token
+    secret_key = os.getenv("JWT_SECRET", "your-secret-key")
+    algorithm = os.getenv("JWT_ALGORITHM", "HS256")
+    
     token = jwt.encode(
         payload,
-        os.getenv("JWT_SECRET", "your-secret-key"),
-        algorithm=os.getenv("JWT_ALGORITHM", "HS256")
+        secret_key,
+        algorithm=algorithm
     )
+    
+    logger.debug(f"Generated token for deployment engine (first 20 chars): {token[:20]}...")
     
     return token
