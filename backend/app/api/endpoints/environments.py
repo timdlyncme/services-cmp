@@ -65,8 +65,8 @@ def get_environments(
                 })
             
             result.append({
-                "id": env.id,
-                "environment_id": env.environment_id,
+                "id": env.environment_id,  # Use environment_id as id
+                "internal_id": env.id,  # Store internal id
                 "name": env.name,
                 "description": env.description,
                 "update_strategy": env.update_strategy,
@@ -126,7 +126,7 @@ def get_environment(
         for account in environment.cloud_accounts:
             cloud_accounts.append(
                 CloudAccountResponse(
-                    id=account.id,
+                    id=account.account_id,  # Use account_id as id
                     account_id=account.account_id,
                     name=account.name,
                     provider=account.provider,
@@ -137,8 +137,9 @@ def get_environment(
             )
         
         return EnvironmentResponse(
-            id=environment.id,
-            environment_id=environment.environment_id,
+            id=environment.environment_id,  # Use environment_id as id
+            internal_id=environment.environment_id,  # Use environment_id as id
+            internal_id=environment.id,  # Store internal id  # Store internal id
             name=environment.name,
             description=environment.description,
             tenant_id=environment.tenant_id,
@@ -224,15 +225,15 @@ def create_environment(
         cloud_accounts = []
         for account in environment.cloud_accounts:
             cloud_accounts.append({
-                "id": account.account_id,
+                "id": account.account_id,  # Use account_id as id
                 "name": account.name,
                 "provider": account.provider,
                 "status": account.status
             })
         
         return {
-            "id": environment.id,
-            "environment_id": environment.environment_id,
+            "id": environment.environment_id,  # Use environment_id as id
+            "internal_id": environment.id,  # Store internal id
             "name": environment.name,
             "description": environment.description,
             "update_strategy": environment.update_strategy,
@@ -350,7 +351,7 @@ def update_environment(
         for account in environment.cloud_accounts:
             cloud_accounts.append(
                 CloudAccountResponse(
-                    id=account.id,
+                    id=account.account_id,  # Use account_id as id
                     account_id=account.account_id,
                     name=account.name,
                     provider=account.provider,
@@ -361,8 +362,9 @@ def update_environment(
             )
         
         return EnvironmentResponse(
-            id=environment.id,
-            environment_id=environment.environment_id,
+            id=environment.environment_id,  # Use environment_id as id
+            internal_id=environment.id,  # Store internal id
+            
             name=environment.name,
             description=environment.description,
             tenant_id=environment.tenant_id,
