@@ -7,8 +7,7 @@ import logging
 
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
-from app.models.environment import Environment
-from app.models.cloud_account import CloudAccount
+from app.models.deployment import Environment, CloudAccount
 from app.models.cloud_settings import CloudSettings
 
 router = APIRouter()
@@ -195,4 +194,3 @@ def get_token_for_deployment_engine(user: User) -> str:
     )
     
     return token
-
