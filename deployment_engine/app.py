@@ -212,6 +212,35 @@ def create_deployment(
         template = deployment.get("template", {})
         parameters = deployment.get("parameters", {})
         
+        # Extract Azure credentials if provided
+        client_id = deployment.get("client_id")
+        client_secret = deployment.get("client_secret")
+        tenant_id = deployment.get("tenant_id")
+        subscription_id = deployment.get("subscription_id")
+        
+        # Log credential information for debugging
+        logger.debug(f"Received credentials: client_id={client_id is not None}, client_secret={client_secret is not None}, tenant_id={tenant_id is not None}, subscription_id={subscription_id is not None}")
+        
+        # Set Azure credentials if provided
+        if client_id and client_secret and tenant_id:
+            logger.debug("Setting Azure credentials from deployment request")
+            azure_deployer.set_credentials(
+                client_id=client_id,
+                client_secret=client_secret,
+                tenant_id=tenant_id,
+                subscription_id=subscription_id
+            )
+        
+        # Check if Azure credentials are configured
+        cred_status = azure_deployer.get_credential_status()
+        if not cred_status.get("configured", False):
+            raise ValueError("Azure credentials not configured")
+        
+        # Set subscription if provided and not already set
+        if subscription_id and azure_deployer.subscription_id != subscription_id:
+            logger.debug(f"Setting subscription ID: {subscription_id}")
+            azure_deployer.set_subscription(subscription_id)
+        
         # Prepare template data
         template_data = {}
         if template.get("source") == "url" and template.get("url"):
