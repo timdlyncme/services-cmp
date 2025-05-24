@@ -526,10 +526,6 @@ const DeploymentDetails = () => {
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh Now
                 </Button>
-                <Button variant="outline" size="sm">
-                  <Terminal className="h-4 w-4 mr-2" />
-                  Full Console
-                </Button>
               </div>
             </CardHeader>
             <CardContent>
