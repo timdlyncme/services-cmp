@@ -100,6 +100,16 @@ const TemplateManagement = () => {
     try {
       setIsLoading(true);
       
+      // Get the file input element
+      const fileInput = document.getElementById('file') as HTMLInputElement;
+      let fileContent = "";
+      
+      // Read the file content if a file was selected
+      if (fileInput && fileInput.files && fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        fileContent = await readFileContent(file);
+      }
+      
       // Create the new template
       const categories = newTemplateCategories
         .split(",")
@@ -111,8 +121,9 @@ const TemplateManagement = () => {
         description: newTemplateDescription,
         provider: newTemplateProvider,
         type: newTemplateType,
-        categories: categories,
-        code: ""
+        category: categories.join(','),  // Convert array to comma-separated string
+        code: fileContent,  // Include the file content
+        categories: categories  // Keep the array for frontend display
       };
       
       await cmpService.createTemplate(newTemplate, currentTenant!.tenant_id);
@@ -177,6 +188,22 @@ const TemplateManagement = () => {
       case "gcp": return "bg-cloud-gcp text-white";
       default: return "bg-muted text-muted-foreground";
     }
+  };
+  
+  // Helper function to read file content
+  const readFileContent = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target && typeof event.target.result === 'string') {
+          resolve(event.target.result);
+        } else {
+          reject(new Error("Failed to read file content"));
+        }
+      };
+      reader.onerror = (error) => reject(error);
+      reader.readAsText(file);
+    });
   };
   
   return (
