@@ -1190,7 +1190,7 @@ def get_deployment_logs(
     Get logs for a specific deployment from the deployment_history table
     """
     # Check if user has permission to view deployments
-    has_permission = any(p.name == "read:deployments" for p in current_user.role.permissions)
+    has_permission = any(p.name == "view:deployments" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
