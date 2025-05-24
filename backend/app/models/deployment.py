@@ -138,6 +138,8 @@ class Deployment(Base):
     parameters = Column(JSON, nullable=True)
     resources = Column(JSON, nullable=True)  # Store deployment resources
     region = Column(String, nullable=True)  # Store deployment region
+    cloud_deployment_id = Column(String, nullable=True)  # ID from the cloud provider
+    deployment_type = Column(String, default="arm")  # arm, terraform, etc.
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

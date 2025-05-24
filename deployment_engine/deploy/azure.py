@@ -6,6 +6,8 @@ import requests
 import os
 import tempfile
 import subprocess
+import logging
+from datetime import datetime
 
 class AzureDeployer:
     def __init__(self):
@@ -367,49 +369,82 @@ class AzureDeployer:
         Returns:
             dict: Status and details of the deployment
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if not self.resource_client:
+            logger.error("Azure credentials not configured")
             raise ValueError("Azure credentials not configured")
         
         try:
+            logger.info(f"Getting deployment status for {deployment_name} in resource group {resource_group}")
+            
             # Get deployment
-            deployment = self.resource_client.deployments.get(
-                resource_group_name=resource_group,
-                deployment_name=deployment_name
-            )
+            try:
+                deployment = self.resource_client.deployments.get(
+                    resource_group_name=resource_group,
+                    deployment_name=deployment_name
+                )
+                logger.info(f"Deployment state: {deployment.properties.provisioning_state}")
+            except Exception as e:
+                logger.error(f"Error getting deployment: {str(e)}", exc_info=True)
+                return {
+                    "status": "failed",
+                    "resources": [],
+                    "outputs": {},
+                    "logs": [{
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "resource_name": None,
+                        "resource_type": None,
+                        "message": f"Error retrieving deployment: {str(e)}"
+                    }]
+                }
             
             # Get deployment operations
-            operations = list(self.resource_client.deployment_operations.list(
-                resource_group_name=resource_group,
-                deployment_name=deployment_name
-            ))
+            try:
+                operations = list(self.resource_client.deployment_operations.list(
+                    resource_group_name=resource_group,
+                    deployment_name=deployment_name
+                ))
+                logger.info(f"Found {len(operations)} deployment operations")
+            except Exception as e:
+                logger.error(f"Error getting deployment operations: {str(e)}", exc_info=True)
+                operations = []
             
             # Extract resources
             resources = []
             for operation in operations:
                 if operation.properties.target_resource:
-                    resources.append({
+                    resource_info = {
                         "id": operation.properties.target_resource.id,
                         "name": operation.properties.target_resource.resource_name,
                         "type": operation.properties.target_resource.resource_type,
                         "status": operation.properties.provisioning_state
-                    })
+                    }
+                    resources.append(resource_info)
+                    logger.debug(f"Resource: {resource_info['name']} ({resource_info['type']}) - Status: {resource_info['status']}")
             
             # Extract outputs
             outputs = {}
             if deployment.properties.outputs:
-                outputs = {k: v.get("value") for k, v in deployment.properties.outputs.items()}
+                try:
+                    outputs = {k: v.get("value") for k, v in deployment.properties.outputs.items()}
+                    logger.debug(f"Outputs: {list(outputs.keys())}")
+                except Exception as e:
+                    logger.error(f"Error extracting outputs: {str(e)}", exc_info=True)
             
             # Extract logs
             logs = []
             for operation in operations:
                 if operation.properties.status_message:
-                    logs.append({
-                        "timestamp": operation.properties.timestamp.isoformat() if operation.properties.timestamp else None,
+                    log_entry = {
+                        "timestamp": operation.properties.timestamp.isoformat() if operation.properties.timestamp else datetime.utcnow().isoformat(),
                         "resource_name": operation.properties.target_resource.resource_name if operation.properties.target_resource else None,
                         "resource_type": operation.properties.target_resource.resource_type if operation.properties.target_resource else None,
-                        "status": operation.properties.provisioning_state,
                         "message": str(operation.properties.status_message)
-                    })
+                    }
+                    logs.append(log_entry)
+                    logger.debug(f"Log: {log_entry['timestamp']} - {log_entry['resource_name']} - {log_entry['message'][:100]}...")
             
             # Map Azure provisioning state to our status
             status_map = {
@@ -425,19 +460,26 @@ class AzureDeployer:
             }
             
             status = status_map.get(deployment.properties.provisioning_state, "in_progress")
+            logger.info(f"Mapped Azure status '{deployment.properties.provisioning_state}' to '{status}'")
             
             return {
                 "status": status,
-                "provisioning_state": deployment.properties.provisioning_state,
                 "resources": resources,
                 "outputs": outputs,
                 "logs": logs
             }
-            
         except Exception as e:
+            logger.error(f"Error getting deployment status: {str(e)}", exc_info=True)
             return {
                 "status": "failed",
-                "error_details": str(e)
+                "resources": [],
+                "outputs": {},
+                "logs": [{
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "resource_name": None,
+                    "resource_type": None,
+                    "message": f"Error retrieving deployment status: {str(e)}"
+                }]
             }
     
     def update_deployment(self, resource_group, deployment_name, template_data=None, parameters=None):
