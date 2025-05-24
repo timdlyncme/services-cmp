@@ -70,27 +70,19 @@ const DeploymentDetails = () => {
               
               if (associatedTemplate) {
                 setTemplate(associatedTemplate);
-                
-                // In a real scenario, we would check for newer template versions
-                // For demo purposes, we'll simulate a newer version available
-                setNewTemplateVersionAvailable(Math.random() > 0.5);
               }
             } catch (error) {
               console.error("Error fetching template:", error);
             }
           }
           
-          // Generate some mock logs (in a real app, these would come from the API)
-          const mockLogs = [
-            "2023-04-01T10:00:00Z [INFO] Starting deployment...",
-            "2023-04-01T10:00:05Z [INFO] Validating template...",
-            "2023-04-01T10:00:10Z [INFO] Provisioning resources...",
-            "2023-04-01T10:01:00Z [INFO] Creating virtual network...",
-            "2023-04-01T10:02:00Z [INFO] Creating storage accounts...",
-            "2023-04-01T10:03:00Z [INFO] Configuring security...",
-            "2023-04-01T10:04:00Z [INFO] Deployment completed successfully."
-          ];
-          setLogs(mockLogs);
+          // Set mock logs if none exist
+          if (deploymentData.logs && deploymentData.logs.length > 0) {
+            // Use real logs from the deployment
+            setLogs(deploymentData.logs.map(log => 
+              `${new Date(log.timestamp).toLocaleString()} - ${log.resource_name || 'System'}: ${log.message}`
+            ));
+          }
         }
       } catch (error) {
         console.error("Error fetching deployment:", error);
@@ -99,10 +91,14 @@ const DeploymentDetails = () => {
         setLoading(false);
       }
     };
+
+    fetchDeployment();
     
-    if (deploymentId && currentTenant) {
-      fetchDeployment();
-    }
+    // Set up polling for deployment status updates
+    const pollingInterval = setInterval(fetchDeployment, 10000); // Poll every 10 seconds
+    
+    // Clean up interval on component unmount
+    return () => clearInterval(pollingInterval);
   }, [deploymentId, currentTenant]);
   
   const handleAction = (action: string) => {
@@ -297,23 +293,18 @@ const DeploymentDetails = () => {
                       deployment.resources.map((resource, index) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">
-                            {typeof resource === 'string' 
-                              ? resource.split(':')[1]?.trim() || resource 
-                              : resource.name || 'Unknown'}
+                            {resource.name || 'Unknown'}
                           </TableCell>
                           <TableCell>
-                            {typeof resource === 'string'
-                              ? resource.split(':')[0]?.trim() || 'Resource'
-                              : resource.type || 'Unknown'}
+                            {resource.type || 'Unknown'}
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center">
-                              <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
-                              <span>Deployed</span>
-                            </div>
+                            {getStatusBadge(resource.status || 'unknown')}
                           </TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="sm">View Details</Button>
+                            <Button variant="ghost" size="sm">
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))
@@ -469,19 +460,15 @@ const DeploymentDetails = () => {
             <CardContent>
               <ScrollArea className="h-[400px] rounded-md border bg-black text-white font-mono">
                 <div className="p-4">
-                  {logs.map((log, index) => (
-                    <div key={index} className="py-0.5">
-                      <span className="opacity-70">{log.split(' [')[0]}</span>
-                      <span className={
-                        log.includes('[INFO]') ? " text-blue-400" :
-                        log.includes('[ERROR]') ? " text-red-400" :
-                        log.includes('[WARNING]') ? " text-yellow-400" :
-                        " text-green-400"
-                      }>
-                        {` [${log.split('[')[1]}`}
-                      </span>
-                    </div>
-                  ))}
+                  {logs.length > 0 ? (
+                    logs.map((log, index) => (
+                      <div key={index} className="py-0.5">
+                        {log}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-2 text-gray-400">No logs available</div>
+                  )}
                 </div>
               </ScrollArea>
             </CardContent>
