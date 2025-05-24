@@ -9,6 +9,8 @@ services:
       - POSTGRES_DB=cmpdb
     ports:
       - "5432:5432"
+    networks:
+      - app-network
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -21,6 +23,8 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
+    networks:
+      - app-network
     environment:
       - POSTGRES_SERVER=db
       - POSTGRES_PORT=5432
