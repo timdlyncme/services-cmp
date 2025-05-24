@@ -281,9 +281,20 @@ def create_template(
     """
     Create a new template
     """
+    # Set up logging for this endpoint
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    
+    logger.debug(f"Creating new template: {template.name}")
+    logger.debug(f"Template type: {template.type}")
+    logger.debug(f"Template category: {template.category}")
+    logger.debug(f"Template code length: {len(template.code) if template.code else 0}")
+    
     # Check if user has permission to create templates
     has_permission = any(p.name == "create:templates" for p in current_user.role.permissions)
     if not has_permission:
+        logger.warning(f"User {current_user.username} does not have permission to create templates")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -293,15 +304,16 @@ def create_template(
         # Get the user's tenant
         user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
         if not user_tenant and not template.is_public:
+            logger.warning(f"User's tenant not found: {current_user.tenant_id}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User's tenant not found"
             )
         
         # Debug: Print the template data
-        print(f"Template data received: {template.dict()}")
-        print(f"Template type: {template.type}")
-        print(f"Template category: {template.category}")
+        logger.debug(f"Template data received: {template.dict()}")
+        logger.debug(f"Template type: {template.type}")
+        logger.debug(f"Template category: {template.category}")
         
         # Create new template
         new_template = Template(
@@ -322,7 +334,7 @@ def create_template(
         )
         
         # Debug: Print the new template object
-        print(f"New template object: type={new_template.type}, category={new_template.category}")
+        logger.debug(f"New template object: type={new_template.type}, category={new_template.category}")
         
         db.add(new_template)
         db.commit()
@@ -330,7 +342,7 @@ def create_template(
         
         # Verify the template was created correctly
         created_template = db.query(Template).filter(Template.id == new_template.id).first()
-        print(f"Created template: type={created_template.type}, category={created_template.category}")
+        logger.debug(f"Created template: type={created_template.type}, category={created_template.category}")
         
         # Create initial version
         initial_version = TemplateVersion(
@@ -376,6 +388,7 @@ def create_template(
         )
     
     except Exception as e:
+        logger.error(f"Error creating template: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

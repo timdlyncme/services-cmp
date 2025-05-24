@@ -49,11 +49,13 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
         access_token: The user's access token for authentication
     """
     logger.info(f"Starting status polling for deployment {deployment_id}")
+    logger.info(f"Resource group: {resource_group}, Azure deployment ID: {azure_deployment_id}")
     
     try:
         # Continue polling until deployment is complete or failed
         while True:
             # Get deployment status from Azure
+            logger.info(f"Polling Azure for deployment status: {azure_deployment_id}")
             azure_status = azure_deployer.get_deployment_status(
                 resource_group=resource_group,
                 deployment_name=azure_deployment_id
@@ -64,6 +66,9 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
             outputs = azure_status.get("outputs", {})
             logs = azure_status.get("logs", [])
             
+            logger.info(f"Deployment {deployment_id} status: {status}")
+            logger.info(f"Resources: {len(resources)}, Outputs: {len(outputs) if outputs else 0}, Logs: {len(logs)}")
+            
             # Update deployment in memory
             if deployment_id in deployments:
                 deployments[deployment_id]["status"] = status
@@ -71,9 +76,13 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
                 deployments[deployment_id]["outputs"] = outputs
                 deployments[deployment_id]["logs"] = logs
                 deployments[deployment_id]["updated_at"] = datetime.utcnow().isoformat()
+                logger.info(f"Updated in-memory deployment {deployment_id}")
+            else:
+                logger.warning(f"Deployment {deployment_id} not found in memory")
             
             # Send update to backend API
             try:
+                logger.info(f"Sending status update to backend API for deployment {deployment_id}")
                 headers = {"Authorization": f"Bearer {access_token}"}
                 update_data = {
                     "status": status,
@@ -82,16 +91,31 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
                     "logs": logs
                 }
                 
+                # Log the request details
+                logger.info(f"Request URL: {API_URL}/api/deployments/engine/{deployment_id}/status")
+                logger.info(f"Request headers: Authorization: Bearer [REDACTED]")
+                logger.info(f"Request data: {json.dumps(update_data, default=str)[:500]}...")
+                
                 response = requests.put(
                     f"{API_URL}/api/deployments/engine/{deployment_id}/status",
                     headers=headers,
                     json=update_data
                 )
                 
+                logger.info(f"Response status code: {response.status_code}")
+                
                 if response.status_code != 200:
                     logger.error(f"Failed to update deployment status: {response.text}")
+                    # Try to parse the response for more details
+                    try:
+                        error_details = response.json()
+                        logger.error(f"Error details: {json.dumps(error_details, default=str)}")
+                    except:
+                        logger.error("Could not parse error response as JSON")
+                else:
+                    logger.info(f"Successfully updated deployment status in backend")
             except Exception as e:
-                logger.error(f"Error updating deployment status: {str(e)}")
+                logger.error(f"Error updating deployment status: {str(e)}", exc_info=True)
             
             # If deployment is complete or failed, stop polling
             if status in ["succeeded", "failed", "canceled"]:
@@ -99,9 +123,10 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
                 break
             
             # Sleep before next poll
+            logger.info(f"Sleeping for 10 seconds before next poll for deployment {deployment_id}")
             time.sleep(10)  # Poll every 10 seconds
     except Exception as e:
-        logger.error(f"Error in status polling thread: {str(e)}")
+        logger.error(f"Error in status polling thread: {str(e)}", exc_info=True)
     finally:
         # Remove thread from active polling threads
         if deployment_id in polling_threads:
@@ -279,11 +304,14 @@ def create_deployment(
     try:
         # Generate deployment ID
         deployment_id = str(uuid.uuid4())
+        logger.info(f"Creating new deployment with ID: {deployment_id}")
         
         # Extract deployment details
         name = deployment.get("name", "Unnamed deployment")
         description = deployment.get("description", "")
         deployment_type = deployment.get("deployment_type", "arm")
+        
+        logger.info(f"Deployment details: name={name}, type={deployment_type}")
         
         # Create a sanitized resource group name (no spaces or special characters)
         sanitized_name = name.lower().replace(' ', '-')
@@ -299,8 +327,8 @@ def create_deployment(
         template = deployment.get("template", {})
         parameters = deployment.get("parameters", {})
         
-        # Log parameters for debugging
-        logger.debug(f"Received parameters: {parameters}")
+        logger.info(f"Resource group: {resource_group}, Location: {location}")
+        logger.info(f"Azure deployment name: {azure_deployment_name}")
         
         # Extract Azure credentials if provided
         client_id = deployment.get("client_id")
@@ -308,12 +336,11 @@ def create_deployment(
         tenant_id = deployment.get("tenant_id")
         subscription_id = deployment.get("subscription_id")
         
-        # Log credential information for debugging
-        logger.debug(f"Received credentials: client_id={client_id is not None}, client_secret={client_secret is not None}, tenant_id={tenant_id is not None}, subscription_id={subscription_id is not None}")
+        logger.info(f"Credentials provided: client_id={client_id is not None}, client_secret={client_secret is not None}, tenant_id={tenant_id is not None}, subscription_id={subscription_id is not None}")
         
         # Set Azure credentials if provided
         if client_id and client_secret and tenant_id:
-            logger.debug("Setting Azure credentials from deployment request")
+            logger.info("Setting Azure credentials from deployment request")
             azure_deployer.set_credentials(
                 client_id=client_id,
                 client_secret=client_secret,
@@ -324,23 +351,31 @@ def create_deployment(
         # Check if Azure credentials are configured
         cred_status = azure_deployer.get_credential_status()
         if not cred_status.get("configured", False):
+            logger.error("Azure credentials not configured")
             raise ValueError("Azure credentials not configured")
         
         # Set subscription if provided and not already set
         if subscription_id and azure_deployer.subscription_id != subscription_id:
-            logger.debug(f"Setting subscription ID: {subscription_id}")
+            logger.info(f"Setting subscription ID: {subscription_id}")
             azure_deployer.set_subscription(subscription_id)
         
         # Prepare template data
         template_data = {}
         if template.get("source") == "url" and template.get("url"):
             template_data["template_url"] = template["url"]
+            logger.info(f"Using template URL: {template['url']}")
         elif template.get("source") == "code" and template.get("code"):
             template_data["template_body"] = template["code"]
+            logger.info(f"Using template code (length: {len(template['code'])})")
         else:
+            logger.error("Invalid template data")
             raise HTTPException(status_code=400, detail="Invalid template data")
         
+        # Log parameters
+        logger.info(f"Deployment parameters: {json.dumps(parameters, default=str)[:500]}...")
+        
         # Deploy to Azure
+        logger.info(f"Starting Azure deployment: {azure_deployment_name}")
         result = azure_deployer.deploy(
             resource_group=resource_group,
             deployment_name=azure_deployment_name,
@@ -349,6 +384,8 @@ def create_deployment(
             parameters=parameters,
             deployment_type=deployment_type
         )
+        
+        logger.info(f"Azure deployment result: {json.dumps(result, default=str)}")
         
         # Store deployment details
         deployments[deployment_id] = {
@@ -369,7 +406,10 @@ def create_deployment(
             "logs": []
         }
         
+        logger.info(f"Stored deployment details in memory: {deployment_id}")
+        
         # Start status polling in a background thread
+        logger.info(f"Starting background polling thread for deployment {deployment_id}")
         thread = threading.Thread(
             target=poll_deployment_status,
             args=(deployment_id, resource_group, azure_deployment_name, user["token"])
@@ -379,6 +419,7 @@ def create_deployment(
         
         # Store thread reference
         polling_threads[deployment_id] = thread
+        logger.info(f"Background polling thread started for deployment {deployment_id}")
         
         return {
             "deployment_id": deployment_id,
@@ -387,7 +428,7 @@ def create_deployment(
             "created_at": deployments[deployment_id]["created_at"]
         }
     except Exception as e:
-        logger.error(f"Error creating deployment: {str(e)}")
+        logger.error(f"Error creating deployment: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/deployments")
