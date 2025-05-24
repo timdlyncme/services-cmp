@@ -183,9 +183,18 @@ def create_environment(
         # Validate that all cloud accounts exist and belong to the user's tenant
         valid_cloud_accounts = []
         for account_id in environment_in.cloud_account_ids:
+            # Convert string ID to int if needed
+            try:
+                account_id_int = int(account_id)
+            except (ValueError, TypeError):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid cloud account ID format: {account_id}"
+                )
+            
             # Get cloud account
             cloud_account = db.query(CloudAccount).filter(
-                CloudAccount.id == account_id,
+                CloudAccount.id == account_id_int,
                 CloudAccount.tenant_id == current_user.tenant.tenant_id
             ).first()
             
@@ -321,9 +330,18 @@ def update_environment(
             # Validate that all cloud accounts exist and belong to the user's tenant
             valid_cloud_accounts = []
             for account_id in environment_update.cloud_account_ids:
+                # Convert string ID to int if needed
+                try:
+                    account_id_int = int(account_id)
+                except (ValueError, TypeError):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid cloud account ID format: {account_id}"
+                    )
+                
                 # Get cloud account
                 cloud_account = db.query(CloudAccount).filter(
-                    CloudAccount.id == account_id,
+                    CloudAccount.id == account_id_int,
                     CloudAccount.tenant_id == current_user.tenant.tenant_id
                 ).first()
                 

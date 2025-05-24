@@ -131,6 +131,27 @@ const Environments = () => {
     setActiveTab("general");
   };
   
+  // Debugging function to help troubleshoot cloud account selection
+  const logCloudAccountState = () => {
+    console.log("Selected cloud accounts:", selectedCloudAccounts);
+    console.log("Available cloud accounts:", cloudAccounts);
+    
+    // Log the mapped IDs to see what's happening
+    const mappedIds = selectedCloudAccounts
+      .map(id => {
+        const account = cloudAccounts.find(acc => acc.id === id);
+        console.log(`Account for ID ${id}:`, account);
+        if (!account) return null;
+        
+        const numericId = parseInt(account.id);
+        console.log(`Parsed ID ${account.id} as:`, numericId, isNaN(numericId));
+        return isNaN(numericId) ? null : numericId;
+      })
+      .filter(id => id !== null);
+    
+    console.log("Mapped IDs:", mappedIds);
+  };
+
   const handleCreateEnvironment = async () => {
     if (!newEnvironmentName) {
       toast.error("Environment name is required");
@@ -143,6 +164,9 @@ const Environments = () => {
       setActiveTab("cloud"); // Switch to cloud accounts tab
       return;
     }
+    
+    // Log the state for debugging
+    logCloudAccountState();
     
     try {
       setIsLoading(true);
@@ -160,27 +184,11 @@ const Environments = () => {
         return;
       }
       
-      // Get cloud account IDs from the selected accounts
-      // Make sure we're using numeric IDs and filtering out any invalid values
-      const cloudAccountIds = selectedCloudAccounts
-        .map(id => {
-          const account = cloudAccounts.find(acc => acc.id === id);
-          if (!account) return null;
-          
-          // Try to parse the ID as an integer
-          const numericId = parseInt(account.id);
-          return isNaN(numericId) ? null : numericId;
-        })
-        .filter(id => id !== null) as number[];
+      // Directly use the selected cloud account IDs
+      // This is the key fix - we're not trying to parse them as integers anymore
+      const cloudAccountIds = selectedCloudAccounts;
       
-      // Double-check that we have valid cloud account IDs
-      if (cloudAccountIds.length === 0) {
-        toast.error("No valid cloud accounts selected");
-        setActiveTab("cloud");
-        return;
-      }
-      
-      // Create the new environment
+      // Create the new environment with the string IDs
       const newEnvironment = {
         name: newEnvironmentName,
         description: newEnvironmentDescription,
@@ -191,6 +199,8 @@ const Environments = () => {
         logging_config: logging,
         monitoring_integration: monitoring
       };
+      
+      console.log("Sending environment data:", newEnvironment);
       
       await cmpService.createEnvironment(newEnvironment, currentTenant!.tenant_id);
       
