@@ -55,6 +55,16 @@ export interface CloudDeployment {
   parameters: Record<string, string>;
   resources: string[];
   tenantId: string;
+  logs?: DeploymentLog[];
+}
+
+export interface DeploymentLog {
+  id: number;
+  status: string;
+  message: string;
+  details?: Record<string, any>;
+  timestamp: string;
+  user_id?: number;
 }
 
 export interface IntegrationConfig {

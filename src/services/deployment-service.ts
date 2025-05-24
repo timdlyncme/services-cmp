@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { CloudDeployment, CloudAccount, CloudTemplate } from '@/types/cloud';
+import { CloudDeployment, CloudAccount, CloudTemplate, DeploymentLog } from '@/types/cloud';
 
 // API base URL
 const API_URL = 'http://localhost:8000/api';
@@ -74,6 +74,28 @@ export class DeploymentService {
     } catch (error) {
       console.error(`Get deployment ${deploymentId} error:`, error);
       return null;
+    }
+  }
+
+  /**
+   * Get logs for a deployment
+   */
+  async getDeploymentLogs(deploymentId: string): Promise<DeploymentLog[]> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return [];
+      }
+
+      const response = await api.get(`/deployments/${deploymentId}/logs`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error(`Get deployment logs for ${deploymentId} error:`, error);
+      return [];
     }
   }
 

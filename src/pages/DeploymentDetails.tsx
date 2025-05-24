@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { deploymentService } from "@/services/deployment-service";
-import { CloudDeployment, CloudTemplate } from "@/types/cloud";
+import { CloudDeployment, CloudTemplate, DeploymentLog } from "@/types/cloud";
 import {
   Activity,
   AlertCircle,
@@ -36,6 +36,7 @@ import {
   GitCompare,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const DeploymentDetails = () => {
   const { deploymentId } = useParams();
@@ -44,11 +45,32 @@ const DeploymentDetails = () => {
   const [template, setTemplate] = useState<CloudTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<string[]>([]);
+  const [deploymentLogs, setDeploymentLogs] = useState<DeploymentLog[]>([]);
+  const [refreshInterval, setRefreshInterval] = useState<number>(10); // Default 10 seconds
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [chatMessage, setChatMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<{role: string, content: string}[]>([
     {role: "system", content: "I'm your Deployment AI Assistant. I can help you understand and manage your deployment."}
   ]);
   const [newTemplateVersionAvailable, setNewTemplateVersionAvailable] = useState(false);
+  
+  // Function to fetch deployment logs
+  const fetchDeploymentLogs = async () => {
+    if (!deploymentId) return;
+    
+    try {
+      const logsData = await deploymentService.getDeploymentLogs(deploymentId);
+      setDeploymentLogs(logsData);
+      
+      // Format logs for display
+      const formattedLogs = logsData.map(log => 
+        `${new Date(log.timestamp).toLocaleString()} - ${log.status}: ${log.message}`
+      );
+      setLogs(formattedLogs);
+    } catch (error) {
+      console.error("Error fetching deployment logs:", error);
+    }
+  };
   
   useEffect(() => {
     const fetchDeployment = async () => {
@@ -76,13 +98,8 @@ const DeploymentDetails = () => {
             }
           }
           
-          // Set real logs from the deployment if available
-          if (deploymentData.logs && deploymentData.logs.length > 0) {
-            const formattedLogs = deploymentData.logs.map(log => 
-              `${new Date(log.timestamp).toLocaleString()} - ${log.resource_name || 'System'}: ${log.message}`
-            );
-            setLogs(formattedLogs);
-          }
+          // Fetch deployment logs
+          await fetchDeploymentLogs();
         }
       } catch (error) {
         console.error("Error fetching deployment:", error);
@@ -101,6 +118,24 @@ const DeploymentDetails = () => {
     // Clean up interval on component unmount
     return () => clearInterval(pollingInterval);
   }, [deploymentId, currentTenant]);
+  
+  // Set up logs refresh interval
+  useEffect(() => {
+    // Clear any existing interval
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+    }
+    
+    // Set new interval
+    refreshIntervalRef.current = setInterval(fetchDeploymentLogs, refreshInterval * 1000);
+    
+    // Clean up on unmount
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [refreshInterval, deploymentId]);
   
   const handleAction = (action: string) => {
     toast.success(`${action} action initiated`);
@@ -125,6 +160,10 @@ const DeploymentDetails = () => {
       
       toast.success("Deployment upgrade started");
       setNewTemplateVersionAvailable(false);
+    } else if (action === "refresh") {
+      // Manually refresh logs
+      fetchDeploymentLogs();
+      toast.success("Logs refreshed");
     }
   };
   
@@ -164,11 +203,11 @@ const DeploymentDetails = () => {
         return <Badge variant="outline">{status}</Badge>;
       case "failed":
         return <Badge variant="destructive">{status}</Badge>;
-        case "succeeded":
-          return <Badge variant="default">{status}</Badge>;
-        default:
-          return <Badge>{status}</Badge>;
-          }
+      case "succeeded":
+        return <Badge variant="default">{status}</Badge>;
+      default:
+        return <Badge>{status}</Badge>;
+    }
   };
   
   if (loading) {
@@ -464,10 +503,34 @@ const DeploymentDetails = () => {
                   Log output from the deployment process
                 </CardDescription>
               </div>
-              <Button variant="outline" size="sm">
-                <Terminal className="h-4 w-4 mr-2" />
-                Full Console
-              </Button>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Refresh:</span>
+                  <Select
+                    value={refreshInterval.toString()}
+                    onValueChange={(value) => setRefreshInterval(parseInt(value))}
+                  >
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue placeholder="Select interval" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5 seconds</SelectItem>
+                      <SelectItem value="10">10 seconds</SelectItem>
+                      <SelectItem value="30">30 seconds</SelectItem>
+                      <SelectItem value="60">1 minute</SelectItem>
+                      <SelectItem value="300">5 minutes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => handleAction("refresh")}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh Now
+                </Button>
+                <Button variant="outline" size="sm">
+                  <Terminal className="h-4 w-4 mr-2" />
+                  Full Console
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-[400px] rounded-md border bg-black text-white font-mono">
