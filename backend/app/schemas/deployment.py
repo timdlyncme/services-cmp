@@ -193,6 +193,12 @@ class DeploymentCreate(DeploymentBase):
         if v not in ['native', 'terraform']:
             raise ValueError('deployment_type must be either "native" or "terraform"')
         return v
+        
+    @validator('environment_id')
+    def validate_environment_id(cls, v):
+        if v is None:
+            raise ValueError('environment_id is required')
+        return v
 
 class DeploymentUpdate(BaseModel):
     name: Optional[str] = None

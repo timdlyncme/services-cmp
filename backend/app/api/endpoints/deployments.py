@@ -668,22 +668,58 @@ def create_deployment(
         db.commit()
         db.refresh(new_deployment)
         
+        # Get cloud account for the environment
+        cloud_account = None
+        if environment.cloud_accounts:
+            # Get the first cloud account associated with this environment
+            cloud_account = environment.cloud_accounts[0]
+        
+        # Get cloud settings if available
+        cloud_settings = None
+        if cloud_account and cloud_account.settings_id:
+            cloud_settings = db.query(CloudSettings).filter(
+                CloudSettings.id == cloud_account.settings_id
+            ).first()
+        
         # Forward deployment to deployment engine
         try:
+            # Determine location/region from parameters or use default
+            location = "eastus"  # Default location
+            if deployment.parameters:
+                if "location" in deployment.parameters:
+                    location = deployment.parameters["location"]
+                elif "region" in deployment.parameters:
+                    location = deployment.parameters["region"]
+            
+            # Ensure template_code is a string
+            template_code = deployment.template_code
+            if template_code is None:
+                template_code = ""
+            
             # Prepare deployment data for the engine
             engine_deployment = {
                 "name": deployment.name,
                 "description": deployment.description,
                 "deployment_type": deployment.deployment_type,
                 "resource_group": f"rg-{deployment.name.lower().replace(' ', '-')}",
-                "location": deployment.parameters.get("location", "eastus") if deployment.parameters else "eastus",
+                "location": location,
                 "template": {
                     "source": deployment.template_source,
                     "url": deployment.template_url,
-                    "code": deployment.template_code
+                    "code": template_code
                 },
-                "parameters": deployment.parameters
+                "parameters": deployment.parameters or {}
             }
+            
+            # Add cloud account and settings information if available
+            if cloud_account:
+                engine_deployment["cloud_account_id"] = str(cloud_account.account_id)
+                engine_deployment["subscription_id"] = cloud_account.cloud_ids[0] if cloud_account.cloud_ids else None
+            
+            if cloud_settings:
+                engine_deployment["settings_id"] = str(cloud_settings.settings_id)
+                engine_deployment["client_id"] = cloud_settings.client_id
+                engine_deployment["tenant_id"] = cloud_settings.tenant_id
             
             # Send to deployment engine
             headers = {"Authorization": f"Bearer {current_user.access_token}"}
@@ -696,6 +732,9 @@ def create_deployment(
             if response.status_code != 200:
                 # Log the error but don't fail the deployment creation
                 print(f"Deployment engine error: {response.text}")
+                # Update deployment status to reflect the error
+                new_deployment.status = "failed"
+                db.commit()
             else:
                 # Update deployment with engine response
                 engine_result = response.json()
@@ -704,13 +743,17 @@ def create_deployment(
         except Exception as e:
             # Log the error but don't fail the deployment creation
             print(f"Error forwarding to deployment engine: {str(e)}")
+            # Update deployment status to reflect the error
+            new_deployment.status = "failed"
+            db.commit()
         
         # Extract region from parameters if available
         region = None
-        if new_deployment.parameters and "region" in new_deployment.parameters:
-            region = new_deployment.parameters["region"]
-        elif new_deployment.parameters and "location" in new_deployment.parameters:
-            region = new_deployment.parameters["location"]
+        if new_deployment.parameters:
+            if "region" in new_deployment.parameters:
+                region = new_deployment.parameters["region"]
+            elif "location" in new_deployment.parameters:
+                region = new_deployment.parameters["location"]
         
         # Return frontend-compatible response
         return CloudDeploymentResponse(
