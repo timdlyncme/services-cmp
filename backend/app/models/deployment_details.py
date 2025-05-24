@@ -32,3 +32,4 @@ class DeploymentDetails(Base):
 
     def __repr__(self):
         return f"<DeploymentDetails(id={self.id}, deployment_id={self.deployment_id}, provider={self.provider}, status={self.status})>"
+

@@ -27,97 +27,50 @@ app.add_middleware(
 # Initialize Azure deployer
 azure_deployer = AzureDeployer()
 
+# Authentication functions
+def get_token_from_header(authorization: str = Header(None)) -> str:
+    """Extract token from Authorization header"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+    
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    
+    return parts[1]
+
+def decode_token(token: str) -> dict:
+    """Decode JWT token"""
+    import jwt
+    
+    try:
+        payload = jwt.decode(
+            token,
+            os.getenv("JWT_SECRET", "your-secret-key"),
+            algorithms=[os.getenv("JWT_ALGORITHM", "HS256")]
+        )
+        return payload
+    except jwt.PyJWTError as e:
+        logger.error(f"Token decode error: {str(e)}")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+def get_current_user(token: str = Depends(get_token_from_header)) -> dict:
+    """Get current user from token"""
+    return decode_token(token)
+
+def check_permission(required_permission: str):
+    """Check if user has required permission"""
+    def _check_permission(user: dict = Depends(get_current_user)) -> dict:
+        if "permissions" not in user or required_permission not in user["permissions"]:
+            raise HTTPException(status_code=403, detail="Not enough permissions")
+        return user
+    return _check_permission
+
 # API settings
 API_URL = os.getenv("API_URL", "http://api:8000")
 
 # In-memory storage for deployments (would be replaced with a database in production)
 deployments = {}
-
-# Authentication dependency
-def get_current_user(authorization: str = Header(None)):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header missing")
-    
-    try:
-        scheme, token = authorization.split()
-        if scheme.lower() != "bearer":
-            raise HTTPException(status_code=401, detail="Invalid authentication scheme")
-        
-        logger.debug(f"Validating token via backend API")
-        
-        # Use the backend API to validate the token
-        headers = {"Authorization": f"Bearer {token}"}
-        response = requests.get(f"{API_URL}/api/auth/me", headers=headers)
-        
-        if response.status_code != 200:
-            logger.error(f"Token validation failed: {response.text}")
-            raise HTTPException(status_code=401, detail="Invalid token")
-        
-        user_data = response.json()
-        logger.debug(f"User data from API: {user_data}")
-        
-        # Extract user information
-        user_id = user_data.get("id")
-        username = user_data.get("username")
-        tenant_id = user_data.get("tenantId")
-        
-        # Extract permissions from user data
-        permissions = user_data.get("permissions", [])
-        if not isinstance(permissions, list):
-            permissions = []
-        
-        # Get role information
-        role = user_data.get("role")
-        
-        logger.debug(f"Extracted user_id: {user_id}")
-        logger.debug(f"Extracted username: {username}")
-        logger.debug(f"Extracted tenant_id: {tenant_id}")
-        logger.debug(f"Extracted permissions: {permissions}")
-        logger.debug(f"Extracted role: {role}")
-        
-        return {
-            "user_id": user_id,
-            "username": username,
-            "tenant_id": tenant_id,
-            "permissions": permissions,
-            "role": role
-        }
-    except Exception as e:
-        logger.error(f"Authentication error: {str(e)}")
-        raise HTTPException(status_code=401, detail=f"Authentication error: {str(e)}")
-
-# Permission check dependency
-def check_permission(required_permission: str):
-    def check(user: dict = Depends(get_current_user)):
-        logger.debug(f"Checking permission: {required_permission}")
-        logger.debug(f"User permissions: {user['permissions']}")
-        
-        # Check if user has the required permission
-        if required_permission in user["permissions"]:
-            return user
-        
-        # Check for view:deployments permission for deployment:read
-        if required_permission == "deployment:read" and "view:deployments" in user["permissions"]:
-            return user
-        
-        # Check for create:deployments permission for deployment:create
-        if required_permission == "deployment:create" and "create:deployments" in user["permissions"]:
-            return user
-        
-        # Check for update:deployments permission for deployment:update
-        if required_permission == "deployment:update" and "update:deployments" in user["permissions"]:
-            return user
-        
-        # Check for delete:deployments permission for deployment:delete
-        if required_permission == "deployment:delete" and "delete:deployments" in user["permissions"]:
-            return user
-        
-        # Check for admin or msp role for deployment:manage
-        if required_permission == "deployment:manage" and user["role"] in ["admin", "msp"]:
-            return user
-        
-        raise HTTPException(status_code=403, detail=f"Insufficient permissions. Required: {required_permission}")
-    return check
 
 # Routes
 @app.get("/")
@@ -131,8 +84,7 @@ def debug_token(user: dict = Depends(get_current_user)):
         "user_id": user["user_id"],
         "username": user["username"],
         "tenant_id": user["tenant_id"],
-        "permissions": user["permissions"],
-        "role": user["role"]
+        "permissions": user["permissions"]
     }
 
 # Credentials endpoints
@@ -143,11 +95,13 @@ def set_credentials(
 ):
     try:
         logger.debug(f"Setting credentials for user: {user['username']}")
+        
         # Set Azure credentials
         azure_deployer.set_credentials(
             client_id=credentials["client_id"],
             client_secret=credentials["client_secret"],
-            tenant_id=credentials["tenant_id"]
+            tenant_id=credentials["tenant_id"],
+            subscription_id=credentials.get("subscription_id")
         )
         
         return {"message": "Credentials set successfully"}
@@ -174,9 +128,7 @@ def set_subscription(
     try:
         logger.debug(f"Setting subscription for user: {user['username']}")
         # Set Azure subscription
-        result = azure_deployer.set_subscription(
-            subscription_id=subscription["subscription_id"]
-        )
+        result = azure_deployer.set_subscription(subscription["subscription_id"])
         return result
     except Exception as e:
         logger.error(f"Error setting subscription: {str(e)}")
@@ -191,6 +143,64 @@ def list_subscriptions(user: dict = Depends(check_permission("deployment:read"))
         return subscriptions
     except Exception as e:
         logger.error(f"Error listing subscriptions: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/credentials/resources")
+def list_resources(
+    subscription_ids: str = None,
+    user: dict = Depends(check_permission("deployment:read"))
+):
+    try:
+        logger.debug(f"Listing resources for user: {user['username']}")
+        
+        # Parse subscription IDs
+        subscription_id_list = []
+        if subscription_ids:
+            subscription_id_list = subscription_ids.split(",")
+        
+        # If no subscription IDs provided, use the current one
+        if not subscription_id_list and azure_deployer.subscription_id:
+            subscription_id_list = [azure_deployer.subscription_id]
+        
+        if not subscription_id_list:
+            raise HTTPException(status_code=400, detail="No subscription IDs provided and no default subscription set")
+        
+        # Get resources for each subscription
+        all_resources = []
+        for subscription_id in subscription_id_list:
+            try:
+                # Set the subscription
+                azure_deployer.set_subscription(subscription_id)
+                
+                # Get resource groups
+                resource_groups = azure_deployer.resource_client.resource_groups.list()
+                
+                # Get resources for each resource group
+                for resource_group in resource_groups:
+                    resources = azure_deployer.resource_client.resources.list_by_resource_group(resource_group.name)
+                    
+                    for resource in resources:
+                        # Convert to dictionary and add subscription and resource group info
+                        resource_dict = {
+                            "id": resource.id,
+                            "name": resource.name,
+                            "type": resource.type.split('/')[-1],
+                            "location": resource.location,
+                            "subscription_id": subscription_id,
+                            "resource_group": resource_group.name,
+                            "provider": "azure",
+                            "status": "running",  # Azure doesn't provide this directly
+                            "created_at": None  # Azure doesn't provide this directly
+                        }
+                        
+                        all_resources.append(resource_dict)
+            except Exception as e:
+                logger.error(f"Error getting resources for subscription {subscription_id}: {str(e)}")
+                # Continue with other subscriptions
+        
+        return all_resources
+    except Exception as e:
+        logger.error(f"Error listing resources: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Deployment endpoints

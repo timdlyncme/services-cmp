@@ -157,8 +157,8 @@ class Deployment(Base):
     # Relationship with DeploymentHistory
     history = relationship("DeploymentHistory", back_populates="deployment")
     
-    # New relationship to deployment details
-    deployment_details = relationship("DeploymentDetails", back_populates="deployment")
+    # Relationship with DeploymentDetails
+    deployment_details = relationship("DeploymentDetails", back_populates="deployment", cascade="all, delete-orphan")
 
 
 class DeploymentHistory(Base):
