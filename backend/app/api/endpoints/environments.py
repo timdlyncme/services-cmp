@@ -124,20 +124,18 @@ def get_environment(
         # Get associated cloud accounts for response
         cloud_accounts = []
         for account in environment.cloud_accounts:
-            cloud_accounts.append(
-                CloudAccountResponse(
-                    id=account.account_id,  # Use account_id as id
-                    account_id=account.account_id,
-                    name=account.name,
-                    provider=account.provider,
-                    status=account.status,
-                    description=account.description,
-                    tenant_id=account.tenant_id,
-                    created_at=account.created_at,
-                    updated_at=account.updated_at,
-                    cloud_ids=account.cloud_ids or []
-                )
-            )
+            # Create a dictionary instead of a CloudAccountResponse object
+            cloud_accounts.append({
+                "id": account.account_id,
+                "name": account.name,
+                "provider": account.provider,
+                "status": account.status,
+                "description": account.description,
+                "tenant_id": account.tenant_id,
+                "created_at": account.created_at,
+                "updated_at": account.updated_at,
+                "cloud_ids": account.cloud_ids or []
+            })
         
         return EnvironmentResponse(
             id=environment.environment_id,  # Use environment_id as id
@@ -351,20 +349,18 @@ def update_environment(
         # Get associated cloud accounts for response
         cloud_accounts = []
         for account in environment.cloud_accounts:
-            cloud_accounts.append(
-                CloudAccountResponse(
-                    id=account.account_id,  # Use account_id as id
-                    account_id=account.account_id,
-                    name=account.name,
-                    provider=account.provider,
-                    status=account.status,
-                    description=account.description,
-                    tenant_id=account.tenant_id,
-                    created_at=account.created_at,
-                    updated_at=account.updated_at,
-                    cloud_ids=account.cloud_ids or []
-                )
-            )
+            # Create a dictionary instead of a CloudAccountResponse object
+            cloud_accounts.append({
+                "id": account.account_id,
+                "name": account.name,
+                "provider": account.provider,
+                "status": account.status,
+                "description": account.description,
+                "tenant_id": account.tenant_id,
+                "created_at": account.created_at,
+                "updated_at": account.updated_at,
+                "cloud_ids": account.cloud_ids or []
+            })
         
         return EnvironmentResponse(
             id=environment.environment_id,  # Use environment_id as id
