@@ -648,7 +648,7 @@ def create_deployment(
             )
         
         # Get tenant for response
-        tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
         
         # Create new deployment
         import uuid
@@ -668,10 +668,49 @@ def create_deployment(
         db.commit()
         db.refresh(new_deployment)
         
+        # Forward deployment to deployment engine
+        try:
+            # Prepare deployment data for the engine
+            engine_deployment = {
+                "name": deployment.name,
+                "description": deployment.description,
+                "deployment_type": deployment.deployment_type,
+                "resource_group": f"rg-{deployment.name.lower().replace(' ', '-')}",
+                "location": deployment.parameters.get("location", "eastus") if deployment.parameters else "eastus",
+                "template": {
+                    "source": deployment.template_source,
+                    "url": deployment.template_url,
+                    "code": deployment.template_code
+                },
+                "parameters": deployment.parameters
+            }
+            
+            # Send to deployment engine
+            headers = {"Authorization": f"Bearer {current_user.access_token}"}
+            response = requests.post(
+                f"{DEPLOYMENT_ENGINE_URL}/deployments",
+                headers=headers,
+                json=engine_deployment
+            )
+            
+            if response.status_code != 200:
+                # Log the error but don't fail the deployment creation
+                print(f"Deployment engine error: {response.text}")
+            else:
+                # Update deployment with engine response
+                engine_result = response.json()
+                new_deployment.status = engine_result.get("status", "pending")
+                db.commit()
+        except Exception as e:
+            # Log the error but don't fail the deployment creation
+            print(f"Error forwarding to deployment engine: {str(e)}")
+        
         # Extract region from parameters if available
         region = None
         if new_deployment.parameters and "region" in new_deployment.parameters:
             region = new_deployment.parameters["region"]
+        elif new_deployment.parameters and "location" in new_deployment.parameters:
+            region = new_deployment.parameters["location"]
         
         # Return frontend-compatible response
         return CloudDeploymentResponse(
@@ -926,8 +965,5 @@ def list_azure_subscriptions(
     
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
