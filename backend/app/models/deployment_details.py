@@ -22,7 +22,7 @@ class DeploymentDetails(Base):
     subscription_id = Column(String, nullable=True)  # Azure subscription ID, AWS account ID, GCP project ID
     resource_group = Column(String, nullable=True)  # Azure resource group, AWS VPC, GCP folder
     tags = Column(JSON, nullable=True)  # Resource tags
-    metadata = Column(JSON, nullable=True)  # Additional metadata
+    additional_metadata = Column(JSON, nullable=True)  # Additional metadata (renamed from metadata)
     logs = Column(Text, nullable=True)  # Deployment logs
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -32,4 +32,3 @@ class DeploymentDetails(Base):
 
     def __repr__(self):
         return f"<DeploymentDetails(id={self.id}, deployment_id={self.deployment_id}, provider={self.provider}, status={self.status})>"
-

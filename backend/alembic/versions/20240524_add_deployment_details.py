@@ -31,7 +31,7 @@ def upgrade():
         sa.Column('subscription_id', sa.String(), nullable=True),
         sa.Column('resource_group', sa.String(), nullable=True),
         sa.Column('tags', sa.JSON(), nullable=True),
-        sa.Column('metadata', sa.JSON(), nullable=True),
+        sa.Column('additional_metadata', sa.JSON(), nullable=True),  # Renamed from metadata
         sa.Column('logs', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
@@ -45,4 +45,3 @@ def downgrade():
     # Drop deployment_details table
     op.drop_index(op.f('ix_deployment_details_id'), table_name='deployment_details')
     op.drop_table('deployment_details')
-
