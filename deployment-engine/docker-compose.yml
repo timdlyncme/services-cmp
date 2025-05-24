@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  deployment-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      - MAIN_API_URL=http://backend:8000
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/cmp
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - TERRAFORM_BINARY_PATH=/usr/bin/terraform
+    volumes:
+      - ./app:/app/app
+    depends_on:
+      - db
+    networks:
+      - cmp-network
+
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=cmp
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - cmp-network
+
+networks:
+  cmp-network:
+    external: true
+
+volumes:
+  postgres_data:
+

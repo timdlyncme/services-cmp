@@ -3,7 +3,8 @@ from fastapi import APIRouter
 from app.api.endpoints import (
     auth, health, nexus_ai, permissions, tenants, 
     deployments, cloud_accounts, environments, 
-    templates, integrations, users, template_foundry
+    templates, integrations, users, template_foundry,
+    roles, cloud_settings, deployment_container
 )
 
 api_router = APIRouter()
@@ -19,3 +20,6 @@ api_router.include_router(templates.router, prefix="/templates", tags=["template
 api_router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(template_foundry.router, prefix="/template-foundry", tags=["template-foundry"])
+api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
+api_router.include_router(cloud_settings.router, prefix="/cloud-settings", tags=["cloud-settings"])
+api_router.include_router(deployment_container.router, prefix="/deployment-container", tags=["deployment-container"])
