@@ -399,14 +399,39 @@ class AzureDeployer:
             if deployment.properties.outputs:
                 outputs = {k: v.get("value") for k, v in deployment.properties.outputs.items()}
             
-            # Map status
-            status = self._map_status(deployment.properties.provisioning_state)
+            # Extract logs
+            logs = []
+            for operation in operations:
+                if operation.properties.status_message:
+                    logs.append({
+                        "timestamp": operation.properties.timestamp.isoformat() if operation.properties.timestamp else None,
+                        "resource_name": operation.properties.target_resource.resource_name if operation.properties.target_resource else None,
+                        "resource_type": operation.properties.target_resource.resource_type if operation.properties.target_resource else None,
+                        "status": operation.properties.provisioning_state,
+                        "message": str(operation.properties.status_message)
+                    })
+            
+            # Map Azure provisioning state to our status
+            status_map = {
+                "Succeeded": "succeeded",
+                "Failed": "failed",
+                "Canceled": "canceled",
+                "Running": "in_progress",
+                "Accepted": "in_progress",
+                "Creating": "in_progress",
+                "Created": "in_progress",
+                "Deleting": "in_progress",
+                "Deleted": "succeeded"
+            }
+            
+            status = status_map.get(deployment.properties.provisioning_state, "in_progress")
             
             return {
                 "status": status,
-                "azure_status": deployment.properties.provisioning_state,
+                "provisioning_state": deployment.properties.provisioning_state,
                 "resources": resources,
-                "outputs": outputs
+                "outputs": outputs,
+                "logs": logs
             }
             
         except Exception as e:

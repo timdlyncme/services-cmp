@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Header, Request
+from fastapi import FastAPI, Depends, HTTPException, Header, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, List, Optional, Any
 import requests
@@ -7,10 +7,12 @@ import json
 from datetime import datetime
 import uuid
 import logging
+import threading
+import time
 from deploy.azure import AzureDeployer
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Deployment Engine API")
@@ -32,6 +34,79 @@ API_URL = os.getenv("API_URL", "http://api:8000")
 
 # In-memory storage for deployments (would be replaced with a database in production)
 deployments = {}
+
+# Active polling threads
+polling_threads = {}
+
+def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, access_token):
+    """
+    Background task to poll for deployment status updates
+    
+    Args:
+        deployment_id: The deployment ID
+        resource_group: The Azure resource group
+        azure_deployment_id: The Azure deployment ID
+        access_token: The user's access token for authentication
+    """
+    logger.info(f"Starting status polling for deployment {deployment_id}")
+    
+    try:
+        # Continue polling until deployment is complete or failed
+        while True:
+            # Get deployment status from Azure
+            azure_status = azure_deployer.get_deployment_status(
+                resource_group=resource_group,
+                deployment_name=azure_deployment_id
+            )
+            
+            status = azure_status.get("status", "in_progress")
+            resources = azure_status.get("resources", [])
+            outputs = azure_status.get("outputs", {})
+            logs = azure_status.get("logs", [])
+            
+            # Update deployment in memory
+            if deployment_id in deployments:
+                deployments[deployment_id]["status"] = status
+                deployments[deployment_id]["resources"] = resources
+                deployments[deployment_id]["outputs"] = outputs
+                deployments[deployment_id]["logs"] = logs
+                deployments[deployment_id]["updated_at"] = datetime.utcnow().isoformat()
+            
+            # Send update to backend API
+            try:
+                headers = {"Authorization": f"Bearer {access_token}"}
+                update_data = {
+                    "status": status,
+                    "resources": resources,
+                    "outputs": outputs,
+                    "logs": logs
+                }
+                
+                response = requests.put(
+                    f"{API_URL}/api/deployments/engine/{deployment_id}/status",
+                    headers=headers,
+                    json=update_data
+                )
+                
+                if response.status_code != 200:
+                    logger.error(f"Failed to update deployment status: {response.text}")
+            except Exception as e:
+                logger.error(f"Error updating deployment status: {str(e)}")
+            
+            # If deployment is complete or failed, stop polling
+            if status in ["succeeded", "failed", "canceled"]:
+                logger.info(f"Deployment {deployment_id} {status}, stopping polling")
+                break
+            
+            # Sleep before next poll
+            time.sleep(10)  # Poll every 10 seconds
+    except Exception as e:
+        logger.error(f"Error in status polling thread: {str(e)}")
+    finally:
+        # Remove thread from active polling threads
+        if deployment_id in polling_threads:
+            del polling_threads[deployment_id]
+        logger.info(f"Stopped status polling for deployment {deployment_id}")
 
 # Authentication dependency
 def get_current_user(authorization: str = Header(None)):
@@ -80,7 +155,8 @@ def get_current_user(authorization: str = Header(None)):
             "username": username,
             "tenant_id": tenant_id,
             "permissions": permissions,
-            "role": role
+            "role": role,
+            "token": token  # Include the token for background tasks
         }
     except Exception as e:
         logger.error(f"Authentication error: {str(e)}")
@@ -197,6 +273,7 @@ def list_subscriptions(user: dict = Depends(check_permission("deployment:read"))
 @app.post("/deployments")
 def create_deployment(
     deployment: Dict[str, Any],
+    background_tasks: BackgroundTasks,
     user: dict = Depends(check_permission("deployment:create"))
 ):
     try:
@@ -281,18 +358,32 @@ def create_deployment(
             "resource_group": resource_group,
             "location": location,
             "deployment_type": deployment_type,
-            "status": result.get("status", "unknown"),
-            "azure_deployment_id": result.get("azure_deployment_id"),
+            "status": result.get("status", "in_progress"),
+            "azure_deployment_id": azure_deployment_name,
             "tenant_id": user["tenant_id"],
             "created_by": user["user_id"],
             "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.utcnow().isoformat(),
+            "resources": [],
+            "outputs": {},
+            "logs": []
         }
+        
+        # Start status polling in a background thread
+        thread = threading.Thread(
+            target=poll_deployment_status,
+            args=(deployment_id, resource_group, azure_deployment_name, user["token"])
+        )
+        thread.daemon = True
+        thread.start()
+        
+        # Store thread reference
+        polling_threads[deployment_id] = thread
         
         return {
             "deployment_id": deployment_id,
-            "status": result.get("status", "unknown"),
-            "azure_deployment_id": result.get("azure_deployment_id"),
+            "status": result.get("status", "in_progress"),
+            "azure_deployment_id": azure_deployment_name,
             "created_at": deployments[deployment_id]["created_at"]
         }
     except Exception as e:
@@ -354,6 +445,7 @@ def get_deployment(
             deployment["status"] = azure_status.get("status", deployment["status"])
             deployment["resources"] = azure_status.get("resources", [])
             deployment["outputs"] = azure_status.get("outputs", {})
+            deployment["logs"] = azure_status.get("logs", [])
             deployment["updated_at"] = datetime.utcnow().isoformat()
         
         return deployment

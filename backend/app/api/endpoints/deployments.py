@@ -5,12 +5,14 @@ from sqlalchemy import func
 import uuid
 import requests
 import os
+import json
 from datetime import datetime
 
-from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
+from app.api.endpoints.auth import get_current_user
 from app.models.user import User, Tenant
-from app.models.deployment import Deployment, Template, Environment, CloudAccount
+from app.models.deployment import Deployment, DeploymentHistory, Template, Environment
+from app.models.deployment_details import DeploymentDetails
 from app.models.cloud_settings import CloudSettings
 from app.schemas.deployment import (
     DeploymentResponse, DeploymentCreate, DeploymentUpdate,
@@ -1029,3 +1031,101 @@ def list_azure_subscriptions(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/engine/{deployment_id}/status", response_model=Dict[str, Any])
+def update_deployment_status(
+    deployment_id: str,
+    update_data: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Update deployment status from the deployment engine
+    """
+    # Check if user has permission to update deployments
+    has_permission = any(p.name == "update:deployments" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    try:
+        # Find the deployment
+        deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
+        if not deployment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Deployment not found"
+            )
+        
+        # Get or create deployment details
+        deployment_details = db.query(DeploymentDetails).filter(
+            DeploymentDetails.deployment_id == deployment.id
+        ).first()
+        
+        if not deployment_details:
+            deployment_details = DeploymentDetails(
+                deployment_id=deployment.id,
+                provider="azure",
+                deployment_type=deployment.deployment_type,
+                cloud_deployment_id=deployment.cloud_deployment_id,
+                cloud_region=deployment.region,
+                status="in_progress"
+            )
+            db.add(deployment_details)
+        
+        # Update deployment status
+        status = update_data.get("status")
+        if status:
+            deployment.status = status
+            deployment_details.status = status
+            
+            # If deployment is complete, update completed_at
+            if status in ["succeeded", "failed", "canceled"]:
+                deployment_details.completed_at = datetime.utcnow()
+        
+        # Update resources
+        resources = update_data.get("resources")
+        if resources:
+            deployment_details.cloud_resources = resources
+        
+        # Update outputs
+        outputs = update_data.get("outputs")
+        if outputs:
+            deployment_details.outputs = outputs
+        
+        # Update logs
+        logs = update_data.get("logs")
+        if logs:
+            deployment_details.logs = logs
+        
+        # Add to deployment history
+        history_entry = DeploymentHistory(
+            deployment_id=deployment.id,
+            status=status,
+            message=f"Deployment status updated to {status}",
+            details={
+                "resources": resources,
+                "outputs": outputs,
+                "logs": logs
+            },
+            user_id=current_user.id
+        )
+        db.add(history_entry)
+        
+        # Commit changes
+        db.commit()
+        
+        return {
+            "message": "Deployment status updated successfully",
+            "deployment_id": deployment_id,
+            "status": status
+        }
+    
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating deployment status: {str(e)}"
+        )
