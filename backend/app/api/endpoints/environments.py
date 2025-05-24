@@ -58,7 +58,7 @@ def get_environments(
             cloud_accounts = []
             for account in env.cloud_accounts:
                 cloud_accounts.append({
-                    "id": account.account_id,
+                    "id": account.account_id,  # Use account_id as id
                     "name": account.name,
                     "provider": account.provider,
                     "status": account.status
@@ -132,14 +132,16 @@ def get_environment(
                     provider=account.provider,
                     status=account.status,
                     description=account.description,
-                    tenant_id=account.tenant_id
+                    tenant_id=account.tenant_id,
+                    created_at=account.created_at,
+                    updated_at=account.updated_at,
+                    cloud_ids=account.cloud_ids or []
                 )
             )
         
         return EnvironmentResponse(
             id=environment.environment_id,  # Use environment_id as id
-            internal_id=environment.environment_id,  # Use environment_id as id
-            internal_id=environment.id,  # Store internal id  # Store internal id
+            internal_id=environment.id,  # Store internal id
             name=environment.name,
             description=environment.description,
             tenant_id=environment.tenant_id,
@@ -357,7 +359,10 @@ def update_environment(
                     provider=account.provider,
                     status=account.status,
                     description=account.description,
-                    tenant_id=account.tenant_id
+                    tenant_id=account.tenant_id,
+                    created_at=account.created_at,
+                    updated_at=account.updated_at,
+                    cloud_ids=account.cloud_ids or []
                 )
             )
         
