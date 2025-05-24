@@ -43,7 +43,7 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
     Background task to poll for deployment status updates
     
     Args:
-        deployment_id: The deployment ID
+        deployment_id: The deployment ID from the backend
         resource_group: The Azure resource group
         azure_deployment_id: The Azure deployment ID
         access_token: The user's access token for authentication
@@ -302,9 +302,15 @@ def create_deployment(
     user: dict = Depends(check_permission("deployment:create"))
 ):
     try:
-        # Generate deployment ID
-        deployment_id = str(uuid.uuid4())
-        logger.info(f"Creating new deployment with ID: {deployment_id}")
+        # Use the deployment ID from the backend if provided, otherwise generate a new one
+        deployment_id = deployment.get("deployment_id")
+        if not deployment_id:
+            deployment_id = str(uuid.uuid4())
+            logger.warning(f"No deployment_id provided by backend, generating new ID: {deployment_id}")
+        else:
+            logger.info(f"Using deployment_id provided by backend: {deployment_id}")
+        
+        logger.info(f"Creating deployment with ID: {deployment_id}")
         
         # Extract deployment details
         name = deployment.get("name", "Unnamed deployment")
@@ -389,7 +395,7 @@ def create_deployment(
         
         # Store deployment details
         deployments[deployment_id] = {
-            "deployment_id": deployment_id,
+            "deployment_id": deployment_id,  # Use the consistent deployment ID
             "name": name,
             "description": description,
             "resource_group": resource_group,
@@ -422,7 +428,7 @@ def create_deployment(
         logger.info(f"Background polling thread started for deployment {deployment_id}")
         
         return {
-            "deployment_id": deployment_id,
+            "deployment_id": deployment_id,  # Return the consistent deployment ID
             "status": result.get("status", "in_progress"),
             "azure_deployment_id": azure_deployment_name,
             "created_at": deployments[deployment_id]["created_at"]

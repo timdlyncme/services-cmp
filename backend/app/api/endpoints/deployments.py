@@ -674,7 +674,8 @@ def create_deployment(
             environment_id=deployment.environment_id,
             tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
             created_by_id=current_user.id,
-            parameters=deployment.parameters
+            parameters=deployment.parameters,
+            deployment_type=template.type.lower()  # Set deployment_type based on template type
         )
         
         db.add(new_deployment)
@@ -709,6 +710,7 @@ def create_deployment(
             
             # Create deployment engine request
             engine_deployment = {
+                "deployment_id": new_deployment.deployment_id,  # Pass the backend-generated deployment ID
                 "name": new_deployment.name,
                 "description": new_deployment.description,
                 "deployment_type": template.type.lower(),  # Use template type (terraform, arm, etc.)
@@ -720,6 +722,9 @@ def create_deployment(
                 },
                 "parameters": new_deployment.parameters if new_deployment.parameters else {}
             }
+            
+            # Debug: Log that we're passing the deployment ID to the engine
+            print(f"Passing deployment_id to engine: {new_deployment.deployment_id}")
             
             # Add cloud account details if available
             if cloud_account:
@@ -760,6 +765,12 @@ def create_deployment(
                 # Update deployment with engine response
                 engine_result = response.json()
                 new_deployment.status = engine_result.get("status", "pending")
+                
+                # Store the Azure deployment ID in the cloud_deployment_id field
+                if "azure_deployment_id" in engine_result:
+                    new_deployment.cloud_deployment_id = engine_result["azure_deployment_id"]
+                    print(f"Stored Azure deployment ID: {engine_result['azure_deployment_id']}")
+                
                 db.commit()
         except Exception as e:
             # Log the error but don't fail the deployment creation
