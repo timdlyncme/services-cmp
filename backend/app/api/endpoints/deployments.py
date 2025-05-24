@@ -703,45 +703,38 @@ def create_deployment(
                     location = deployment.parameters["region"]
             
             # Ensure template_code is a string and not empty
-            template_code = deployment.template_code
-            if template_code is None:
-                # If template_code is None but template_source is 'code', try to get code from the template
-                if deployment.template_source == 'code' and template:
-                    template_code = template.code or ""
-                else:
-                    template_code = ""
+            template_code = template.code if template.code else ""
             
-            # Debug: Print template code length and first 100 characters
-            print(f"Template code length: {len(template_code)}")
-            print(f"Template code preview: {template_code[:100] if template_code else 'Empty'}")
-            
-            # Prepare deployment data for the engine
+            # Create deployment engine request
             engine_deployment = {
-                "name": deployment.name,
-                "description": deployment.description,
-                "deployment_type": deployment.deployment_type,
-                "resource_group": f"rg-{deployment.name.lower().replace(' ', '-')}",
+                "name": new_deployment.name,
+                "description": new_deployment.description,
+                "deployment_type": template.type.lower(),  # Use template type (terraform, arm, etc.)
+                "resource_group": f"rg-{new_deployment.name.lower().replace(' ', '-')}",
                 "location": location,
                 "template": {
-                    "source": deployment.template_source,
-                    "url": deployment.template_url,
+                    "source": "code",
                     "code": template_code
                 },
-                "parameters": deployment.parameters or {}
+                "parameters": new_deployment.parameters if new_deployment.parameters else {}
             }
             
-            # Add cloud account and settings information if available
+            # Add cloud account details if available
             if cloud_account:
-                engine_deployment["cloud_account_id"] = str(cloud_account.account_id)
                 engine_deployment["subscription_id"] = cloud_account.cloud_ids[0] if cloud_account.cloud_ids else None
             
+            # Add cloud settings (credentials) if available
             if cloud_settings:
                 engine_deployment["settings_id"] = str(cloud_settings.settings_id)
                 engine_deployment["client_id"] = cloud_settings.client_id
+                engine_deployment["client_secret"] = cloud_settings.client_secret
                 engine_deployment["tenant_id"] = cloud_settings.tenant_id
             
-            # Debug: Print engine deployment data
-            print(f"Engine deployment data: {engine_deployment}")
+            # Debug: Print engine deployment data (redact sensitive info)
+            debug_data = engine_deployment.copy()
+            if "client_secret" in debug_data:
+                debug_data["client_secret"] = "***REDACTED***"
+            print(f"Engine deployment data: {debug_data}")
             
             # Send to deployment engine
             headers = {"Authorization": f"Bearer {current_user.access_token}"}
