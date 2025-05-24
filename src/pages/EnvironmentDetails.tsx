@@ -20,7 +20,8 @@ import {
   FolderTree, 
   Activity, 
   BarChart4, 
-  Settings 
+  Settings,
+  Eye
 } from "lucide-react";
 import { cmpService } from "@/services/cmp-service";
 
@@ -85,66 +86,49 @@ const EnvironmentDetails = () => {
       const environmentData = await cmpService.getEnvironment(environmentId);
       setEnvironment(environmentData);
       
-      // In a real implementation, we would fetch deployments and resources
-      // For now, we'll use mock data
-      setDeployments([
-        {
-          id: "dep-1",
-          name: "Production API",
-          status: "running",
-          template_name: "API Service",
-          created_at: "2023-05-15T10:30:00Z",
-          updated_at: "2023-05-15T10:35:00Z"
-        },
-        {
-          id: "dep-2",
-          name: "Database Cluster",
-          status: "running",
-          template_name: "Database",
-          created_at: "2023-05-15T11:00:00Z",
-          updated_at: "2023-05-15T11:10:00Z"
-        }
-      ]);
-      
-      setResources([
-        {
-          id: "res-1",
-          name: "app-service-1",
-          type: "App Service",
-          region: "East US",
-          status: "running",
-          provider: "azure",
-          created_at: "2023-05-15T10:30:00Z"
-        },
-        {
-          id: "res-2",
-          name: "sql-server-1",
-          type: "SQL Server",
-          region: "East US",
-          status: "running",
-          provider: "azure",
-          created_at: "2023-05-15T11:00:00Z"
-        },
-        {
-          id: "res-3",
-          name: "storage-account-1",
-          type: "Storage Account",
-          region: "East US",
-          status: "running",
-          provider: "azure",
-          created_at: "2023-05-15T11:30:00Z"
-        }
-      ]);
-    } catch (error) {
-      console.error("Error fetching environment details:", error);
-      setError("Failed to load environment details. Please try again.");
-      
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error("Failed to load environment details");
+      // Fetch real deployments from the API
+      try {
+        const deploymentsData = await cmpService.getDeployments(currentTenant.id);
+        // Filter deployments for this environment
+        const environmentDeployments = deploymentsData.filter(
+          (dep) => dep.environment === environmentData.name
+        );
+        setDeployments(environmentDeployments.map(dep => ({
+          id: dep.id,
+          name: dep.name,
+          status: dep.status,
+          template_name: dep.templateName,
+          created_at: dep.createdAt,
+          updated_at: dep.updatedAt
+        })));
+      } catch (deployError) {
+        console.error("Error fetching deployments:", deployError);
+        setDeployments([]);
       }
-    } finally {
+      
+      // Fetch real resources from the API
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/environments/${environmentId}/resources`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Error fetching resources: ${response.statusText}`);
+        }
+        
+        const resourcesData = await response.json();
+        setResources(resourcesData);
+      } catch (resourceError) {
+        console.error("Error fetching resources:", resourceError);
+        setResources([]);
+      }
+      
+      setIsLoading(false);
+    } catch (err) {
+      console.error("Error fetching environment details:", err);
+      setError("Failed to load environment details. Please try again.");
       setIsLoading(false);
     }
   };
@@ -378,6 +362,16 @@ const EnvironmentDetails = () => {
                         <TableHead>Status</TableHead>
                         <TableHead>Created</TableHead>
                         <TableHead>Last Updated</TableHead>
+                        <TableHead>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => navigate("/deployments")}
+                            title="View all deployments"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -395,6 +389,16 @@ const EnvironmentDetails = () => {
                           </TableCell>
                           <TableCell>{new Date(deployment.created_at).toLocaleString()}</TableCell>
                           <TableCell>{new Date(deployment.updated_at).toLocaleString()}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => navigate(`/deployments/${deployment.id}`)}
+                              title="View deployment details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -540,4 +544,3 @@ const EnvironmentDetails = () => {
 };
 
 export default EnvironmentDetails;
-

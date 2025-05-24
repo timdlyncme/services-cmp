@@ -498,10 +498,9 @@ def get_deployments(
             query = query.filter(Tenant.tenant_id == tenant_id)
         else:
             # Default to current user's tenant
-            tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
-            if tenant:
-                query = query.filter(Tenant.tenant_id == tenant.tenant_id)
-        
+            # Use tenant_id (UUID) instead of id (Integer)
+            query = query.filter(Tenant.tenant_id == current_user.tenant.tenant_id)
+
         results = query.all()
         
         # Convert to frontend-compatible format
@@ -926,8 +925,5 @@ def list_azure_subscriptions(
     
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
