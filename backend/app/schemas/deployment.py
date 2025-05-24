@@ -274,8 +274,8 @@ class EnvironmentUpdate(BaseModel):
     cloud_account_ids: Optional[List[Union[int, str]]] = None
 
 class EnvironmentResponse(EnvironmentBase):
-    id: int
-    environment_id: str
+    id: str  # Changed from int to str to use environment_id
+    internal_id: Optional[int] = None  # Added to store the internal ID if needed
     update_strategy: Optional[str] = None
     cloud_accounts: List[Dict[str, Any]] = []
 
