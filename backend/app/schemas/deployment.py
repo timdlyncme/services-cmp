@@ -115,6 +115,7 @@ class TemplateDetailResponse(TemplateResponse):
 
 class CloudTemplateResponse(BaseModel):
     id: str
+    template_id: str  # Added to ensure template_id is included in the response
     name: str
     description: str
     type: str
@@ -159,7 +160,7 @@ class CloudDeploymentResponse(BaseModel):
 # Deployment schemas
 class DeploymentCreate(DeploymentBase):
     environment_id: int
-    template_id: int
+    template_id: str  # Changed from int to str to support GUID
     environment_name: str  # For deployment engine
     provider: str  # aws, azure, gcp
     deployment_type: str  # native, terraform

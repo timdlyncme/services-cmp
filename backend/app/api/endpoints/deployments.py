@@ -635,12 +635,20 @@ def create_deployment(
         print(f"Deployment data received: {deployment.dict()}")
         
         # Verify template exists
-        template = db.query(Template).filter(Template.id == deployment.template_id).first()
+        print(f"Looking for template with template_id: {deployment.template_id}")
+        template = db.query(Template).filter(Template.template_id == deployment.template_id).first()
         if not template:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Template with ID {deployment.template_id} not found"
-            )
+            # Try to find the template by ID as a fallback
+            print(f"Template not found by template_id, trying to find by id")
+            template = db.query(Template).filter(Template.id == deployment.template_id).first()
+            if not template:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Template with ID {deployment.template_id} not found"
+                )
+            print(f"Template found by id: {template.id}, template_id: {template.template_id}")
+        else:
+            print(f"Template found by template_id: {template.template_id}, id: {template.id}")
         
         # Verify environment exists
         environment = db.query(Environment).filter(Environment.id == deployment.environment_id).first()
@@ -660,7 +668,7 @@ def create_deployment(
             name=deployment.name,
             description=deployment.description,
             status="pending",  # Default status for new deployments
-            template_id=deployment.template_id,
+            template_id=template.id,  # Use the template's numeric ID for the database relationship
             environment_id=deployment.environment_id,
             tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
             created_by_id=current_user.id,

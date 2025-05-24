@@ -14,6 +14,7 @@ export interface CloudAccount {
 
 export interface CloudTemplate {
   id: string;
+  template_id?: string; // Added for GUID template ID
   name: string;
   description: string;
   type: TemplateType;

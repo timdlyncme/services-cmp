@@ -134,16 +134,18 @@ def get_templates(
             
             result.append(CloudTemplateResponse(
                 id=template.template_id,
+                template_id=template.template_id,  # Explicitly include template_id
                 name=template.name,
                 description=template.description or "",
                 type=template.type,  # Use the actual template type from the database
                 provider=template.provider,
-                code=template.code or "",
+                code=code,
                 deploymentCount=deployment_count,
                 uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
                 updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
                 categories=categories,
-                tenantId=tenant_id
+                tenantId=tenant_id,
+                lastUpdatedBy=last_updated_by
             ))
         
         return result
@@ -232,6 +234,7 @@ def get_template(
         
         return CloudTemplateResponse(
             id=template.template_id,
+            template_id=template.template_id,  # Explicitly include template_id
             name=template.name,
             description=template.description or "",
             type=template.type,  # Use the actual template type from the database
@@ -280,14 +283,19 @@ def create_template(
                 detail="User's tenant not found"
             )
         
+        # Debug: Print the template data
+        print(f"Template data received: {template.dict()}")
+        print(f"Template type: {template.type}")
+        print(f"Template category: {template.category}")
+        
         # Create new template
         new_template = Template(
             template_id=str(uuid.uuid4()),
             name=template.name,
             description=template.description,
-            category=template.category,
+            category=template.category,  # Store category as a string
             provider=template.provider,
-            type=template.type if template.type else "terraform",  # Use the provided type or default to terraform
+            type=template.type,  # Always use the provided type, don't default to terraform
             is_public=template.is_public,
             tenant_id=None if template.is_public else user_tenant.tenant_id,
             code=template.code,  # Store the code directly in the template
@@ -297,6 +305,9 @@ def create_template(
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
+        
+        # Debug: Print the new template object
+        print(f"New template object: type={new_template.type}, category={new_template.category}")
         
         db.add(new_template)
         db.commit()
@@ -329,6 +340,7 @@ def create_template(
         
         return CloudTemplateResponse(
             id=new_template.template_id,
+            template_id=new_template.template_id,  # Explicitly include template_id
             name=new_template.name,
             description=new_template.description or "",
             type=new_template.type,  # Use the actual template type from the database
@@ -456,6 +468,7 @@ def update_template(
         
         return CloudTemplateResponse(
             id=template.template_id,
+            template_id=template.template_id,  # Explicitly include template_id
             name=template.name,
             description=template.description or "",
             type=template.type,  # Use the actual template type from the database
@@ -672,6 +685,7 @@ def create_template_version(
             "id": new_version.id,
             "version": new_version.version,
             "changes": new_version.changes,
+            "code": version.code,
             "created_at": new_version.created_at.isoformat(),
             "created_by": created_by.username if created_by else "Unknown",
             "is_current": True
