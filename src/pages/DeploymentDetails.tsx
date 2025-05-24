@@ -331,8 +331,8 @@ const DeploymentDetails = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {deployment.resources && deployment.resources.length > 0 ? (
-                      deployment.resources.map((resource, index) => (
+                    {deployment.cloud_resources && deployment.cloud_resources.length > 0 ? (
+                      deployment.cloud_resources.map((resource, index) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">
                             {resource.name || 'Unknown'}
