@@ -22,8 +22,8 @@ const CloudAccounts = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // State for the new account dialog
-  const [isNewAccountDialogOpen, setIsNewAccountDialogOpen] = useState(false);
+  // State for the account dialog
+  const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountDescription, setNewAccountDescription] = useState("");
   const [selectedSubscriptions, setSelectedSubscriptions] = useState<string[]>([]);
@@ -36,6 +36,10 @@ const CloudAccounts = () => {
   const [selectedCredential, setSelectedCredential] = useState<string | null>(null);
   const [availableSubscriptions, setAvailableSubscriptions] = useState<any[]>([]);
   const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(false);
+  
+  // State for edit mode
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<CloudAccount | null>(null);
   
   // Fetch cloud accounts from API
   const fetchCloudAccounts = async () => {
@@ -159,31 +163,63 @@ const CloudAccounts = () => {
         subscription_ids: selectedSubscriptions
       };
       
-      await cmpService.createCloudAccount(newAccount, currentTenant!.tenant_id);
+      if (isEditMode && editingAccount) {
+        // Update existing account
+        await cmpService.updateCloudAccount(editingAccount.id, newAccount);
+        toast.success("Cloud account updated successfully");
+      } else {
+        // Create new account
+        await cmpService.createCloudAccount(newAccount, currentTenant!.tenant_id);
+        toast.success("Cloud account created successfully");
+      }
       
       // Refresh the list
       await fetchCloudAccounts();
       
       // Reset form and close dialog
-      setNewAccountName("");
-      setNewAccountDescription("");
-      setSelectedCredential(null);
-      setSelectedSubscriptions([]);
-      setAccountTags({});
-      setIsNewAccountDialogOpen(false);
+      resetForm();
+      setIsAccountDialogOpen(false);
       
-      toast.success("Cloud account created successfully");
     } catch (error) {
-      console.error("Error creating cloud account:", error);
+      console.error(isEditMode ? "Error updating cloud account:" : "Error creating cloud account:", error);
       
       if (error instanceof Error) {
         toast.error(error.message);
       } else {
-        toast.error("Failed to create cloud account");
+        toast.error(isEditMode ? "Failed to update cloud account" : "Failed to create cloud account");
       }
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  const handleEditAccount = (account: CloudAccount) => {
+    setIsEditMode(true);
+    setEditingAccount(account);
+    
+    // Populate form with account data
+    setNewAccountName(account.name);
+    setNewAccountDescription(account.description || "");
+    setSelectedCredential(account.settings_id);
+    setSelectedSubscriptions(account.subscription_ids || []);
+    
+    // Open dialog
+    setIsAccountDialogOpen(true);
+    
+    // Fetch subscriptions for this account
+    if (account.settings_id) {
+      fetchAzureSubscriptions(account.settings_id);
+    }
+  };
+  
+  const resetForm = () => {
+    setNewAccountName("");
+    setNewAccountDescription("");
+    setSelectedCredential(null);
+    setSelectedSubscriptions([]);
+    setAccountTags({});
+    setIsEditMode(false);
+    setEditingAccount(null);
   };
   
   const handleDeleteAccount = async (accountId: string) => {
@@ -262,7 +298,10 @@ const CloudAccounts = () => {
             <RefreshCw className="h-4 w-4" />
           </Button>
           
-          <Dialog open={isNewAccountDialogOpen} onOpenChange={setIsNewAccountDialogOpen}>
+          <Dialog open={isAccountDialogOpen} onOpenChange={(open) => {
+            setIsAccountDialogOpen(open);
+            if (!open) resetForm();
+          }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
@@ -271,9 +310,11 @@ const CloudAccounts = () => {
             </DialogTrigger>
             <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Create Cloud Account</DialogTitle>
+                <DialogTitle>{isEditMode ? "Edit Cloud Account" : "Create Cloud Account"}</DialogTitle>
                 <DialogDescription>
-                  Group your cloud provider resources into a managed account
+                  {isEditMode 
+                    ? "Update your cloud provider account settings" 
+                    : "Group your cloud provider resources into a managed account"}
                 </DialogDescription>
               </DialogHeader>
               
@@ -442,8 +483,10 @@ const CloudAccounts = () => {
               </div>
               
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsNewAccountDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleCreateCloudAccount}>Create Account</Button>
+                <Button variant="outline" onClick={() => setIsAccountDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreateCloudAccount}>
+                  {isEditMode ? "Update Account" : "Create Account"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -502,10 +545,20 @@ const CloudAccounts = () => {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteAccount(account.id)}>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleDeleteAccount(account.id)}
+                        title="Delete account"
+                      >
                         <Trash className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleEditAccount(account)}
+                        title="Edit account"
+                      >
                         <Edit className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -523,7 +576,7 @@ const CloudAccounts = () => {
                 ? "No cloud accounts match your search criteria" 
                 : "Create your first cloud account to start organizing your resources"}
             </p>
-            <Button className="mt-4" onClick={() => setIsNewAccountDialogOpen(true)}>
+            <Button className="mt-4" onClick={() => setIsAccountDialogOpen(true)}>
               Create Cloud Account
             </Button>
           </div>
