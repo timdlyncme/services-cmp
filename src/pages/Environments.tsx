@@ -137,6 +137,13 @@ const Environments = () => {
       return;
     }
     
+    // Make cloud account selection mandatory
+    if (selectedCloudAccounts.length === 0) {
+      toast.error("At least one cloud account must be selected");
+      setActiveTab("cloud"); // Switch to cloud accounts tab
+      return;
+    }
+    
     try {
       setIsLoading(true);
       
@@ -153,10 +160,25 @@ const Environments = () => {
         return;
       }
       
-      // Get cloud account IDs from the selected names
-      const cloudAccountIds = cloudAccounts
-        .filter(account => selectedCloudAccounts.includes(account.id))
-        .map(account => parseInt(account.id));
+      // Get cloud account IDs from the selected accounts
+      // Make sure we're using numeric IDs and filtering out any invalid values
+      const cloudAccountIds = selectedCloudAccounts
+        .map(id => {
+          const account = cloudAccounts.find(acc => acc.id === id);
+          if (!account) return null;
+          
+          // Try to parse the ID as an integer
+          const numericId = parseInt(account.id);
+          return isNaN(numericId) ? null : numericId;
+        })
+        .filter(id => id !== null) as number[];
+      
+      // Double-check that we have valid cloud account IDs
+      if (cloudAccountIds.length === 0) {
+        toast.error("No valid cloud accounts selected");
+        setActiveTab("cloud");
+        return;
+      }
       
       // Create the new environment
       const newEnvironment = {
@@ -267,7 +289,7 @@ const Environments = () => {
               <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
                 <TabsList className="grid grid-cols-4 mb-4">
                   <TabsTrigger value="general">General</TabsTrigger>
-                  <TabsTrigger value="cloud">Cloud Accounts</TabsTrigger>
+                  <TabsTrigger value="cloud">Cloud Accounts *</TabsTrigger>
                   <TabsTrigger value="config">Configuration</TabsTrigger>
                   <TabsTrigger value="advanced">Advanced</TabsTrigger>
                 </TabsList>
@@ -311,9 +333,9 @@ const Environments = () => {
                 
                 <TabsContent value="cloud" className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Cloud Accounts</label>
+                    <label className="text-sm font-medium">Cloud Accounts <span className="text-red-500">*</span></label>
                     <p className="text-sm text-muted-foreground mb-2">
-                      Select one or more cloud accounts to use with this environment
+                      Select one or more cloud accounts to use with this environment. At least one cloud account is required.
                     </p>
                     
                     {cloudAccounts.length > 0 ? (

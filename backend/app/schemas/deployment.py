@@ -261,7 +261,7 @@ class EnvironmentCreate(EnvironmentBase):
     environment_variables: Optional[Dict[str, Any]] = None
     logging_config: Optional[Dict[str, Any]] = None
     monitoring_integration: Optional[Dict[str, Any]] = None
-    cloud_account_ids: List[int] = []
+    cloud_account_ids: List[int]  # Make this required by removing default empty list
 
 class EnvironmentUpdate(BaseModel):
     name: Optional[str] = None
