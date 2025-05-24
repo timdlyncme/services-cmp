@@ -32,6 +32,31 @@ services:
     volumes:
       - ./backend:/app
     restart: always
+    
+  # Deployment Engine Container
+  deployment-engine:
+    build:
+      context: ./deployment_engine
+      dockerfile: Dockerfile
+    volumes:
+      - ./deployment_engine:/app
+      - deployment_data:/data
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - API_URL=http://api:8000
+    ports:
+      - "5000:5000"
+    networks:
+      - app-network
+    depends_on:
+      - db
+      - api
+    restart: always
 
 volumes:
   postgres_data:
+  deployment_data:
+
+networks:
+  app-network:

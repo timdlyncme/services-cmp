@@ -12,28 +12,11 @@ import { toast } from "sonner";
 import { Search, Cloud, Plus, Users, Tag, Shield, CheckCircle, AlertCircle, XCircle, Edit, Trash, RefreshCw } from "lucide-react";
 import { CloudAccount } from "@/types/cloud";
 import { cmpService } from "@/services/cmp-service";
-
-// Mock data for discovered cloud accounts - this would come from an API in a real implementation
-const mockDiscoveredAccounts = [
-  // Azure Subscriptions
-  { id: "azure-sub-1", name: "Production", type: "subscription", provider: "azure", status: "active" },
-  { id: "azure-sub-2", name: "Development", type: "subscription", provider: "azure", status: "active" },
-  { id: "azure-sub-3", name: "Testing", type: "subscription", provider: "azure", status: "active" },
-  { id: "azure-sub-4", name: "Staging", type: "subscription", provider: "azure", status: "inactive" },
-  
-  // AWS Accounts
-  { id: "aws-acc-1", name: "Main Account", type: "account", provider: "aws", status: "active" },
-  { id: "aws-acc-2", name: "Dev Account", type: "account", provider: "aws", status: "active" },
-  
-  // GCP Projects
-  { id: "gcp-proj-1", name: "Analytics", type: "project", provider: "gcp", status: "active" },
-  { id: "gcp-proj-2", name: "ML Platform", type: "project", provider: "gcp", status: "active" },
-  { id: "gcp-proj-3", name: "Infrastructure", type: "project", provider: "gcp", status: "inactive" }
-];
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const CloudAccounts = () => {
   const { currentTenant } = useAuth();
-  const [activeTab, setActiveTab] = useState("connected");
+  const [activeTab, setActiveTab] = useState("azure");
   const [searchQuery, setSearchQuery] = useState("");
   const [cloudAccounts, setCloudAccounts] = useState<CloudAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,11 +26,16 @@ const CloudAccounts = () => {
   const [isNewAccountDialogOpen, setIsNewAccountDialogOpen] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountDescription, setNewAccountDescription] = useState("");
-  const [newAccountProvider, setNewAccountProvider] = useState("azure");
-  const [selectedDiscoveredAccounts, setSelectedDiscoveredAccounts] = useState<string[]>([]);
+  const [selectedSubscriptions, setSelectedSubscriptions] = useState<string[]>([]);
   const [tagKey, setTagKey] = useState("");
   const [tagValue, setTagValue] = useState("");
   const [accountTags, setAccountTags] = useState<Record<string, string>>({});
+  
+  // State for Azure credentials and subscriptions
+  const [azureCredentials, setAzureCredentials] = useState<any[]>([]);
+  const [selectedCredential, setSelectedCredential] = useState<string | null>(null);
+  const [availableSubscriptions, setAvailableSubscriptions] = useState<any[]>([]);
+  const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(false);
   
   // Fetch cloud accounts from API
   const fetchCloudAccounts = async () => {
@@ -73,11 +61,60 @@ const CloudAccounts = () => {
     }
   };
   
+  // Fetch Azure credentials
+  const fetchAzureCredentials = async () => {
+    if (!currentTenant) return;
+    
+    try {
+      const credentials = await cmpService.getAzureCredentials(currentTenant.tenant_id);
+      setAzureCredentials(credentials);
+    } catch (error) {
+      console.error("Error fetching Azure credentials:", error);
+      
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to load Azure credentials");
+      }
+    }
+  };
+  
+  // Fetch Azure subscriptions for a selected credential
+  const fetchAzureSubscriptions = async (credentialId: string) => {
+    setIsLoadingSubscriptions(true);
+    setAvailableSubscriptions([]);
+    
+    try {
+      const subscriptions = await cmpService.getAzureSubscriptions(credentialId);
+      setAvailableSubscriptions(subscriptions);
+    } catch (error) {
+      console.error("Error fetching Azure subscriptions:", error);
+      
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to load Azure subscriptions");
+      }
+    } finally {
+      setIsLoadingSubscriptions(false);
+    }
+  };
+  
   useEffect(() => {
     if (currentTenant) {
       fetchCloudAccounts();
+      fetchAzureCredentials();
     }
   }, [currentTenant]);
+  
+  // When a credential is selected, fetch its subscriptions
+  useEffect(() => {
+    if (selectedCredential) {
+      fetchAzureSubscriptions(selectedCredential);
+    } else {
+      setAvailableSubscriptions([]);
+    }
+  }, [selectedCredential]);
   
   // Helper functions
   const getStatusIcon = (status: string) => {
@@ -99,8 +136,13 @@ const CloudAccounts = () => {
       return;
     }
     
-    if (!newAccountProvider) {
-      toast.error("Cloud provider is required");
+    if (!selectedCredential) {
+      toast.error("Please select cloud credentials");
+      return;
+    }
+    
+    if (selectedSubscriptions.length === 0) {
+      toast.error("Please select at least one subscription");
       return;
     }
     
@@ -110,9 +152,11 @@ const CloudAccounts = () => {
       // Create the new cloud account
       const newAccount = {
         name: newAccountName,
-        provider: newAccountProvider as any,
+        provider: "azure", // Default to azure since that's all we support for now
         status: "connected",
-        description: newAccountDescription
+        description: newAccountDescription,
+        settings_id: selectedCredential, // Pass as string, not number
+        subscription_ids: selectedSubscriptions
       };
       
       await cmpService.createCloudAccount(newAccount, currentTenant!.tenant_id);
@@ -123,8 +167,8 @@ const CloudAccounts = () => {
       // Reset form and close dialog
       setNewAccountName("");
       setNewAccountDescription("");
-      setNewAccountProvider("azure");
-      setSelectedDiscoveredAccounts([]);
+      setSelectedCredential(null);
+      setSelectedSubscriptions([]);
       setAccountTags({});
       setIsNewAccountDialogOpen(false);
       
@@ -168,6 +212,7 @@ const CloudAccounts = () => {
   
   const handleRefresh = () => {
     fetchCloudAccounts();
+    fetchAzureCredentials();
     toast.success("Refreshing cloud accounts...");
   };
   
@@ -256,14 +301,28 @@ const CloudAccounts = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Select Cloud Provider</label>
-                  <Tabs defaultValue="azure" onValueChange={setNewAccountProvider}>
-                    <TabsList className="grid grid-cols-3 mb-2">
-                      <TabsTrigger value="azure">Azure</TabsTrigger>
-                      <TabsTrigger value="aws">AWS</TabsTrigger>
-                      <TabsTrigger value="gcp">GCP</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
+                  <label className="text-sm font-medium">Select Cloud Credentials</label>
+                  <Select
+                    value={selectedCredential || ""}
+                    onValueChange={(value) => setSelectedCredential(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select credentials" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {azureCredentials.length > 0 ? (
+                        azureCredentials.map((cred) => (
+                          <SelectItem key={cred.settings_id} value={cred.settings_id}>
+                            {cred.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="" disabled>
+                          No credentials available
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
                 
                 <div className="space-y-2">
@@ -271,8 +330,8 @@ const CloudAccounts = () => {
                   <Tabs defaultValue="azure" onValueChange={setActiveTab}>
                     <TabsList className="grid grid-cols-3 mb-2">
                       <TabsTrigger value="azure">Azure</TabsTrigger>
-                      <TabsTrigger value="aws">AWS</TabsTrigger>
-                      <TabsTrigger value="gcp">GCP</TabsTrigger>
+                      <TabsTrigger value="aws" disabled>AWS (Not Implemented)</TabsTrigger>
+                      <TabsTrigger value="gcp" disabled>GCP (Not Implemented)</TabsTrigger>
                     </TabsList>
                     
                     <div className="border rounded-md">
@@ -281,41 +340,62 @@ const CloudAccounts = () => {
                           <TableRow>
                             <TableHead className="w-[50px]"></TableHead>
                             <TableHead>Name</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Status</TableHead>
+                            <TableHead>State</TableHead>
+                            <TableHead>ID</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {mockDiscoveredAccounts.filter(a => a.provider === activeTab).length > 0 ? (
-                            mockDiscoveredAccounts.filter(a => a.provider === activeTab).map((account) => (
-                              <TableRow key={account.id}>
-                                <TableCell>
-                                  <Checkbox
-                                    checked={selectedDiscoveredAccounts.includes(account.id)}
-                                    onCheckedChange={(checked) => {
-                                      if (checked) {
-                                        setSelectedDiscoveredAccounts([...selectedDiscoveredAccounts, account.id]);
-                                      } else {
-                                        setSelectedDiscoveredAccounts(
-                                          selectedDiscoveredAccounts.filter(id => id !== account.id)
-                                        );
-                                      }
-                                    }}
-                                  />
-                                </TableCell>
-                                <TableCell className="font-medium">{account.name}</TableCell>
-                                <TableCell className="capitalize">{account.type}</TableCell>
-                                <TableCell>
-                                  <Badge variant={account.status === "active" ? "secondary" : "outline"}>
-                                    {account.status}
-                                  </Badge>
+                          {activeTab === "azure" ? (
+                            isLoadingSubscriptions ? (
+                              <TableRow>
+                                <TableCell colSpan={4} className="text-center py-4">
+                                  <RefreshCw className="h-4 w-4 animate-spin mx-auto" />
+                                  <span className="mt-2 text-sm text-muted-foreground">Loading subscriptions...</span>
                                 </TableCell>
                               </TableRow>
-                            ))
+                            ) : !selectedCredential ? (
+                              <TableRow>
+                                <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
+                                  Please select credentials to view available subscriptions
+                                </TableCell>
+                              </TableRow>
+                            ) : availableSubscriptions.length > 0 ? (
+                              availableSubscriptions.map((subscription) => (
+                                <TableRow key={subscription.id}>
+                                  <TableCell>
+                                    <Checkbox
+                                      checked={selectedSubscriptions.includes(subscription.id)}
+                                      onCheckedChange={(checked) => {
+                                        if (checked) {
+                                          setSelectedSubscriptions([...selectedSubscriptions, subscription.id]);
+                                        } else {
+                                          setSelectedSubscriptions(
+                                            selectedSubscriptions.filter(id => id !== subscription.id)
+                                          );
+                                        }
+                                      }}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="font-medium">{subscription.name}</TableCell>
+                                  <TableCell>
+                                    <Badge variant={subscription.state === "Enabled" ? "secondary" : "outline"}>
+                                      {subscription.state}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">{subscription.id}</TableCell>
+                                </TableRow>
+                              ))
+                            ) : (
+                              <TableRow>
+                                <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
+                                  No subscriptions found for the selected credentials
+                                </TableCell>
+                              </TableRow>
+                            )
                           ) : (
                             <TableRow>
                               <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
-                                No {activeTab.toUpperCase()} accounts found
+                                {activeTab.toUpperCase()} is not implemented yet
                               </TableCell>
                             </TableRow>
                           )}

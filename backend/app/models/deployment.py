@@ -1,12 +1,11 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, DateTime, Table, JSON
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Table, DateTime, JSON, Text, Float
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 
 from app.models.base_models import Base, generate_uuid
 
-
-# Association table for many-to-many relationship between Environment and CloudAccount
+# Association tables
 environment_cloud_account = Table(
     "environment_cloud_account",
     Base.metadata,
@@ -14,6 +13,13 @@ environment_cloud_account = Table(
     Column("cloud_account_id", Integer, ForeignKey("cloud_accounts.id"), primary_key=True)
 )
 
+# New association table for cloud accounts and subscriptions
+cloud_account_subscription = Table(
+    "cloud_account_subscription",
+    Base.metadata,
+    Column("cloud_account_id", Integer, ForeignKey("cloud_accounts.id"), primary_key=True),
+    Column("subscription_id", String, primary_key=True)
+)
 
 class CloudAccount(Base):
     __tablename__ = "cloud_accounts"
@@ -25,9 +31,16 @@ class CloudAccount(Base):
     status = Column(String)  # connected, disconnected, error
     description = Column(String, nullable=True)
     
+    # Provider-specific fields
+    cloud_ids = Column(JSON, nullable=True)  # Store as JSON array of cloud identifiers (subscriptions, accounts, projects)
+    
     # Relationships
-    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))  # Changed to UUID type
+    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))
     tenant = relationship("Tenant", back_populates="cloud_accounts")
+    
+    # Link to cloud settings/credentials
+    settings_id = Column(Integer, ForeignKey("cloud_settings.id"), nullable=True)
+    cloud_settings = relationship("CloudSettings", back_populates="cloud_accounts")
     
     # Many-to-many relationship with Environment
     environments = relationship(
@@ -35,7 +48,10 @@ class CloudAccount(Base):
         secondary=environment_cloud_account,
         back_populates="cloud_accounts"
     )
-
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Environment(Base):
     __tablename__ = "environments"
@@ -119,6 +135,8 @@ class Deployment(Base):
     description = Column(String, nullable=True)
     status = Column(String)  # pending, running, completed, failed
     parameters = Column(JSON, nullable=True)
+    resources = Column(JSON, nullable=True)  # Store deployment resources
+    region = Column(String, nullable=True)  # Store deployment region
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

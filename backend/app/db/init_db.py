@@ -67,6 +67,13 @@ PERMISSIONS = [
     {"name": "update:deployments", "description": "Update deployments"},
     {"name": "delete:deployments", "description": "Delete deployments"},
     
+    # Deployment Engine
+    {"name": "deployment:read", "description": "View deployment engine resources"},
+    {"name": "deployment:create", "description": "Create deployment engine resources"},
+    {"name": "deployment:update", "description": "Update deployment engine resources"},
+    {"name": "deployment:delete", "description": "Delete deployment engine resources"},
+    {"name": "deployment:manage", "description": "Manage deployment engine credentials"},
+    
     # NexusAI
     {"name": "use:nexus_ai", "description": "Use NexusAI"},
     {"name": "manage:nexus_ai", "description": "Manage NexusAI settings"},
@@ -81,6 +88,7 @@ ROLES = [
             "view:users", "view:tenants", 
             "view:cloud-accounts", "view:environments", "view:templates", "view:deployments",
             "create:deployments", "update:deployments", "delete:deployments",
+            "deployment:read", "deployment:create", "deployment:update", "deployment:delete",
             "use:nexus_ai"
         ]
     },
@@ -640,31 +648,25 @@ provider "google" {
   region  = "us-central1"
 }
 
-resource "google_container_cluster" "example" {
-  name     = "example-gke-cluster"
-  location = "us-central1"
-
-  # We can't create a cluster with no node pool defined, but we want to only use
-  # separately managed node pools. So we create the smallest possible default
-  # node pool and immediately delete it.
-  remove_default_node_pool = true
-  initial_node_count       = 1
+resource "google_vpc_network" "vpc_network" {
+  name = "example-network"
 }
 
-resource "google_container_node_pool" "example_nodes" {
-  name       = "example-node-pool"
-  location   = "us-central1"
-  cluster    = google_container_cluster.example.name
-  node_count = 3
+resource "google_compute_instance" "example" {
+  name         = "example-instance"
+  machine_type = "e2-medium"
+  
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-10"
+    }
+  }
 
-  node_config {
-    preemptible  = true
-    machine_type = "e2-medium"
-
-    oauth_scopes = [
-      "https://www.googleapis.com/auth/logging.write",
-      "https://www.googleapis.com/auth/monitoring",
-    ]
+  network_interface {
+    network = google_vpc_network.vpc_network.name
+    access_config {
+      // Ephemeral IP
+    }
   }
 }
 """

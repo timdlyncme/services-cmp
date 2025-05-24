@@ -1,7 +1,8 @@
-fastapi  
-uvicorn  
-azure-identity  
-azure-mgmt-resource  
-azure-mgmt-compute  
-azure-mgmt-storage  
-azure-mgmt-network
+fastapi==0.104.1
+uvicorn==0.23.2
+pydantic==2.4.2
+pyjwt==2.8.0
+requests==2.31.0
+azure-identity==1.14.1
+azure-mgmt-resource==23.0.1
+azure-mgmt-subscription==3.1.1

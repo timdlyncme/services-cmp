@@ -65,4 +65,7 @@ def get_current_user(
     if user is None:
         raise credentials_exception
     
+    # Store the access token with the user object for use in forwarding requests
+    user.access_token = token
+    
     return user
