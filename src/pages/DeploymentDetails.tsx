@@ -204,7 +204,7 @@ const DeploymentDetails = () => {
       case "failed":
         return <Badge variant="destructive">{status}</Badge>;
       case "succeeded":
-        return <Badge variant="default">{status}</Badge>;
+        return <Badge variant="success">{status}</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
