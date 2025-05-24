@@ -27,8 +27,8 @@ class DeploymentDetails(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationship to the deployment
-    deployment = relationship("Deployment", back_populates="deployment_details")
+    # Relationship to the deployment - we'll define this in __init__.py to avoid circular imports
+    # deployment = relationship("Deployment", back_populates="deployment_details")
 
     def __repr__(self):
         return f"<DeploymentDetails(id={self.id}, deployment_id={self.deployment_id}, provider={self.provider}, status={self.status})>"
