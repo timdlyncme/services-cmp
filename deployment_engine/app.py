@@ -222,6 +222,9 @@ def create_deployment(
         template = deployment.get("template", {})
         parameters = deployment.get("parameters", {})
         
+        # Log parameters for debugging
+        logger.debug(f"Received parameters: {parameters}")
+        
         # Extract Azure credentials if provided
         client_id = deployment.get("client_id")
         client_secret = deployment.get("client_secret")
