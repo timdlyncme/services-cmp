@@ -7,9 +7,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, Layers } from "lucide-react";
+import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, Layers, Server, Settings, Terminal, Activity } from "lucide-react";
 import { cmpService } from "@/services/cmp-service";
+import { CloudAccount } from "@/types/cloud";
 
 interface Environment {
   id: string;
@@ -17,6 +20,17 @@ interface Environment {
   name: string;
   description: string;
   tenant_id: string;  // Changed from number to string
+  update_strategy?: string;
+  cloud_accounts: Array<{
+    id: string;
+    name: string;
+    provider: string;
+    status: string;
+  }>;
+  scaling_policies?: Record<string, any>;
+  environment_variables?: Record<string, any>;
+  logging_config?: Record<string, any>;
+  monitoring_integration?: Record<string, any>;
 }
 
 const Environments = () => {
@@ -31,6 +45,16 @@ const Environments = () => {
   const [isNewEnvironmentDialogOpen, setIsNewEnvironmentDialogOpen] = useState(false);
   const [newEnvironmentName, setNewEnvironmentName] = useState("");
   const [newEnvironmentDescription, setNewEnvironmentDescription] = useState("");
+  const [updateStrategy, setUpdateStrategy] = useState<string>("");
+  const [selectedCloudAccounts, setSelectedCloudAccounts] = useState<string[]>([]);
+  const [cloudAccounts, setCloudAccounts] = useState<CloudAccount[]>([]);
+  const [activeTab, setActiveTab] = useState("general");
+  
+  // State for environment configuration
+  const [environmentVariables, setEnvironmentVariables] = useState<string>("{\n  \"KEY\": \"value\"\n}");
+  const [scalingPolicies, setScalingPolicies] = useState<string>("{\n  \"min_instances\": 1,\n  \"max_instances\": 5,\n  \"cpu_threshold\": 70\n}");
+  const [loggingConfig, setLoggingConfig] = useState<string>("{\n  \"log_level\": \"info\",\n  \"retention_days\": 30\n}");
+  const [monitoringIntegration, setMonitoringIntegration] = useState<string>("{\n  \"metrics\": [\"cpu\", \"memory\", \"disk\"],\n  \"alert_threshold\": 80\n}");
   
   // Fetch environments from API
   const fetchEnvironments = async () => {
@@ -57,9 +81,28 @@ const Environments = () => {
     }
   };
   
+  // Fetch cloud accounts
+  const fetchCloudAccounts = async () => {
+    if (!currentTenant) return;
+    
+    try {
+      const accounts = await cmpService.getCloudAccounts(currentTenant.tenant_id);
+      setCloudAccounts(accounts);
+    } catch (error) {
+      console.error("Error fetching cloud accounts:", error);
+      
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to load cloud accounts");
+      }
+    }
+  };
+  
   useEffect(() => {
     if (currentTenant) {
       fetchEnvironments();
+      fetchCloudAccounts();
     }
   }, [currentTenant]);
   
@@ -76,6 +119,18 @@ const Environments = () => {
     }
   }, [searchQuery, environments]);
   
+  const resetForm = () => {
+    setNewEnvironmentName("");
+    setNewEnvironmentDescription("");
+    setUpdateStrategy("");
+    setSelectedCloudAccounts([]);
+    setEnvironmentVariables("{\n  \"KEY\": \"value\"\n}");
+    setScalingPolicies("{\n  \"min_instances\": 1,\n  \"max_instances\": 5,\n  \"cpu_threshold\": 70\n}");
+    setLoggingConfig("{\n  \"log_level\": \"info\",\n  \"retention_days\": 30\n}");
+    setMonitoringIntegration("{\n  \"metrics\": [\"cpu\", \"memory\", \"disk\"],\n  \"alert_threshold\": 80\n}");
+    setActiveTab("general");
+  };
+  
   const handleCreateEnvironment = async () => {
     if (!newEnvironmentName) {
       toast.error("Environment name is required");
@@ -85,10 +140,34 @@ const Environments = () => {
     try {
       setIsLoading(true);
       
+      // Parse JSON strings to objects
+      let envVars, scaling, logging, monitoring;
+      
+      try {
+        envVars = JSON.parse(environmentVariables);
+        scaling = JSON.parse(scalingPolicies);
+        logging = JSON.parse(loggingConfig);
+        monitoring = JSON.parse(monitoringIntegration);
+      } catch (e) {
+        toast.error("Invalid JSON in one of the configuration fields");
+        return;
+      }
+      
+      // Get cloud account IDs from the selected names
+      const cloudAccountIds = cloudAccounts
+        .filter(account => selectedCloudAccounts.includes(account.id))
+        .map(account => parseInt(account.id));
+      
       // Create the new environment
       const newEnvironment = {
         name: newEnvironmentName,
-        description: newEnvironmentDescription
+        description: newEnvironmentDescription,
+        update_strategy: updateStrategy,
+        cloud_account_ids: cloudAccountIds,
+        environment_variables: envVars,
+        scaling_policies: scaling,
+        logging_config: logging,
+        monitoring_integration: monitoring
       };
       
       await cmpService.createEnvironment(newEnvironment, currentTenant!.tenant_id);
@@ -97,8 +176,7 @@ const Environments = () => {
       await fetchEnvironments();
       
       // Reset form and close dialog
-      setNewEnvironmentName("");
-      setNewEnvironmentDescription("");
+      resetForm();
       setIsNewEnvironmentDialogOpen(false);
       
       toast.success("Environment created successfully");
@@ -141,7 +219,16 @@ const Environments = () => {
   
   const handleRefresh = () => {
     fetchEnvironments();
+    fetchCloudAccounts();
     toast.success("Refreshing environments...");
+  };
+  
+  const toggleCloudAccount = (accountId: string) => {
+    if (selectedCloudAccounts.includes(accountId)) {
+      setSelectedCloudAccounts(selectedCloudAccounts.filter(id => id !== accountId));
+    } else {
+      setSelectedCloudAccounts([...selectedCloudAccounts, accountId]);
+    }
   };
   
   return (
@@ -159,14 +246,17 @@ const Environments = () => {
             <RefreshCw className="h-4 w-4" />
           </Button>
           
-          <Dialog open={isNewEnvironmentDialogOpen} onOpenChange={setIsNewEnvironmentDialogOpen}>
+          <Dialog open={isNewEnvironmentDialogOpen} onOpenChange={(open) => {
+            setIsNewEnvironmentDialogOpen(open);
+            if (!open) resetForm();
+          }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
                 New Environment
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
                 <DialogTitle>Create Environment</DialogTitle>
                 <DialogDescription>
@@ -174,29 +264,141 @@ const Environments = () => {
                 </DialogDescription>
               </DialogHeader>
               
-              <div className="grid gap-4 py-4">
-                <div className="space-y-2">
-                  <label htmlFor="name" className="text-sm font-medium">Environment Name</label>
-                  <Input
-                    id="name"
-                    value={newEnvironmentName}
-                    onChange={(e) => setNewEnvironmentName(e.target.value)}
-                    placeholder="e.g., Production, Development, Testing"
-                  />
-                </div>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
+                <TabsList className="grid grid-cols-4 mb-4">
+                  <TabsTrigger value="general">General</TabsTrigger>
+                  <TabsTrigger value="cloud">Cloud Accounts</TabsTrigger>
+                  <TabsTrigger value="config">Configuration</TabsTrigger>
+                  <TabsTrigger value="advanced">Advanced</TabsTrigger>
+                </TabsList>
                 
-                <div className="space-y-2">
-                  <label htmlFor="description" className="text-sm font-medium">Description</label>
-                  <Input
-                    id="description"
-                    value={newEnvironmentDescription}
-                    onChange={(e) => setNewEnvironmentDescription(e.target.value)}
-                    placeholder="Describe this environment"
-                  />
-                </div>
-              </div>
+                <TabsContent value="general" className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="name" className="text-sm font-medium">Environment Name</label>
+                    <Input
+                      id="name"
+                      value={newEnvironmentName}
+                      onChange={(e) => setNewEnvironmentName(e.target.value)}
+                      placeholder="e.g., Production, Development, Testing"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="description" className="text-sm font-medium">Description</label>
+                    <Input
+                      id="description"
+                      value={newEnvironmentDescription}
+                      onChange={(e) => setNewEnvironmentDescription(e.target.value)}
+                      placeholder="Describe this environment"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="update-strategy" className="text-sm font-medium">Update Strategy</label>
+                    <Select value={updateStrategy} onValueChange={setUpdateStrategy}>
+                      <SelectTrigger id="update-strategy">
+                        <SelectValue placeholder="Select update strategy" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="rolling">Rolling Update</SelectItem>
+                        <SelectItem value="blue-green">Blue-Green Deployment</SelectItem>
+                        <SelectItem value="canary">Canary Deployment</SelectItem>
+                        <SelectItem value="recreate">Recreate</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="cloud" className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Cloud Accounts</label>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Select one or more cloud accounts to use with this environment
+                    </p>
+                    
+                    {cloudAccounts.length > 0 ? (
+                      <div className="grid gap-2 max-h-[300px] overflow-y-auto">
+                        {cloudAccounts.map((account) => (
+                          <div 
+                            key={account.id} 
+                            className={`flex items-center justify-between p-3 rounded-md border cursor-pointer ${
+                              selectedCloudAccounts.includes(account.id) ? 'bg-primary/10 border-primary' : ''
+                            }`}
+                            onClick={() => toggleCloudAccount(account.id)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Server className="h-4 w-4" />
+                              <div>
+                                <p className="font-medium">{account.name}</p>
+                                <p className="text-xs text-muted-foreground">{account.provider}</p>
+                              </div>
+                            </div>
+                            <Badge variant={account.status === 'connected' ? 'success' : 'destructive'}>
+                              {account.status}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-32 border rounded-md p-4">
+                        <Server className="h-8 w-8 text-muted-foreground mb-2" />
+                        <p className="text-sm text-muted-foreground">No cloud accounts available</p>
+                        <p className="text-xs text-muted-foreground">Create a cloud account first</p>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="config" className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="env-vars" className="text-sm font-medium">Environment Variables</label>
+                    <p className="text-xs text-muted-foreground">Define environment variables as JSON</p>
+                    <Textarea
+                      id="env-vars"
+                      value={environmentVariables}
+                      onChange={(e) => setEnvironmentVariables(e.target.value)}
+                      className="font-mono text-sm h-32"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="scaling" className="text-sm font-medium">Scaling Policies</label>
+                    <p className="text-xs text-muted-foreground">Define scaling rules as JSON</p>
+                    <Textarea
+                      id="scaling"
+                      value={scalingPolicies}
+                      onChange={(e) => setScalingPolicies(e.target.value)}
+                      className="font-mono text-sm h-32"
+                    />
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="advanced" className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="logging" className="text-sm font-medium">Logging Configuration</label>
+                    <p className="text-xs text-muted-foreground">Configure logging settings as JSON</p>
+                    <Textarea
+                      id="logging"
+                      value={loggingConfig}
+                      onChange={(e) => setLoggingConfig(e.target.value)}
+                      className="font-mono text-sm h-32"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="monitoring" className="text-sm font-medium">Monitoring Integration</label>
+                    <p className="text-xs text-muted-foreground">Configure monitoring settings as JSON</p>
+                    <Textarea
+                      id="monitoring"
+                      value={monitoringIntegration}
+                      onChange={(e) => setMonitoringIntegration(e.target.value)}
+                      className="font-mono text-sm h-32"
+                    />
+                  </div>
+                </TabsContent>
+              </Tabs>
               
-              <DialogFooter>
+              <DialogFooter className="mt-4">
                 <Button variant="outline" onClick={() => setIsNewEnvironmentDialogOpen(false)}>Cancel</Button>
                 <Button onClick={handleCreateEnvironment}>Create Environment</Button>
               </DialogFooter>
@@ -237,6 +439,8 @@ const Environments = () => {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Description</TableHead>
+                  <TableHead>Cloud Accounts</TableHead>
+                  <TableHead>Update Strategy</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -245,6 +449,28 @@ const Environments = () => {
                   <TableRow key={environment.environment_id}>
                     <TableCell className="font-medium">{environment.name}</TableCell>
                     <TableCell>{environment.description || "No description"}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {environment.cloud_accounts.length > 0 ? (
+                          environment.cloud_accounts.map((account, index) => (
+                            <Badge key={index} variant="outline" className="mr-1">
+                              {account.name}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-muted-foreground text-sm">None</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {environment.update_strategy ? (
+                        <Badge variant="secondary">
+                          {environment.update_strategy}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">Default</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteEnvironment(environment.environment_id)}>
                         <Trash className="h-4 w-4" />
