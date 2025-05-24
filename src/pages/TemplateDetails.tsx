@@ -174,11 +174,52 @@ const TemplateDetails = () => {
     }
   };
   
-  const handleDeployTemplate = () => {
-    // In a real app, this would trigger deployment
-    toast.success(`Deploying ${deployName} to selected environment`);
-    setDeployDialogOpen(false);
-    navigate("/deployments");
+  const handleDeployTemplate = async () => {
+    if (!template || !deployEnv || !deployName) {
+      toast.error("Please provide all required deployment information");
+      return;
+    }
+    
+    try {
+      // Find the selected environment to get its name
+      const selectedEnvironment = environments.find(env => env.id === deployEnv);
+      if (!selectedEnvironment) {
+        toast.error("Selected environment not found");
+        return;
+      }
+      
+      // Map ARM template type to 'native' for the backend
+      const backendDeploymentType = template.type === 'arm' ? 'native' : template.type;
+      
+      // Prepare the deployment data
+      const deploymentData = {
+        name: deployName,
+        description: `Deployment of ${template.name}`,
+        template_id: parseInt(template.id),
+        environment_id: parseInt(deployEnv),
+        environment_name: selectedEnvironment.name,
+        provider: template.provider,
+        deployment_type: backendDeploymentType,
+        template_source: "code",
+        template_code: template.code,
+        parameters: parameters || {}
+      };
+      
+      // Use the deployment service to create the deployment
+      await deploymentService.createDeployment(deploymentData, currentTenant?.tenant_id || "");
+      
+      toast.success(`Deploying ${deployName} to selected environment`);
+      setDeployDialogOpen(false);
+      navigate("/deployments");
+    } catch (error) {
+      console.error("Error deploying template:", error);
+      
+      if (error instanceof Error) {
+        toast.error(`Deployment failed: ${error.message}`);
+      } else {
+        toast.error("Failed to deploy template");
+      }
+    }
   };
   
   const handleAiSend = () => {
