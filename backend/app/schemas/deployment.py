@@ -158,8 +158,8 @@ class CloudDeploymentResponse(BaseModel):
 
 # Deployment schemas
 class DeploymentCreate(DeploymentBase):
-    environment_id: int
-    template_id: int
+    environment_id: str  # Changed from int to str to accept UUID
+    template_id: str  # Changed from int to str to accept UUID
     environment_name: str  # For deployment engine
     provider: str  # aws, azure, gcp
     deployment_type: str  # native, terraform
