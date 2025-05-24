@@ -173,6 +173,39 @@ def create_environment(
         )
     
     try:
+        # Validate that cloud_account_ids is not empty
+        if not environment_in.cloud_account_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="At least one cloud account must be selected"
+            )
+        
+        # Validate that all cloud accounts exist and belong to the user's tenant
+        valid_cloud_accounts = []
+        for account_id in environment_in.cloud_account_ids:
+            # Convert string ID to int if needed
+            try:
+                account_id_int = int(account_id)
+            except (ValueError, TypeError):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid cloud account ID format: {account_id}"
+                )
+            
+            # Get cloud account
+            cloud_account = db.query(CloudAccount).filter(
+                CloudAccount.id == account_id_int,
+                CloudAccount.tenant_id == current_user.tenant.tenant_id
+            ).first()
+            
+            if not cloud_account:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cloud account with ID {account_id} not found or does not belong to your tenant"
+                )
+            
+            valid_cloud_accounts.append(cloud_account)
+        
         # Create new environment
         environment = Environment(
             name=environment_in.name,
@@ -189,20 +222,12 @@ def create_environment(
         db.commit()
         db.refresh(environment)
         
-        # Link cloud accounts if provided
-        if environment_in.cloud_account_ids:
-            for account_id in environment_in.cloud_account_ids:
-                # Get cloud account
-                cloud_account = db.query(CloudAccount).filter(
-                    CloudAccount.id == account_id,
-                    CloudAccount.tenant_id == current_user.tenant.tenant_id
-                ).first()
-                
-                if cloud_account:
-                    environment.cloud_accounts.append(cloud_account)
-            
-            db.commit()
-            db.refresh(environment)
+        # Link cloud accounts
+        for cloud_account in valid_cloud_accounts:
+            environment.cloud_accounts.append(cloud_account)
+        
+        db.commit()
+        db.refresh(environment)
         
         # Format response
         cloud_accounts = []
@@ -224,6 +249,7 @@ def create_environment(
         }
     
     except HTTPException:
+        db.rollback()
         raise
     except Exception as e:
         db.rollback()
@@ -294,14 +320,45 @@ def update_environment(
         
         # Update cloud account associations if provided
         if environment_update.cloud_account_ids is not None:
+            # Validate that cloud_account_ids is not empty
+            if not environment_update.cloud_account_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="At least one cloud account must be selected"
+                )
+            
+            # Validate that all cloud accounts exist and belong to the user's tenant
+            valid_cloud_accounts = []
+            for account_id in environment_update.cloud_account_ids:
+                # Convert string ID to int if needed
+                try:
+                    account_id_int = int(account_id)
+                except (ValueError, TypeError):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid cloud account ID format: {account_id}"
+                    )
+                
+                # Get cloud account
+                cloud_account = db.query(CloudAccount).filter(
+                    CloudAccount.id == account_id_int,
+                    CloudAccount.tenant_id == current_user.tenant.tenant_id
+                ).first()
+                
+                if not cloud_account:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Cloud account with ID {account_id} not found or does not belong to your tenant"
+                    )
+                
+                valid_cloud_accounts.append(cloud_account)
+            
             # Clear existing associations
             environment.cloud_accounts = []
             
             # Add new associations
-            for account_id in environment_update.cloud_account_ids:
-                cloud_account = db.query(CloudAccount).filter(CloudAccount.id == account_id).first()
-                if cloud_account:
-                    environment.cloud_accounts.append(cloud_account)
+            for cloud_account in valid_cloud_accounts:
+                environment.cloud_accounts.append(cloud_account)
         
         db.commit()
         db.refresh(environment)

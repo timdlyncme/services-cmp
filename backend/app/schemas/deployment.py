@@ -261,7 +261,7 @@ class EnvironmentCreate(EnvironmentBase):
     environment_variables: Optional[Dict[str, Any]] = None
     logging_config: Optional[Dict[str, Any]] = None
     monitoring_integration: Optional[Dict[str, Any]] = None
-    cloud_account_ids: List[int] = []
+    cloud_account_ids: List[Union[int, str]]  # Accept both int and string IDs
 
 class EnvironmentUpdate(BaseModel):
     name: Optional[str] = None
@@ -271,7 +271,7 @@ class EnvironmentUpdate(BaseModel):
     environment_variables: Optional[Dict[str, Any]] = None
     logging_config: Optional[Dict[str, Any]] = None
     monitoring_integration: Optional[Dict[str, Any]] = None
-    cloud_account_ids: Optional[List[int]] = None
+    cloud_account_ids: Optional[List[Union[int, str]]] = None
 
 class EnvironmentResponse(EnvironmentBase):
     id: int
