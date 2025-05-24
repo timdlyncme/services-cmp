@@ -32,6 +32,7 @@ interface Environment {
   description: string;
   provider: string;
   tenantId: string;
+  internal_id: number; // Add internal_id to the environment
 }
 
 const TemplateDetails = () => {
@@ -182,7 +183,7 @@ const TemplateDetails = () => {
     }
     
     try {
-      // Find the selected environment to get its name
+      // Find the selected environment to get its name and environment_id
       const selectedEnvironment = environments.find(env => env.id === deployEnv);
       if (!selectedEnvironment) {
         toast.error("Selected environment not found");
@@ -200,7 +201,7 @@ const TemplateDetails = () => {
         name: deployName,
         description: `Deployment of ${template.name}`,
         template_id: parseInt(template.id),
-        environment_id: parseInt(deployEnv),
+        environment_id: selectedEnvironment.internal_id, // Use the internal_id from the environment
         environment_name: selectedEnvironment.name,
         provider: template.provider,
         deployment_type: backendDeploymentType,

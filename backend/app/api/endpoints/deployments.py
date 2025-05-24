@@ -631,6 +631,9 @@ def create_deployment(
         )
     
     try:
+        # Debug: Print the deployment data
+        print(f"Deployment data received: {deployment.dict()}")
+        
         # Verify template exists
         template = db.query(Template).filter(Template.id == deployment.template_id).first()
         if not template:
@@ -691,10 +694,13 @@ def create_deployment(
                 elif "region" in deployment.parameters:
                     location = deployment.parameters["region"]
             
-            # Ensure template_code is a string
+            # Ensure template_code is a string and not empty
             template_code = deployment.template_code
             if template_code is None:
                 template_code = ""
+            
+            # Debug: Print template code length
+            print(f"Template code length: {len(template_code)}")
             
             # Prepare deployment data for the engine
             engine_deployment = {
@@ -721,6 +727,9 @@ def create_deployment(
                 engine_deployment["client_id"] = cloud_settings.client_id
                 engine_deployment["tenant_id"] = cloud_settings.tenant_id
             
+            # Debug: Print engine deployment data
+            print(f"Engine deployment data: {engine_deployment}")
+            
             # Send to deployment engine
             headers = {"Authorization": f"Bearer {current_user.access_token}"}
             response = requests.post(
@@ -728,6 +737,10 @@ def create_deployment(
                 headers=headers,
                 json=engine_deployment
             )
+            
+            # Debug: Print deployment engine response
+            print(f"Deployment engine response status: {response.status_code}")
+            print(f"Deployment engine response: {response.text}")
             
             if response.status_code != 200:
                 # Log the error but don't fail the deployment creation
