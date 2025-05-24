@@ -126,6 +126,31 @@ export class DeploymentService {
       throw error;
     }
   }
+
+  /**
+   * Create a new deployment
+   */
+  async createDeployment(deploymentData: any, tenantId: string): Promise<CloudDeployment> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await api.post('/deployments', deploymentData, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        params: {
+          tenant_id: formatTenantId(tenantId)
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Create deployment error:', error);
+      throw error;
+    }
+  }
 }
 
 // Create a singleton instance
