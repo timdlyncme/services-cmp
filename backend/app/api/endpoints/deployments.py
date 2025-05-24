@@ -1178,3 +1178,67 @@ def update_deployment_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error updating deployment status: {str(e)}"
         )
+
+
+@router.get("/{deployment_id}/logs", response_model=List[Dict[str, Any]])
+def get_deployment_logs(
+    deployment_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Get logs for a specific deployment from the deployment_history table
+    """
+    # Check if user has permission to view deployments
+    has_permission = any(p.name == "read:deployments" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    try:
+        # First, get the deployment to check if it exists and if the user has access
+        deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
+        
+        if not deployment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Deployment with ID {deployment_id} not found"
+            )
+        
+        # Check if user has access to this deployment's tenant
+        if deployment.tenant_id != current_user.tenant_id:
+            # Admin users can view all deployments
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to view this deployment"
+                )
+        
+        # Get logs from deployment_history table
+        logs = db.query(DeploymentHistory).filter(
+            DeploymentHistory.deployment_id == deployment.id
+        ).order_by(DeploymentHistory.created_at.desc()).all()
+        
+        # Format logs for response
+        formatted_logs = []
+        for log in logs:
+            formatted_logs.append({
+                "id": log.id,
+                "status": log.status,
+                "message": log.message,
+                "details": log.details,
+                "timestamp": log.created_at.isoformat(),
+                "user_id": log.user_id
+            })
+        
+        return formatted_logs
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving deployment logs: {str(e)}"
+        )
