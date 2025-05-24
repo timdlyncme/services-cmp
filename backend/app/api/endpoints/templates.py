@@ -328,6 +328,10 @@ def create_template(
         db.commit()
         db.refresh(new_template)
         
+        # Verify the template was created correctly
+        created_template = db.query(Template).filter(Template.id == new_template.id).first()
+        print(f"Created template: type={created_template.type}, category={created_template.category}")
+        
         # Create initial version
         initial_version = TemplateVersion(
             template_id=new_template.id,
