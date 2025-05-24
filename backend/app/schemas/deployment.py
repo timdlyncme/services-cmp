@@ -52,8 +52,9 @@ class CloudAccountFrontendResponse(BaseModel):
     provider: str
     status: str
     tenantId: str
-    subscription_id: Optional[str] = None
-    subscription_ids: List[str] = []
+    subscription_id: Optional[str] = None  # For backward compatibility
+    subscription_ids: List[str] = []  # For backward compatibility
+    cloud_ids: List[str] = []  # New field
     settings_id: Optional[str] = None
     connectionDetails: Dict[str, Any] = {}
 

@@ -32,8 +32,7 @@ class CloudAccount(Base):
     description = Column(String, nullable=True)
     
     # Provider-specific fields
-    cloud_id = Column(String, nullable=True)  # For multi-cloud support (replaces subscription_id)
-    subscription_ids = Column(JSON, nullable=True)  # Store as JSON array
+    cloud_ids = Column(JSON, nullable=True)  # Store as JSON array of cloud identifiers (subscriptions, accounts, projects)
     
     # Relationships
     tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))

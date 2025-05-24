@@ -74,18 +74,21 @@ def get_cloud_accounts(
                     "tenant_id": account.cloud_settings.tenant_id,
                 }
             
-            # Format subscription IDs
-            subscription_ids = []
-            if account.subscription_ids:
-                if isinstance(account.subscription_ids, str):
+            # Format cloud IDs
+            cloud_ids = []
+            if account.cloud_ids:
+                if isinstance(account.cloud_ids, str):
                     try:
-                        subscription_ids = json.loads(account.subscription_ids)
+                        cloud_ids = json.loads(account.cloud_ids)
                     except:
-                        subscription_ids = [account.subscription_ids]
+                        cloud_ids = [account.cloud_ids]
                 else:
-                    subscription_ids = account.subscription_ids
-            elif account.cloud_id:
-                subscription_ids = [account.cloud_id]
+                    cloud_ids = account.cloud_ids
+            
+            # For backward compatibility
+            subscription_id = None
+            if cloud_ids and len(cloud_ids) > 0:
+                subscription_id = cloud_ids[0]
             
             result.append({
                 "id": account.account_id,
@@ -93,8 +96,9 @@ def get_cloud_accounts(
                 "provider": account.provider,
                 "status": account.status,
                 "tenantId": account.tenant_id,
-                "subscription_id": account.cloud_id,  # Use cloud_id for backward compatibility
-                "subscription_ids": subscription_ids,
+                "subscription_id": subscription_id,  # For backward compatibility
+                "subscription_ids": cloud_ids,  # For backward compatibility
+                "cloud_ids": cloud_ids,  # New field
                 "settings_id": account.cloud_settings.settings_id if account.cloud_settings else None,
                 "connectionDetails": connection_details
             })
@@ -173,18 +177,21 @@ def get_cloud_account(
             if settings:
                 settings_id_str = str(settings.settings_id)
         
-        # Format subscription IDs
-        subscription_ids = []
-        if account.subscription_ids:
-            if isinstance(account.subscription_ids, str):
+        # Format cloud IDs
+        cloud_ids = []
+        if account.cloud_ids:
+            if isinstance(account.cloud_ids, str):
                 try:
-                    subscription_ids = json.loads(account.subscription_ids)
+                    cloud_ids = json.loads(account.cloud_ids)
                 except:
-                    subscription_ids = [account.subscription_ids]
+                    cloud_ids = [account.cloud_ids]
             else:
-                subscription_ids = account.subscription_ids
-        elif account.cloud_id:
-            subscription_ids = [account.cloud_id]
+                cloud_ids = account.cloud_ids
+        
+        # For backward compatibility
+        subscription_id = None
+        if cloud_ids and len(cloud_ids) > 0:
+            subscription_id = cloud_ids[0]
         
         # Return frontend-compatible response
         return CloudAccountFrontendResponse(
@@ -193,8 +200,9 @@ def get_cloud_account(
             provider=account.provider,
             status=account.status,
             tenantId=tenant.tenant_id if tenant else account.tenant_id,
-            subscription_id=account.cloud_id,  # Use cloud_id for backward compatibility
-            subscription_ids=subscription_ids,
+            subscription_id=subscription_id,  # For backward compatibility
+            subscription_ids=cloud_ids,  # For backward compatibility
+            cloud_ids=cloud_ids,  # New field
             settings_id=settings_id_str,
             connectionDetails={}
         )
@@ -255,12 +263,8 @@ def create_cloud_account(
             description=cloud_account_in.description,
             tenant_id=current_user.tenant.tenant_id,
             settings_id=cloud_settings.id if cloud_settings else None,
-            subscription_ids=cloud_account_in.subscription_ids
+            cloud_ids=cloud_account_in.subscription_ids  # Use subscription_ids for backward compatibility
         )
-        
-        # If there's only one subscription ID, also set it in the cloud_id field
-        if cloud_account_in.subscription_ids and len(cloud_account_in.subscription_ids) == 1:
-            cloud_account.cloud_id = cloud_account_in.subscription_ids[0]
         
         db.add(cloud_account)
         db.commit()
@@ -273,7 +277,7 @@ def create_cloud_account(
             provider=cloud_account.provider,
             status=cloud_account.status,
             tenant_id=str(cloud_account.tenant_id),
-            subscription_id=cloud_account.cloud_id,
+            subscription_id=cloud_account.cloud_ids[0] if cloud_account.cloud_ids and len(cloud_account.cloud_ids) > 0 else None,
             created_at=cloud_account.created_at,
             updated_at=cloud_account.updated_at
         )
@@ -362,10 +366,7 @@ def update_cloud_account(
         if account_update.description is not None:
             account.description = account_update.description
         if account_update.subscription_ids is not None:
-            account.subscription_ids = account_update.subscription_ids
-            # If there's only one subscription ID, also set it in the cloud_id field
-            if account_update.subscription_ids and len(account_update.subscription_ids) == 1:
-                account.cloud_id = account_update.subscription_ids[0]
+            account.cloud_ids = account_update.subscription_ids  # Use subscription_ids for backward compatibility
         if settings_id is not None:
             account.settings_id = settings_id
         
@@ -383,18 +384,21 @@ def update_cloud_account(
             if settings:
                 settings_id_str = str(settings.settings_id)
         
-        # Format subscription IDs
-        subscription_ids = []
-        if account.subscription_ids:
-            if isinstance(account.subscription_ids, str):
+        # Format cloud IDs
+        cloud_ids = []
+        if account.cloud_ids:
+            if isinstance(account.cloud_ids, str):
                 try:
-                    subscription_ids = json.loads(account.subscription_ids)
+                    cloud_ids = json.loads(account.cloud_ids)
                 except:
-                    subscription_ids = [account.subscription_ids]
+                    cloud_ids = [account.cloud_ids]
             else:
-                subscription_ids = account.subscription_ids
-        elif account.cloud_id:
-            subscription_ids = [account.cloud_id]
+                cloud_ids = account.cloud_ids
+        
+        # For backward compatibility
+        subscription_id = None
+        if cloud_ids and len(cloud_ids) > 0:
+            subscription_id = cloud_ids[0]
         
         # Return frontend-compatible response
         return CloudAccountFrontendResponse(
@@ -403,8 +407,9 @@ def update_cloud_account(
             provider=account.provider,
             status=account.status,
             tenantId=tenant.tenant_id if tenant else current_user.tenant.tenant_id,
-            subscription_id=account.cloud_id,  # Use cloud_id for backward compatibility
-            subscription_ids=subscription_ids,
+            subscription_id=subscription_id,  # For backward compatibility
+            subscription_ids=cloud_ids,  # For backward compatibility
+            cloud_ids=cloud_ids,  # New field
             settings_id=settings_id_str,
             connectionDetails={}
         )
