@@ -159,14 +159,16 @@ const DeploymentDetails = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "running":
-        return <Badge variant="secondary">{status}</Badge>;
+        return <Badge variant="default">{status}</Badge>;
       case "stopped":
         return <Badge variant="outline">{status}</Badge>;
       case "failed":
         return <Badge variant="destructive">{status}</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
-    }
+        case "succeeded":
+          return <Badge variant="default">{status}</Badge>;
+        default:
+          return <Badge>{status}</Badge>;
+          }
   };
   
   if (loading) {
