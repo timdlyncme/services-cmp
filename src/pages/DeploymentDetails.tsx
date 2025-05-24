@@ -81,6 +81,9 @@ const DeploymentDetails = () => {
         const deploymentData = await deploymentService.getDeployment(deploymentId);
         
         if (deploymentData) {
+          console.log("Deployment data received:", deploymentData);
+          console.log("Cloud resources:", deploymentData.cloud_resources);
+          
           setDeployment(deploymentData);
           
           // Fetch template data

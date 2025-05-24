@@ -528,7 +528,7 @@ def get_deployments(
                 createdAt=deployment.created_at.isoformat(),
                 updatedAt=deployment.updated_at.isoformat(),
                 parameters=deployment.parameters or {},
-                resources=deployment.resources or [],
+                resources=[],  # Default empty list if not available
                 tenantId=tenant.tenant_id,
                 region=region
             ))
@@ -589,6 +589,16 @@ def get_deployment(
                     detail="Not authorized to access this deployment"
                 )
         
+        # Get deployment details if available
+        deployment_details = db.query(DeploymentDetails).filter(
+            DeploymentDetails.deployment_id == deployment.id
+        ).first()
+        
+        # Get cloud resources from deployment details
+        cloud_resources = []
+        if deployment_details and deployment_details.cloud_resources:
+            cloud_resources = deployment_details.cloud_resources
+        
         # Convert to frontend-compatible format
         return CloudDeploymentResponse(
             id=deployment.deployment_id,
@@ -604,7 +614,7 @@ def get_deployment(
             resources=deployment.resources or [],
             tenantId=tenant.tenant_id,
             region=deployment.region,
-            cloud_resources=deployment.resources or []
+            cloud_resources=cloud_resources
         )
     
     except HTTPException:
