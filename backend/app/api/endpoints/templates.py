@@ -124,6 +124,9 @@ def get_templates(
                 if tenant:
                     tenant_id = tenant.tenant_id
             
+            # Get the template's code
+            template_code = template.code or ""
+            
             # Get deployment count
             deployment_count = deployment_counts.get(template.id, 0)
             
@@ -132,6 +135,18 @@ def get_templates(
             if template.category:
                 categories = [cat.strip() for cat in template.category.split(",")]
             
+            # Get the last user who updated the template
+            last_updated_by = None
+            if hasattr(template, 'versions') and template.versions:
+                # Sort versions by created_at in descending order
+                sorted_versions = sorted(template.versions, key=lambda v: v.created_at, reverse=True)
+                if sorted_versions:
+                    latest_version = sorted_versions[0]
+                    if latest_version.created_by_id:
+                        user = db.query(User).filter(User.id == latest_version.created_by_id).first()
+                        if user:
+                            last_updated_by = user.full_name or user.username
+            
             result.append(CloudTemplateResponse(
                 id=template.template_id,
                 template_id=template.template_id,  # Explicitly include template_id
@@ -139,7 +154,7 @@ def get_templates(
                 description=template.description or "",
                 type=template.type,  # Use the actual template type from the database
                 provider=template.provider,
-                code=code,
+                code=template_code,
                 deploymentCount=deployment_count,
                 uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
                 updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
