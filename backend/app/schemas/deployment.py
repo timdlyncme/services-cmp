@@ -177,8 +177,11 @@ class DeploymentCreate(DeploymentBase):
         if v == 'url' and not values.get('template_url'):
             raise ValueError('template_url is required when template_source is "url"')
         
-        if v == 'code' and not values.get('template_code'):
-            raise ValueError('template_code is required when template_source is "code"')
+        # For code source, check if template_code exists and is not empty
+        if v == 'code':
+            template_code = values.get('template_code')
+            if template_code is None or template_code == '':
+                raise ValueError('template_code is required when template_source is "code"')
         
         return v
 
