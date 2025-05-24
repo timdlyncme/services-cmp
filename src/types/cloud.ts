@@ -53,10 +53,9 @@ export interface CloudDeployment {
   createdAt: string;
   updatedAt: string;
   parameters: Record<string, string>;
-  resources: string[];
+  resources: CloudResource[];
   tenantId: string;
   logs?: DeploymentLog[];
-  cloud_resources?: CloudResource[];
 }
 
 export interface CloudResource {

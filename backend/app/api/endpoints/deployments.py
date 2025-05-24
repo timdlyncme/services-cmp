@@ -476,33 +476,47 @@ def get_deployments(
             Tenant, Deployment.tenant_id == Tenant.tenant_id  # Join on tenant_id (UUID) instead of id (Integer)
         )
         
-        # Filter by tenant
+        # Get the user's tenant
+        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
+        
+        # Filter by tenant if specified
         if tenant_id:
-            # Remove 'tenant-' prefix if present
-            if tenant_id.startswith('tenant-'):
-                tenant_id = tenant_id[7:]
+            # Handle different tenant ID formats
+            try:
+                # Remove 'tenant-' prefix if present
+                if tenant_id.startswith('tenant-'):
+                    tenant_id = tenant_id[7:]
                 
-            # Check if tenant exists
-            tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
-            if not tenant:
+                # Check if tenant exists
+                tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
+                if not tenant:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Tenant with ID {tenant_id} not found"
+                    )
+                
+                # Check if user has access to this tenant
+                if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Not authorized to view deployments for this tenant"
+                    )
+                
+                query = query.filter(Tenant.tenant_id == tenant_id)
+            except Exception as e:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Tenant with ID {tenant_id} not found"
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid tenant ID format: {str(e)}"
                 )
-            
-            # Check if user has access to this tenant
-            if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to view deployments for this tenant"
-                )
-            
-            query = query.filter(Tenant.tenant_id == tenant_id)
         else:
-            # Default to current user's tenant
-            tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
-            if tenant:
-                query = query.filter(Tenant.tenant_id == tenant.tenant_id)
+            # No tenant specified, show deployments from the user's tenant
+            if current_user.role.name == "admin" or current_user.role.name == "msp":
+                # Admin and MSP users can see all deployments if no tenant is specified
+                pass
+            else:
+                # Regular users can only see deployments from their tenant
+                if user_tenant:
+                    query = query.filter(Tenant.tenant_id == user_tenant.tenant_id)
         
         results = query.all()
         
@@ -517,6 +531,16 @@ def get_deployments(
             if deployment.parameters and "region" in deployment.parameters:
                 region = deployment.parameters["region"]
             
+            # Get deployment details if available to fetch cloud_resources
+            deployment_details = db.query(DeploymentDetails).filter(
+                DeploymentDetails.deployment_id == deployment.id
+            ).first()
+            
+            # Get resources from deployment details
+            resources = []
+            if deployment_details and deployment_details.cloud_resources:
+                resources = deployment_details.cloud_resources
+            
             deployments.append(CloudDeploymentResponse(
                 id=deployment.deployment_id,
                 name=deployment.name,
@@ -528,13 +552,15 @@ def get_deployments(
                 createdAt=deployment.created_at.isoformat(),
                 updatedAt=deployment.updated_at.isoformat(),
                 parameters=deployment.parameters or {},
-                resources=[],  # Default empty list if not available
+                resources=resources,  # Use resources from deployment_details
                 tenantId=tenant.tenant_id,
                 region=region
             ))
         
         return deployments
     
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -594,10 +620,10 @@ def get_deployment(
             DeploymentDetails.deployment_id == deployment.id
         ).first()
         
-        # Get cloud resources from deployment details
-        cloud_resources = []
+        # Get resources from deployment details
+        resources = []
         if deployment_details and deployment_details.cloud_resources:
-            cloud_resources = deployment_details.cloud_resources
+            resources = deployment_details.cloud_resources
         
         # Convert to frontend-compatible format
         return CloudDeploymentResponse(
@@ -611,10 +637,9 @@ def get_deployment(
             createdAt=deployment.created_at.isoformat(),
             updatedAt=deployment.updated_at.isoformat(),
             parameters=deployment.parameters or {},
-            resources=deployment.resources or [],
+            resources=resources,
             tenantId=tenant.tenant_id,
-            region=deployment.region,
-            cloud_resources=cloud_resources
+            region=deployment.region
         )
     
     except HTTPException:
