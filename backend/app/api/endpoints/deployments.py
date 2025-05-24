@@ -697,10 +697,15 @@ def create_deployment(
             # Ensure template_code is a string and not empty
             template_code = deployment.template_code
             if template_code is None:
-                template_code = ""
+                # If template_code is None but template_source is 'code', try to get code from the template
+                if deployment.template_source == 'code' and template:
+                    template_code = template.code or ""
+                else:
+                    template_code = ""
             
-            # Debug: Print template code length
+            # Debug: Print template code length and first 100 characters
             print(f"Template code length: {len(template_code)}")
+            print(f"Template code preview: {template_code[:100] if template_code else 'Empty'}")
             
             # Prepare deployment data for the engine
             engine_deployment = {
