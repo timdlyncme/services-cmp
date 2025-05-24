@@ -56,6 +56,14 @@ export interface CloudDeployment {
   resources: string[];
   tenantId: string;
   logs?: DeploymentLog[];
+  cloud_resources?: CloudResource[];
+}
+
+export interface CloudResource {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
 }
 
 export interface DeploymentLog {

@@ -528,7 +528,7 @@ def get_deployments(
                 createdAt=deployment.created_at.isoformat(),
                 updatedAt=deployment.updated_at.isoformat(),
                 parameters=deployment.parameters or {},
-                resources=[],  # Default empty list if not available
+                resources=deployment.resources or [],
                 tenantId=tenant.tenant_id,
                 region=region
             ))
@@ -595,15 +595,16 @@ def get_deployment(
             name=deployment.name,
             templateId=template.template_id,
             templateName=template.name,
-            provider=template.provider,
+            provider=deployment.deployment_type,
             status=deployment.status,
             environment=environment.name,
             createdAt=deployment.created_at.isoformat(),
             updatedAt=deployment.updated_at.isoformat(),
             parameters=deployment.parameters or {},
-            resources=[],  # Default empty list if not available
+            resources=deployment.resources or [],
             tenantId=tenant.tenant_id,
-            region=deployment.region
+            region=deployment.region,
+            cloud_resources=deployment.resources or []
         )
     
     except HTTPException:
