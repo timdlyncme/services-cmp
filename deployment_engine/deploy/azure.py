@@ -201,10 +201,22 @@ class AzureDeployer:
         
         # Create deployment
         try:
+            # Ensure template is a valid JSON object
+            if isinstance(template_content, str):
+                try:
+                    template_json = json.loads(template_content)
+                except json.JSONDecodeError:
+                    raise ValueError("Template content is not valid JSON")
+            else:
+                template_json = template_content
+            
+            # Create deployment properties with the required 'properties' field
             deployment_properties = {
-                "mode": DeploymentMode.incremental,
-                "template": json.loads(template_content) if isinstance(template_content, str) else template_content,
-                "parameters": params
+                "properties": {
+                    "mode": DeploymentMode.incremental,
+                    "template": template_json,
+                    "parameters": params
+                }
             }
             
             # Start deployment
@@ -239,12 +251,15 @@ class AzureDeployer:
         
         # Create deployment
         try:
+            # Create deployment properties with the required 'properties' field
             deployment_properties = {
-                "mode": DeploymentMode.incremental,
-                "template_link": {
-                    "uri": template_uri
-                },
-                "parameters": params
+                "properties": {
+                    "mode": DeploymentMode.incremental,
+                    "templateLink": {
+                        "uri": template_uri
+                    },
+                    "parameters": params
+                }
             }
             
             # Start deployment
@@ -399,25 +414,34 @@ class AzureDeployer:
                 deployment_name=deployment_name
             )
             
-            # Prepare deployment properties
+            # Prepare deployment properties with the required 'properties' field
             deployment_properties = {
-                "mode": DeploymentMode.incremental
+                "properties": {
+                    "mode": DeploymentMode.incremental
+                }
             }
             
             # Update template if provided
             if template_data:
                 if "template_url" in template_data:
-                    deployment_properties["template_link"] = {
+                    deployment_properties["properties"]["templateLink"] = {
                         "uri": template_data["template_url"]
                     }
                 elif "template_body" in template_data:
                     template_content = template_data["template_body"]
-                    deployment_properties["template"] = json.loads(template_content) if isinstance(template_content, str) else template_content
+                    if isinstance(template_content, str):
+                        try:
+                            template_json = json.loads(template_content)
+                        except json.JSONDecodeError:
+                            raise ValueError("Template content is not valid JSON")
+                    else:
+                        template_json = template_content
+                    deployment_properties["properties"]["template"] = template_json
             else:
                 # Use existing template
-                if hasattr(deployment.properties, "template_link") and deployment.properties.template_link:
-                    deployment_properties["template_link"] = {
-                        "uri": deployment.properties.template_link.uri
+                if hasattr(deployment.properties, "templateLink") and deployment.properties.templateLink:
+                    deployment_properties["properties"]["templateLink"] = {
+                        "uri": deployment.properties.templateLink.uri
                     }
                 else:
                     # Get the template from the deployment
@@ -425,7 +449,7 @@ class AzureDeployer:
                         resource_group_name=resource_group,
                         deployment_name=deployment_name
                     ).template
-                    deployment_properties["template"] = template
+                    deployment_properties["properties"]["template"] = template
             
             # Update parameters if provided
             if parameters:
@@ -434,7 +458,7 @@ class AzureDeployer:
                     params[key] = {
                         "value": value
                     }
-                deployment_properties["parameters"] = params
+                deployment_properties["properties"]["parameters"] = params
             
             # Start deployment update
             deployment_async_operation = self.resource_client.deployments.begin_create_or_update(

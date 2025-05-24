@@ -207,7 +207,17 @@ def create_deployment(
         name = deployment.get("name", "Unnamed deployment")
         description = deployment.get("description", "")
         deployment_type = deployment.get("deployment_type", "arm")
-        resource_group = deployment.get("resource_group", f"rg-{name.lower()}")
+        
+        # Create a sanitized resource group name (no spaces or special characters)
+        sanitized_name = name.lower().replace(' ', '-')
+        # Remove any other special characters
+        import re
+        sanitized_name = re.sub(r'[^a-z0-9\-]', '', sanitized_name)
+        resource_group = deployment.get("resource_group", f"rg-{sanitized_name}")
+        
+        # Use UUID for Azure deployment name to avoid issues with spaces and special characters
+        azure_deployment_name = f"deploy-{deployment_id}"
+        
         location = deployment.get("location", "eastus")
         template = deployment.get("template", {})
         parameters = deployment.get("parameters", {})
@@ -253,7 +263,7 @@ def create_deployment(
         # Deploy to Azure
         result = azure_deployer.deploy(
             resource_group=resource_group,
-            deployment_name=name,
+            deployment_name=azure_deployment_name,
             location=location,
             template_data=template_data,
             parameters=parameters,
