@@ -85,20 +85,13 @@ def get_cloud_accounts(
                 else:
                     cloud_ids = account.cloud_ids
             
-            # For backward compatibility
-            subscription_id = None
-            if cloud_ids and len(cloud_ids) > 0:
-                subscription_id = cloud_ids[0]
-            
             result.append({
                 "id": account.account_id,
                 "name": account.name,
                 "provider": account.provider,
                 "status": account.status,
                 "tenantId": account.tenant_id,
-                "subscription_id": subscription_id,  # For backward compatibility
-                "subscription_ids": cloud_ids,  # For backward compatibility
-                "cloud_ids": cloud_ids,  # New field
+                "cloud_ids": cloud_ids,
                 "settings_id": account.cloud_settings.settings_id if account.cloud_settings else None,
                 "connectionDetails": connection_details
             })
@@ -188,11 +181,6 @@ def get_cloud_account(
             else:
                 cloud_ids = account.cloud_ids
         
-        # For backward compatibility
-        subscription_id = None
-        if cloud_ids and len(cloud_ids) > 0:
-            subscription_id = cloud_ids[0]
-        
         # Return frontend-compatible response
         return CloudAccountFrontendResponse(
             id=account.account_id,
@@ -200,9 +188,7 @@ def get_cloud_account(
             provider=account.provider,
             status=account.status,
             tenantId=tenant.tenant_id if tenant else account.tenant_id,
-            subscription_id=subscription_id,  # For backward compatibility
-            subscription_ids=cloud_ids,  # For backward compatibility
-            cloud_ids=cloud_ids,  # New field
+            cloud_ids=cloud_ids,
             settings_id=settings_id_str,
             connectionDetails={}
         )
@@ -263,12 +249,23 @@ def create_cloud_account(
             description=cloud_account_in.description,
             tenant_id=current_user.tenant.tenant_id,
             settings_id=cloud_settings.id if cloud_settings else None,
-            cloud_ids=cloud_account_in.subscription_ids  # Use subscription_ids for backward compatibility
+            cloud_ids=cloud_account_in.cloud_ids if cloud_account_in.cloud_ids else cloud_account_in.subscription_ids
         )
         
         db.add(cloud_account)
         db.commit()
         db.refresh(cloud_account)
+        
+        # Format cloud IDs
+        cloud_ids = []
+        if cloud_account.cloud_ids:
+            if isinstance(cloud_account.cloud_ids, str):
+                try:
+                    cloud_ids = json.loads(cloud_account.cloud_ids)
+                except:
+                    cloud_ids = [cloud_account.cloud_ids]
+            else:
+                cloud_ids = cloud_account.cloud_ids
         
         # Create a response with the correct format
         return CloudAccountResponse(
@@ -277,7 +274,7 @@ def create_cloud_account(
             provider=cloud_account.provider,
             status=cloud_account.status,
             tenant_id=str(cloud_account.tenant_id),
-            subscription_id=cloud_account.cloud_ids[0] if cloud_account.cloud_ids and len(cloud_account.cloud_ids) > 0 else None,
+            cloud_ids=cloud_ids,
             created_at=cloud_account.created_at,
             updated_at=cloud_account.updated_at
         )
@@ -365,8 +362,11 @@ def update_cloud_account(
             account.status = account_update.status
         if account_update.description is not None:
             account.description = account_update.description
-        if account_update.subscription_ids is not None:
-            account.cloud_ids = account_update.subscription_ids  # Use subscription_ids for backward compatibility
+        if account_update.cloud_ids is not None:
+            account.cloud_ids = account_update.cloud_ids
+        elif account_update.subscription_ids is not None:
+            # For backward compatibility
+            account.cloud_ids = account_update.subscription_ids
         if settings_id is not None:
             account.settings_id = settings_id
         
@@ -395,11 +395,6 @@ def update_cloud_account(
             else:
                 cloud_ids = account.cloud_ids
         
-        # For backward compatibility
-        subscription_id = None
-        if cloud_ids and len(cloud_ids) > 0:
-            subscription_id = cloud_ids[0]
-        
         # Return frontend-compatible response
         return CloudAccountFrontendResponse(
             id=account.account_id,
@@ -407,9 +402,7 @@ def update_cloud_account(
             provider=account.provider,
             status=account.status,
             tenantId=tenant.tenant_id if tenant else current_user.tenant.tenant_id,
-            subscription_id=subscription_id,  # For backward compatibility
-            subscription_ids=cloud_ids,  # For backward compatibility
-            cloud_ids=cloud_ids,  # New field
+            cloud_ids=cloud_ids,
             settings_id=settings_id_str,
             connectionDetails={}
         )

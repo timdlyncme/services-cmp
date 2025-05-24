@@ -25,20 +25,26 @@ class CloudAccountBase(BaseModel):
     settings_id: Optional[str] = None
 
 class CloudAccountCreate(CloudAccountBase):
-    subscription_ids: List[str] = []
+    provider: str
+    status: str = "connected"
+    description: Optional[str] = None
+    settings_id: Optional[str] = None
+    cloud_ids: List[str] = []
+    subscription_ids: List[str] = []  # For backward compatibility
 
-class CloudAccountUpdate(BaseModel):
+class CloudAccountUpdate(CloudAccountBase):
     name: Optional[str] = None
     provider: Optional[str] = None
     status: Optional[str] = None
     description: Optional[str] = None
     settings_id: Optional[str] = None
-    subscription_ids: Optional[List[str]] = None
+    cloud_ids: Optional[List[str]] = None
+    subscription_ids: Optional[List[str]] = None  # For backward compatibility
 
 class CloudAccountResponse(CloudAccountBase):
     id: str
     tenant_id: str
-    subscription_id: Optional[str] = None
+    cloud_ids: List[str] = []
     created_at: datetime
     updated_at: datetime
 
@@ -52,9 +58,7 @@ class CloudAccountFrontendResponse(BaseModel):
     provider: str
     status: str
     tenantId: str
-    subscription_id: Optional[str] = None  # For backward compatibility
-    subscription_ids: List[str] = []  # For backward compatibility
-    cloud_ids: List[str] = []  # New field
+    cloud_ids: List[str] = []
     settings_id: Optional[str] = None
     connectionDetails: Dict[str, Any] = {}
 
