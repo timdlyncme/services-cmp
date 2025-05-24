@@ -191,13 +191,25 @@ class AzureDeployer:
         else:
             raise ValueError("Invalid template data. Must provide either template_url or template_body")
         
-        # Prepare parameters
+        # Prepare parameters - extract just the value from complex parameter objects
         params = {}
         if parameters:
+            print(f"Original parameters: {parameters}")
             for key, value in parameters.items():
-                params[key] = {
-                    "value": value
-                }
+                # Check if the parameter is a complex object with a 'value' field
+                if isinstance(value, dict) and 'value' in value:
+                    # Extract just the value for Azure
+                    params[key] = {
+                        "value": value['value']
+                    }
+                    print(f"Parameter {key}: Extracted value '{value['value']}' from complex object")
+                else:
+                    # Use the parameter value directly
+                    params[key] = {
+                        "value": value
+                    }
+                    print(f"Parameter {key}: Using direct value '{value}'")
+            print(f"Processed parameters for Azure: {params}")
         
         # Create deployment
         try:
@@ -241,13 +253,25 @@ class AzureDeployer:
     
     def _deploy_from_template_uri(self, resource_group, deployment_name, template_uri, parameters=None):
         """Deploy using a template URI"""
-        # Prepare parameters
+        # Prepare parameters - extract just the value from complex parameter objects
         params = {}
         if parameters:
+            print(f"Original parameters: {parameters}")
             for key, value in parameters.items():
-                params[key] = {
-                    "value": value
-                }
+                # Check if the parameter is a complex object with a 'value' field
+                if isinstance(value, dict) and 'value' in value:
+                    # Extract just the value for Azure
+                    params[key] = {
+                        "value": value['value']
+                    }
+                    print(f"Parameter {key}: Extracted value '{value['value']}' from complex object")
+                else:
+                    # Use the parameter value directly
+                    params[key] = {
+                        "value": value
+                    }
+                    print(f"Parameter {key}: Using direct value '{value}'")
+            print(f"Processed parameters for Azure: {params}")
         
         # Create deployment
         try:
@@ -455,9 +479,17 @@ class AzureDeployer:
             if parameters:
                 params = {}
                 for key, value in parameters.items():
-                    params[key] = {
-                        "value": value
-                    }
+                    # Check if the parameter is a complex object with a 'value' field
+                    if isinstance(value, dict) and 'value' in value:
+                        # Extract just the value for Azure
+                        params[key] = {
+                            "value": value['value']
+                        }
+                    else:
+                        # Use the parameter value directly
+                        params[key] = {
+                            "value": value
+                        }
                 deployment_properties["properties"]["parameters"] = params
             
             # Start deployment update
