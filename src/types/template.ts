@@ -3,6 +3,7 @@ import { CloudProvider, TemplateType } from "./cloud";
 // Template interface
 export interface Template {
   id: string;
+  template_id?: string; // Added for GUID template ID
   name: string;
   description: string;
   type: TemplateType;

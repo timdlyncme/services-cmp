@@ -93,6 +93,8 @@ export class CMPService {
         throw new Error('Authentication token not found');
       }
 
+      console.log("Creating cloud account with data:", account);
+
       const response = await api.post('/cloud-accounts', {
         ...account
       }, {
@@ -103,6 +105,8 @@ export class CMPService {
           tenant_id: formatTenantId(tenantId)
         }
       });
+      
+      console.log("Cloud account created successfully:", response.data);
       return response.data;
     } catch (error) {
       console.error('Create cloud account error:', error);
@@ -210,6 +214,13 @@ export class CMPService {
         throw new Error('Authentication token not found');
       }
 
+      console.log("Creating template with data:", {
+        ...template,
+        code: template.code ? `${template.code.substring(0, 100)}...` : 'No code',
+        type: template.type,
+        category: template.category
+      });
+
       const response = await api.post('/templates', {
         ...template,
         tenant_id: formatTenantId(tenantId)
@@ -218,6 +229,8 @@ export class CMPService {
           Authorization: `Bearer ${token}`
         }
       });
+      
+      console.log("Template created successfully:", response.data);
       return response.data;
     } catch (error) {
       console.error('Create template error:', error);

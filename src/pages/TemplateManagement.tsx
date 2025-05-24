@@ -108,6 +108,9 @@ const TemplateManagement = () => {
       if (fileInput && fileInput.files && fileInput.files.length > 0) {
         const file = fileInput.files[0];
         fileContent = await readFileContent(file);
+        console.log("File content read:", fileContent.substring(0, 100) + "...");
+      } else {
+        console.log("No file selected");
       }
       
       // Create the new template
