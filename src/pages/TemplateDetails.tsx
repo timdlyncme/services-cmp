@@ -123,8 +123,23 @@ const TemplateDetails = () => {
         if (templateData) {
           setTemplate(templateData);
           setCode(templateData.code || "");
-          setParameters(templateData.parameters || {});
-          setVariables(templateData.variables || {});
+          
+          // Initialize parameters and variables from template data
+          if (templateData.parameters) {
+            console.log("Loading parameters from template:", templateData.parameters);
+            setParameters(templateData.parameters);
+          } else {
+            console.log("No parameters found in template data");
+            setParameters({});
+          }
+          
+          if (templateData.variables) {
+            console.log("Loading variables from template:", templateData.variables);
+            setVariables(templateData.variables);
+          } else {
+            console.log("No variables found in template data");
+            setVariables({});
+          }
           
           // Fetch template versions
           await fetchVersions(templateId);

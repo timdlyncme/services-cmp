@@ -11,7 +11,7 @@ from app.models.user import User, Tenant
 from app.models.deployment import Template, Deployment, TemplateVersion
 from app.schemas.deployment import (
     TemplateResponse, TemplateCreate, TemplateUpdate,
-    CloudTemplateResponse, TemplateVersionCreate
+    CloudTemplateResponse, TemplateVersionCreate, TemplateVersionResponse
 )
 
 router = APIRouter()
@@ -136,16 +136,11 @@ def get_templates(
                 categories = [cat.strip() for cat in template.category.split(",")]
             
             # Get the last user who updated the template
-            last_updated_by = None
-            if hasattr(template, 'versions') and template.versions:
-                # Sort versions by created_at in descending order
-                sorted_versions = sorted(template.versions, key=lambda v: v.created_at, reverse=True)
-                if sorted_versions:
-                    latest_version = sorted_versions[0]
-                    if latest_version.created_by_id:
-                        user = db.query(User).filter(User.id == latest_version.created_by_id).first()
-                        if user:
-                            last_updated_by = user.full_name or user.username
+            last_updated_by = current_user.full_name or current_user.username
+            
+            # Debug log for parameters and variables
+            print(f"Template parameters: {template.parameters}")
+            print(f"Template variables: {template.variables}")
             
             result.append(CloudTemplateResponse(
                 id=template.template_id,
@@ -159,6 +154,10 @@ def get_templates(
                 uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
                 updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
                 categories=categories,
+                isPublic=template.is_public,
+                currentVersion=template.current_version,
+                parameters=template.parameters,
+                variables=template.variables,
                 tenantId=tenant_id,
                 lastUpdatedBy=last_updated_by
             ))
@@ -236,16 +235,11 @@ def get_template(
                 code = latest_version.code or ""
         
         # Get the last user who updated the template
-        last_updated_by = None
-        if template.versions:
-            # Sort versions by created_at in descending order
-            sorted_versions = sorted(template.versions, key=lambda v: v.created_at, reverse=True)
-            if sorted_versions:
-                latest_version = sorted_versions[0]
-                if latest_version.created_by_id:
-                    user = db.query(User).filter(User.id == latest_version.created_by_id).first()
-                    if user:
-                        last_updated_by = user.full_name or user.username
+        last_updated_by = current_user.full_name or current_user.username
+        
+        # Debug log for parameters and variables
+        print(f"Template parameters: {template.parameters}")
+        print(f"Template variables: {template.variables}")
         
         return CloudTemplateResponse(
             id=template.template_id,
@@ -259,6 +253,10 @@ def get_template(
             uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
             categories=categories,
+            isPublic=template.is_public,
+            currentVersion=template.current_version,
+            parameters=template.parameters,
+            variables=template.variables,
             tenantId=tenant_id,
             lastUpdatedBy=last_updated_by
         )
@@ -400,10 +398,12 @@ def create_template(
             uploadedAt=new_template.created_at.isoformat(),
             updatedAt=new_template.updated_at.isoformat(),
             categories=categories,
-            tenantId=tenant_id,
-            lastUpdatedBy=current_user.full_name or current_user.username,
+            isPublic=new_template.is_public,
+            currentVersion=new_template.current_version,
             parameters=new_template.parameters,
-            variables=new_template.variables
+            variables=new_template.variables,
+            tenantId=tenant_id,
+            lastUpdatedBy=current_user.full_name or current_user.username
         )
     
     except Exception as e:
@@ -480,10 +480,25 @@ def update_template(
         if template_update.code is not None:
             template.code = template_update.code
             
+            # Determine the new version number
+            current_version = template.current_version or "1.0.0"
+            
+            # Split version into major, minor, patch
+            try:
+                major, minor, patch = map(int, current_version.split('.'))
+                # Increment patch version
+                patch += 1
+                new_version_number = f"{major}.{minor}.{patch}"
+            except ValueError:
+                # If current version is not in the expected format, default to incrementing
+                new_version_number = f"{current_version}.1"
+            
+            print(f"Creating new version in update: {new_version_number} (previous: {current_version})")
+            
             # Create new version
             new_version = TemplateVersion(
                 template_id=template.id,
-                version=template.current_version or "1.0.0",  # Use current version or default
+                version=new_version_number,
                 code=template_update.code,
                 changes="Updated template code",
                 created_at=datetime.utcnow(),
@@ -491,6 +506,9 @@ def update_template(
             )
             
             db.add(new_version)
+            
+            # Update template with new version number
+            template.current_version = new_version_number
         
         template.updated_at = datetime.utcnow()
         
@@ -529,6 +547,10 @@ def update_template(
             uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
             categories=categories,
+            isPublic=template.is_public,
+            currentVersion=template.current_version,
+            parameters=template.parameters,
+            variables=template.variables,
             tenantId=tenant_id,
             lastUpdatedBy=last_updated_by
         )
@@ -673,7 +695,7 @@ def get_template_versions(
         )
 
 
-@router.post("/{template_id}/versions", response_model=dict)
+@router.post("/{template_id}/versions", response_model=TemplateVersionResponse)
 def create_template_version(
     template_id: str,
     version: TemplateVersionCreate,
@@ -709,12 +731,33 @@ def create_template_version(
                     detail="Not authorized to update this template"
                 )
         
+        # Determine the new version number
+        new_version_number = version.version
+        
+        # If no specific version is provided or it's the same as the current version,
+        # increment the current version
+        if not new_version_number or new_version_number == template.current_version:
+            # Parse current version (default to 1.0.0 if not set)
+            current_version = template.current_version or "1.0.0"
+            
+            # Split version into major, minor, patch
+            try:
+                major, minor, patch = map(int, current_version.split('.'))
+                # Increment patch version
+                patch += 1
+                new_version_number = f"{major}.{minor}.{patch}"
+            except ValueError:
+                # If current version is not in the expected format, default to incrementing
+                new_version_number = f"{current_version}.1"
+        
+        print(f"Creating new version: {new_version_number} (previous: {template.current_version})")
+        
         # Create new version
         new_version = TemplateVersion(
             template_id=template.id,
-            version=version.version,
+            version=new_version_number,
             code=version.code,
-            changes=version.commit_message or f"Updated to version {version.version}",
+            changes=version.commit_message or f"Updated to version {new_version_number}",
             created_at=datetime.utcnow(),
             created_by_id=current_user.id
         )
@@ -723,7 +766,7 @@ def create_template_version(
         
         # Update template with new code and version
         template.code = version.code
-        template.current_version = version.version
+        template.current_version = new_version_number
         template.updated_at = datetime.utcnow()
         
         db.commit()
@@ -731,22 +774,22 @@ def create_template_version(
         
         # Get created_by user
         created_by = db.query(User).filter(User.id == new_version.created_by_id).first()
+        created_by_name = created_by.full_name if created_by else "Unknown"
         
-        return {
-            "id": new_version.id,
-            "version": new_version.version,
-            "changes": new_version.changes,
-            "code": version.code,
-            "created_at": new_version.created_at.isoformat(),
-            "created_by": created_by.username if created_by else "Unknown",
-            "is_current": True
-        }
-    
-    except HTTPException:
-        db.rollback()
-        raise
+        # Check if this is the current version
+        is_current = template.current_version == new_version.version
+        
+        return TemplateVersionResponse(
+            id=new_version.id,
+            version=new_version.version,
+            changes=new_version.changes,
+            created_at=new_version.created_at.isoformat(),
+            created_by=created_by_name,
+            is_current=is_current
+        )
     except Exception as e:
         db.rollback()
+        print(f"Error creating template version: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating template version: {str(e)}"
