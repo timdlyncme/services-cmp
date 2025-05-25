@@ -253,13 +253,13 @@ def create_cloud_account(
         if cloud_account_in.settings_id:
             cloud_settings = db.query(CloudSettings).filter(
                 CloudSettings.settings_id == cloud_account_in.settings_id,
-                CloudSettings.organization_tenant_id == account_tenant_id
+                CloudSettings.tenant_id == account_tenant_id
             ).first()
             
             if not cloud_settings:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Cloud settings with ID {cloud_account_in.settings_id} not found"
+                    detail="Cloud settings not found"
                 )
         
         # Create new cloud account
@@ -361,7 +361,7 @@ def update_cloud_account(
             # Get credential from database
             from app.models.cloud_settings import CloudSettings
             creds = db.query(CloudSettings).filter(
-                CloudSettings.organization_tenant_id == account.tenant_id,
+                CloudSettings.tenant_id == account.tenant_id,
                 CloudSettings.provider == account.provider,
                 CloudSettings.settings_id == account_update.settings_id
             ).first()
@@ -554,7 +554,7 @@ def list_azure_subscriptions(
         # Get credential from database
         from app.models.cloud_settings import CloudSettings
         creds = db.query(CloudSettings).filter(
-            CloudSettings.organization_tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.tenant_id == current_user.tenant.tenant_id,
             CloudSettings.provider == "azure",
             CloudSettings.settings_id == settings_id
         ).first()
