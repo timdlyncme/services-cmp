@@ -853,6 +853,62 @@ export class CMPService {
       throw error;
     }
   }
+
+  /**
+   * Create a new Azure credential set
+   */
+  async createAzureCredential(credential: { name: string, client_id: string, client_secret: string, tenant_id: string }, tenantId?: string): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const params: Record<string, string> = {};
+      if (tenantId) {
+        params.tenant_id = formatTenantId(tenantId);
+      }
+
+      const response = await api.post('/deployments/azure_credentials', credential, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Create Azure credential error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete an Azure credential set
+   */
+  async deleteAzureCredential(settingsId: string, tenantId?: string): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const params: Record<string, string> = {};
+      if (tenantId) {
+        params.tenant_id = formatTenantId(tenantId);
+      }
+
+      const response = await api.delete(`/deployments/azure_credentials/${settingsId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Delete Azure credential error:', error);
+      throw error;
+    }
+  }
 }
 
 // Create a singleton instance
