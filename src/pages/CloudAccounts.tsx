@@ -65,7 +65,7 @@ const CloudAccounts = () => {
     }
   };
   
-  // Fetch Azure credentials
+  // Fetch Azure credentials from API
   const fetchAzureCredentials = async () => {
     if (!currentTenant) return;
     
@@ -74,12 +74,7 @@ const CloudAccounts = () => {
       setAzureCredentials(credentials);
     } catch (error) {
       console.error("Error fetching Azure credentials:", error);
-      
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error("Failed to load Azure credentials");
-      }
+      toast.error("Failed to load Azure credentials");
     }
   };
   
@@ -89,13 +84,13 @@ const CloudAccounts = () => {
     setAvailableSubscriptions([]);
     
     try {
-      const subscriptions = await cmpService.getAzureSubscriptions(credentialId);
+      const subscriptions = await cmpService.getAzureSubscriptions(credentialId, currentTenant?.tenant_id);
       setAvailableSubscriptions(subscriptions);
     } catch (error) {
       console.error("Error fetching Azure subscriptions:", error);
       
       if (error instanceof Error) {
-        toast.error(error.message);
+        toast.error(`Failed to load Azure subscriptions: ${error.message}`);
       } else {
         toast.error("Failed to load Azure subscriptions");
       }
