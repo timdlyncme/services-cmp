@@ -537,10 +537,14 @@ def list_azure_subscriptions(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    settings_id: str
+    settings_id: str,
+    tenant_id: Optional[str] = None
 ):
     """
     List available Azure subscriptions for a specific credential
+    
+    If tenant_id is provided, it will be used to filter the credentials.
+    Otherwise, the current user's tenant ID will be used.
     """
     # Check if user has permission to view cloud accounts
     has_permission = any(p.name == "view:cloud-accounts" for p in current_user.role.permissions)
@@ -551,10 +555,30 @@ def list_azure_subscriptions(
         )
     
     try:
+        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+        account_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        
+        # Check if tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == account_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {account_tenant_id} not found"
+            )
+        
+        # Check if user has permission to access this tenant
+        if account_tenant_id != current_user.tenant.tenant_id:
+            # Only admin or MSP users can access other tenants
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to access credentials for other tenants"
+                )
+        
         # Get credential from database
         from app.models.cloud_settings import CloudSettings
         creds = db.query(CloudSettings).filter(
-            CloudSettings.tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.tenant_id == account_tenant_id,
             CloudSettings.provider == "azure",
             CloudSettings.settings_id == settings_id
         ).first()

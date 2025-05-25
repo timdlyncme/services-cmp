@@ -94,7 +94,7 @@ class Template(Base):
     type = Column(String)  # terraform, arm, cloudformation
     is_public = Column(Boolean, default=False)
     current_version = Column(String, nullable=True)
-    code = Column(String, nullable=True)  # Store the template code directly
+    code = Column(Text, nullable=True)  # Store the template code directly, using Text for large content
     parameters = Column(JSON, nullable=True)  # Store template parameters
     variables = Column(JSON, nullable=True)  # Store template variables
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -116,7 +116,7 @@ class TemplateVersion(Base):
     id = Column(Integer, primary_key=True, index=True)
     version = Column(String)
     changes = Column(String, nullable=True)
-    code = Column(String, nullable=True)
+    code = Column(Text, nullable=True)  # Also use Text for version code
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships

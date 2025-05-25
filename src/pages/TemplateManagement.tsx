@@ -124,7 +124,8 @@ const TemplateManagement = () => {
         description: newTemplateDescription,
         provider: newTemplateProvider,
         type: newTemplateType, // Make sure this is correctly set
-        category: categories.length > 0 ? categories.join(',') : undefined,  // Convert array to comma-separated string
+        category: categories.length > 0 ? categories.join(',') : undefined,  // Convert array to comma-separated string for backend
+        categories: categories, // Also include the array for frontend
         code: fileContent || "",  // Include the file content, ensure it's not null
         is_public: false
       };
@@ -198,18 +199,27 @@ const TemplateManagement = () => {
     }
   };
   
-  // Helper function to read file content
+  // Function to read file content
   const readFileContent = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
+      console.log("Reading file:", file.name, "Size:", file.size, "bytes");
       const reader = new FileReader();
+      
       reader.onload = (event) => {
         if (event.target && typeof event.target.result === 'string') {
+          console.log("File read successfully. Content length:", event.target.result.length);
           resolve(event.target.result);
         } else {
+          console.error("Failed to read file content");
           reject(new Error("Failed to read file content"));
         }
       };
-      reader.onerror = (error) => reject(error);
+      
+      reader.onerror = (error) => {
+        console.error("Error reading file:", error);
+        reject(error);
+      };
+      
       reader.readAsText(file);
     });
   };

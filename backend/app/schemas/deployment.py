@@ -69,12 +69,19 @@ class CloudAccountFrontendResponse(BaseModel):
 # Template schemas
 class TemplateCreate(TemplateBase):
     provider: str
-    type: str
+    type: str  # Ensure this is properly validated
     code: Optional[str] = None
     is_public: bool = False
     category: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
     variables: Optional[Dict[str, Any]] = None
+    
+    @validator('type')
+    def validate_type(cls, v):
+        valid_types = ["terraform", "arm", "cloudformation"]
+        if v.lower() not in valid_types:
+            raise ValueError(f"Type must be one of {valid_types}")
+        return v.lower()  # Normalize to lowercase
 
 class TemplateUpdate(BaseModel):
     name: Optional[str] = None

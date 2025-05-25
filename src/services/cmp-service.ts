@@ -218,7 +218,8 @@ export class CMPService {
         ...template,
         code: template.code ? `${template.code.substring(0, 100)}...` : 'No code',
         type: template.type,
-        category: template.category
+        category: template.category,
+        codeLength: template.code?.length || 0
       });
 
       // Make sure we're sending the correct template type and category
@@ -236,6 +237,14 @@ export class CMPService {
           tenant_id: formatTenantId(tenantId)
         }
       });
+      
+      console.log("Template created successfully:", {
+        id: response.data.id,
+        type: response.data.type,
+        categories: response.data.categories,
+        codeLength: response.data.code?.length || 0
+      });
+      
       return response.data;
     } catch (error) {
       console.error('Create template error:', error);

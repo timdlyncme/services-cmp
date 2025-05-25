@@ -133,7 +133,9 @@ def get_templates(
             # Convert category to categories list
             categories = []
             if template.category:
-                categories = [cat.strip() for cat in template.category.split(",")]
+                # Split by comma and strip whitespace
+                categories = [cat.strip() for cat in template.category.split(",") if cat.strip()]
+                logger.debug(f"Parsed categories: {categories}")
             
             # Get the last user who updated the template
             last_updated_by = None
@@ -158,7 +160,7 @@ def get_templates(
                 deploymentCount=deployment_count,
                 uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
                 updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
-                categories=categories,
+                categories=categories,  # Use the parsed categories list
                 tenantId=tenant_id,
                 lastUpdatedBy=last_updated_by
             ))
@@ -222,7 +224,9 @@ def get_template(
         # Convert category to categories list
         categories = []
         if template.category:
-            categories = [cat.strip() for cat in template.category.split(",")]
+            # Split by comma and strip whitespace
+            categories = [cat.strip() for cat in template.category.split(",") if cat.strip()]
+            logger.debug(f"Parsed categories: {categories}")
         
         # Use the template's code field directly
         code = template.code or ""
@@ -258,7 +262,7 @@ def get_template(
             deploymentCount=deployment_count,
             uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
-            categories=categories,
+            categories=categories,  # Use the parsed categories list
             tenantId=tenant_id,
             lastUpdatedBy=last_updated_by
         )
@@ -291,8 +295,8 @@ def create_template(
     logger.setLevel(logging.DEBUG)
     
     logger.debug(f"Creating new template: {template.name}")
-    logger.debug(f"Template type: {template.type}")
-    logger.debug(f"Template category: {template.category}")
+    logger.debug(f"Template type (from request): {template.type}")
+    logger.debug(f"Template category (from request): {template.category}")
     logger.debug(f"Template code length: {len(template.code) if template.code else 0}")
     logger.debug(f"Requested tenant_id: {tenant_id}")
     
@@ -331,17 +335,20 @@ def create_template(
         
         # Debug: Print the template data
         logger.debug(f"Template data received: {template.dict()}")
-        logger.debug(f"Template type: {template.type}")
-        logger.debug(f"Template category: {template.category}")
+        logger.debug(f"Template type (from dict): {template.dict().get('type')}")
+        logger.debug(f"Template category (from dict): {template.dict().get('category')}")
         
-        # Create new template
+        # Create new template with explicit type assignment
+        template_type = template.type
+        logger.debug(f"Using template type: {template_type}")
+        
         new_template = Template(
             template_id=str(uuid.uuid4()),
             name=template.name,
             description=template.description,
             category=template.category,  # Store category as a string
             provider=template.provider,
-            type=template.type,  # Always use the provided type
+            type=template_type,  # Explicitly use the provided type
             is_public=template.is_public,
             tenant_id=None if template.is_public else template_tenant.tenant_id,
             code=template.code,  # Store the code directly in the template
@@ -353,7 +360,7 @@ def create_template(
         )
         
         # Debug: Print the new template object
-        logger.debug(f"New template object: type={new_template.type}, category={new_template.category}")
+        logger.debug(f"New template object before save: type={new_template.type}, category={new_template.category}")
         
         db.add(new_template)
         db.commit()
@@ -361,7 +368,7 @@ def create_template(
         
         # Verify the template was created correctly
         created_template = db.query(Template).filter(Template.id == new_template.id).first()
-        logger.debug(f"Created template: type={created_template.type}, category={created_template.category}")
+        logger.debug(f"Created template after save: type={created_template.type}, category={created_template.category}")
         
         # Create initial version
         initial_version = TemplateVersion(
@@ -386,9 +393,12 @@ def create_template(
         # Convert category to categories list
         categories = []
         if new_template.category:
-            categories = [cat.strip() for cat in new_template.category.split(",")]
+            # Split by comma and strip whitespace
+            categories = [cat.strip() for cat in new_template.category.split(",") if cat.strip()]
+            logger.debug(f"Parsed categories: {categories}")
         
-        return CloudTemplateResponse(
+        # Create response with explicit type
+        response = CloudTemplateResponse(
             id=new_template.template_id,
             template_id=new_template.template_id,  # Explicitly include template_id
             name=new_template.name,
@@ -399,12 +409,16 @@ def create_template(
             deploymentCount=0,
             uploadedAt=new_template.created_at.isoformat(),
             updatedAt=new_template.updated_at.isoformat(),
-            categories=categories,
+            categories=categories,  # Use the parsed categories list
             tenantId=tenant_id,
             lastUpdatedBy=current_user.full_name or current_user.username,
             parameters=new_template.parameters,
             variables=new_template.variables
         )
+        
+        logger.debug(f"Response type: {response.type}")
+        logger.debug(f"Response categories: {response.categories}")
+        return response
     
     except Exception as e:
         logger.error(f"Error creating template: {str(e)}", exc_info=True)
@@ -512,7 +526,9 @@ def update_template(
         # Convert category to categories list
         categories = []
         if template.category:
-            categories = [cat.strip() for cat in template.category.split(",")]
+            # Split by comma and strip whitespace
+            categories = [cat.strip() for cat in template.category.split(",") if cat.strip()]
+            logger.debug(f"Parsed categories: {categories}")
         
         # Get the last user who updated the template
         last_updated_by = current_user.full_name or current_user.username
@@ -528,7 +544,7 @@ def update_template(
             deploymentCount=deployment_count,
             uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
-            categories=categories,
+            categories=categories,  # Use the parsed categories list
             tenantId=tenant_id,
             lastUpdatedBy=last_updated_by
         )
