@@ -358,7 +358,7 @@ const CloudAccounts = () => {
                           </SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="no-credentials" disabled>
+                        <SelectItem key="no-credentials" value="no-credentials" disabled>
                           No credentials available
                         </SelectItem>
                       )}
@@ -388,14 +388,14 @@ const CloudAccounts = () => {
                         <TableBody>
                           {activeTab === "azure" ? (
                             isLoadingSubscriptions ? (
-                              <TableRow>
+                              <TableRow key="loading-subscriptions">
                                 <TableCell colSpan={4} className="text-center py-4">
                                   <RefreshCw className="h-4 w-4 animate-spin mx-auto" />
                                   <span className="mt-2 text-sm text-muted-foreground">Loading subscriptions...</span>
                                 </TableCell>
                               </TableRow>
                             ) : !selectedCredential ? (
-                              <TableRow>
+                              <TableRow key="no-credentials-selected">
                                 <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
                                   Please select credentials to view available subscriptions
                                 </TableCell>
@@ -427,14 +427,14 @@ const CloudAccounts = () => {
                                 </TableRow>
                               ))
                             ) : (
-                              <TableRow>
+                              <TableRow key="no-subscriptions">
                                 <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
                                   No subscriptions found for the selected credentials
                                 </TableCell>
                               </TableRow>
                             )
                           ) : (
-                            <TableRow>
+                            <TableRow key="not-implemented">
                               <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
                                 {activeTab.toUpperCase()} is not implemented yet
                               </TableCell>
