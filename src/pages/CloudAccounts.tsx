@@ -353,7 +353,7 @@ const CloudAccounts = () => {
                     <SelectContent>
                       {azureCredentials.length > 0 ? (
                         azureCredentials.map((cred) => (
-                          <SelectItem key={cred.settings_id} value={cred.settings_id}>
+                          <SelectItem key={cred.id} value={cred.id}>
                             {cred.name}
                           </SelectItem>
                         ))
