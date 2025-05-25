@@ -57,13 +57,15 @@ def set_azure_credentials(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
-        # Create new credentials
+        # Create new credentials with connection_details as JSON
         new_creds = CloudSettings(
             provider="azure",
             name=credentials.name,
-            client_id=credentials.client_id,
-            client_secret=credentials.client_secret,
-            tenant_id=credentials.tenant_id,
+            connection_details={
+                "client_id": credentials.client_id,
+                "client_secret": credentials.client_secret,
+                "tenant_id": credentials.tenant_id
+            },
             organization_tenant_id=current_user.tenant.tenant_id
         )
         db.add(new_creds)
@@ -128,12 +130,19 @@ def get_azure_credentials(
         # Format response
         result = []
         for creds in creds_list:
+            # Extract client_id and tenant_id from connection_details
+            client_id = ""
+            tenant_id = ""
+            if creds.connection_details:
+                client_id = creds.connection_details.get("client_id", "")
+                tenant_id = creds.connection_details.get("tenant_id", "")
+            
             result.append({
                 "id": creds.id,
                 "settings_id": str(creds.settings_id),
                 "name": creds.name or "Azure Credentials",
-                "client_id": creds.client_id,
-                "tenant_id": creds.tenant_id,
+                "client_id": client_id,
+                "tenant_id": tenant_id,
                 "configured": engine_status.get("configured", False),
                 "message": engine_status.get("message", "")
             })
@@ -183,8 +192,8 @@ def get_azure_credential(
             "id": creds.id,
             "settings_id": str(creds.settings_id),
             "name": creds.name or "Azure Credentials",
-            "client_id": creds.client_id,
-            "tenant_id": creds.tenant_id,
+            "client_id": creds.connection_details.get("client_id", "") if creds.connection_details else "",
+            "tenant_id": creds.connection_details.get("tenant_id", "") if creds.connection_details else "",
             "configured": engine_status.get("configured", False),
             "message": engine_status.get("message", "")
         }
@@ -769,9 +778,12 @@ def create_deployment(
             # Add cloud settings (credentials) if available
             if cloud_settings:
                 engine_deployment["settings_id"] = str(cloud_settings.settings_id)
-                engine_deployment["client_id"] = cloud_settings.client_id
-                engine_deployment["client_secret"] = cloud_settings.client_secret
-                engine_deployment["tenant_id"] = cloud_settings.tenant_id
+                # Extract credentials from connection_details
+                if cloud_settings.connection_details:
+                    engine_deployment["client_id"] = cloud_settings.connection_details.get("client_id", "")
+                    engine_deployment["client_secret"] = cloud_settings.connection_details.get("client_secret", "")
+                    engine_deployment["tenant_id"] = cloud_settings.connection_details.get("tenant_id", "")
+                    engine_deployment["subscription_id"] = cloud_settings.connection_details.get("subscription_id", "")
             
             # Debug: Print engine deployment data (redact sensitive info)
             debug_data = engine_deployment.copy()
@@ -1054,9 +1066,9 @@ def list_azure_subscriptions(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
             headers=headers,
             json={
-                "client_id": creds.client_id,
-                "client_secret": creds.client_secret,
-                "tenant_id": creds.tenant_id
+                "client_id": creds.connection_details.get("client_id", "") if creds.connection_details else "",
+                "client_secret": creds.connection_details.get("client_secret", "") if creds.connection_details else "",
+                "tenant_id": creds.connection_details.get("tenant_id", "") if creds.connection_details else ""
             }
         )
         

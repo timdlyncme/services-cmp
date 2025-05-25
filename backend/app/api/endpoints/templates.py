@@ -132,8 +132,8 @@ def get_templates(
             
             # Convert category to categories list
             categories = []
-            if template.category:
-                categories = [cat.strip() for cat in template.category.split(",")]
+            if new_template.category:
+                categories = [new_template.category]  # Use the category directly instead of splitting
             
             # Get the last user who updated the template
             last_updated_by = None
@@ -367,7 +367,7 @@ def create_template(
         # Convert category to categories list
         categories = []
         if new_template.category:
-            categories = [cat.strip() for cat in new_template.category.split(",")]
+            categories = [new_template.category]  # Use the category directly instead of splitting
         
         return CloudTemplateResponse(
             id=new_template.template_id,
