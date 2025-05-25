@@ -358,7 +358,7 @@ const CloudAccounts = () => {
                           </SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="no-credentials" disabled>
+                        <SelectItem key="no-credentials" value="no-credentials" disabled>
                           No credentials available
                         </SelectItem>
                       )}
