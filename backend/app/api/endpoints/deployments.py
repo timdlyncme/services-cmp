@@ -861,7 +861,12 @@ def create_deployment(
                     engine_deployment["client_id"] = cloud_settings.connection_details.get("client_id", "")
                     engine_deployment["client_secret"] = cloud_settings.connection_details.get("client_secret", "")
                     engine_deployment["tenant_id"] = cloud_settings.connection_details.get("tenant_id", "")
-                    engine_deployment["subscription_id"] = cloud_settings.connection_details.get("subscription_id", "")
+                    # If subscription_id is already set from cloud_account, don't override it
+                    if "subscription_id" not in engine_deployment or not engine_deployment["subscription_id"]:
+                        engine_deployment["subscription_id"] = cloud_settings.connection_details.get("subscription_id", "")
+                    
+                    # Debug log for credentials
+                    print(f"Extracted credentials from connection_details: client_id={engine_deployment['client_id'] != ''}, client_secret={engine_deployment['client_secret'] != ''}, tenant_id={engine_deployment['tenant_id'] != ''}, subscription_id={engine_deployment.get('subscription_id', '') != ''}")
             
             # Debug: Print engine deployment data (redact sensitive info)
             debug_data = engine_deployment.copy()
