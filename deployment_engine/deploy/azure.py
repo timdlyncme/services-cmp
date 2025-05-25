@@ -29,28 +29,41 @@ class AzureDeployer:
             tenant_id (str): Azure AD Tenant ID
             subscription_id (str, optional): Azure Subscription ID
         """
+        # Log credential information (without exposing secrets)
+        logging.info(f"Setting Azure credentials: client_id={bool(client_id)}, client_secret={bool(client_secret)}, tenant_id={bool(tenant_id)}, subscription_id={bool(subscription_id)}")
+        
         self.client_id = client_id
         self.client_secret = client_secret
         self.tenant_id = tenant_id
         self.subscription_id = subscription_id
         
         # Create credential
-        self.credential = ClientSecretCredential(
-            tenant_id=self.tenant_id,
-            client_id=self.client_id,
-            client_secret=self.client_secret
-        )
+        try:
+            self.credential = ClientSecretCredential(
+                tenant_id=self.tenant_id,
+                client_id=self.client_id,
+                client_secret=self.client_secret
+            )
+            logging.info("Successfully created ClientSecretCredential")
+        except Exception as e:
+            logging.error(f"Error creating ClientSecretCredential: {str(e)}")
+            raise
         
         # Create resource client if subscription_id is provided
         if subscription_id:
-            self.resource_client = ResourceManagementClient(
-                credential=self.credential,
-                subscription_id=self.subscription_id
-            )
-            
-            # Test the credentials
-            self._test_credentials()
-        
+            try:
+                self.resource_client = ResourceManagementClient(
+                    credential=self.credential,
+                    subscription_id=self.subscription_id
+                )
+                logging.info("Successfully created ResourceManagementClient")
+                
+                # Test the credentials
+                self._test_credentials()
+            except Exception as e:
+                logging.error(f"Error creating ResourceManagementClient: {str(e)}")
+                raise
+
     def get_credential_status(self):
         """
         Get the status of Azure credentials
@@ -173,7 +186,9 @@ class AzureDeployer:
         Returns:
             dict: Deployment result with status and details
         """
+        # Check if credentials are properly configured
         if not self.resource_client:
+            logging.error(f"Azure credentials not configured. client_id={bool(self.client_id)}, client_secret={bool(self.client_secret)}, tenant_id={bool(self.tenant_id)}, subscription_id={bool(self.subscription_id)}, credential={self.credential is not None}")
             raise ValueError("Azure credentials not configured")
         
         # Ensure resource group exists
