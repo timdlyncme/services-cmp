@@ -9,6 +9,9 @@ import subprocess
 import logging
 from datetime import datetime
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
 class AzureDeployer:
     def __init__(self):
         # Initialize with empty credentials
@@ -19,6 +22,24 @@ class AzureDeployer:
         self.credential = None
         self.resource_client = None
         
+        # Check for credentials in environment variables
+        env_client_id = os.getenv("AZURE_CLIENT_ID")
+        env_client_secret = os.getenv("AZURE_CLIENT_SECRET")
+        env_tenant_id = os.getenv("AZURE_TENANT_ID")
+        env_subscription_id = os.getenv("AZURE_SUBSCRIPTION_ID")
+        
+        logger.info(f"Environment credentials available: client_id={env_client_id is not None}, client_secret={env_client_secret is not None}, tenant_id={env_tenant_id is not None}, subscription_id={env_subscription_id is not None}")
+        
+        # If environment variables are set, use them
+        if env_client_id and env_client_secret and env_tenant_id:
+            logger.info("Initializing Azure deployer with environment credentials")
+            self.set_credentials(
+                client_id=env_client_id,
+                client_secret=env_client_secret,
+                tenant_id=env_tenant_id,
+                subscription_id=env_subscription_id
+            )
+    
     def set_credentials(self, client_id, client_secret, tenant_id, subscription_id=None):
         """
         Set Azure credentials for deployments
@@ -29,6 +50,8 @@ class AzureDeployer:
             tenant_id (str): Azure AD Tenant ID
             subscription_id (str, optional): Azure Subscription ID
         """
+        logger.info(f"Setting Azure credentials: client_id={client_id is not None}, client_secret={client_secret is not None}, tenant_id={tenant_id is not None}, subscription_id={subscription_id is not None}")
+        
         self.client_id = client_id
         self.client_secret = client_secret
         self.tenant_id = tenant_id
@@ -43,14 +66,20 @@ class AzureDeployer:
         
         # Create resource client if subscription_id is provided
         if subscription_id:
+            logger.info(f"Creating resource client with subscription_id: {subscription_id}")
             self.resource_client = ResourceManagementClient(
                 credential=self.credential,
                 subscription_id=self.subscription_id
             )
             
             # Test the credentials
-            self._test_credentials()
-        
+            try:
+                self._test_credentials()
+                logger.info("Azure credentials validated successfully")
+            except Exception as e:
+                logger.error(f"Error validating Azure credentials: {str(e)}")
+                raise
+    
     def get_credential_status(self):
         """
         Get the status of Azure credentials
@@ -174,6 +203,13 @@ class AzureDeployer:
             dict: Deployment result with status and details
         """
         if not self.resource_client:
+            logger.error("Azure credentials not configured - resource_client is None")
+            if not self.client_id or not self.client_secret or not self.tenant_id:
+                logger.error(f"Missing credentials: client_id={self.client_id is not None}, client_secret={self.client_secret is not None}, tenant_id={self.tenant_id is not None}")
+                raise ValueError("Azure credentials not configured - missing client_id, client_secret, or tenant_id")
+            if not self.subscription_id:
+                logger.error("Missing subscription_id")
+                raise ValueError("Azure credentials not configured - missing subscription_id")
             raise ValueError("Azure credentials not configured")
         
         # Ensure resource group exists

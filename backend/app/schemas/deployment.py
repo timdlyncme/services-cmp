@@ -82,6 +82,13 @@ class TemplateCreate(TemplateBase):
         if v.lower() not in valid_types:
             raise ValueError(f"Type must be one of {valid_types}")
         return v.lower()  # Normalize to lowercase
+    
+    # Ensure category is properly handled
+    @validator('category')
+    def validate_category(cls, v):
+        if v is None or v.strip() == "":
+            return None
+        return v.strip()  # Remove any leading/trailing whitespace
 
 class TemplateUpdate(BaseModel):
     name: Optional[str] = None

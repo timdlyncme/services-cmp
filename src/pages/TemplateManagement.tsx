@@ -107,8 +107,16 @@ const TemplateManagement = () => {
       // Read the file content if a file was selected
       if (fileInput && fileInput.files && fileInput.files.length > 0) {
         const file = fileInput.files[0];
-        fileContent = await readFileContent(file);
-        console.log("File content read:", fileContent.substring(0, 100) + "...");
+        try {
+          fileContent = await readFileContent(file);
+          console.log("File content read:", fileContent.substring(0, 100) + "...");
+          console.log("File content length:", fileContent.length);
+        } catch (error) {
+          console.error("Error reading file:", error);
+          toast.error("Failed to read template file");
+          setIsLoading(false);
+          return;
+        }
       } else {
         console.log("No file selected");
       }
@@ -126,13 +134,14 @@ const TemplateManagement = () => {
         type: newTemplateType, // Make sure this is correctly set
         category: categories.length > 0 ? categories.join(',') : undefined,  // Convert array to comma-separated string for backend
         categories: categories, // Also include the array for frontend
-        code: fileContent || "",  // Include the file content, ensure it's not null
+        code: fileContent,  // Include the file content, ensure it's not null
         is_public: false
       };
       
       console.log("Sending template data:", {
         ...newTemplate,
-        code: newTemplate.code ? `${newTemplate.code.substring(0, 100)}...` : 'No code'
+        code: newTemplate.code ? `${newTemplate.code.substring(0, 100)}...` : 'No code',
+        codeLength: newTemplate.code?.length || 0
       });
       
       await cmpService.createTemplate(newTemplate, currentTenant!.tenant_id);

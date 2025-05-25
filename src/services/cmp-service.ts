@@ -227,6 +227,7 @@ export class CMPService {
         ...template,
         type: template.type, // Ensure type is explicitly set
         category: template.category, // Ensure category is explicitly set
+        code: template.code || "", // Ensure code is explicitly set and not null
       };
 
       const response = await api.post('/templates', templateData, {

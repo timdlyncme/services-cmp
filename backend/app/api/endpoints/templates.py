@@ -339,19 +339,24 @@ def create_template(
         logger.debug(f"Template category (from dict): {template.dict().get('category')}")
         
         # Create new template with explicit type assignment
-        template_type = template.type
+        template_type = template.type.lower()  # Ensure lowercase
+        template_category = template.category.strip() if template.category else None  # Ensure stripped
+        template_code = template.code if template.code else ""  # Ensure code is not None
+        
         logger.debug(f"Using template type: {template_type}")
+        logger.debug(f"Using template category: {template_category}")
+        logger.debug(f"Code length to be saved: {len(template_code)}")
         
         new_template = Template(
             template_id=str(uuid.uuid4()),
             name=template.name,
             description=template.description,
-            category=template.category,  # Store category as a string
+            category=template_category,  # Store category as a string
             provider=template.provider,
             type=template_type,  # Explicitly use the provided type
             is_public=template.is_public,
             tenant_id=None if template.is_public else template_tenant.tenant_id,
-            code=template.code,  # Store the code directly in the template
+            code=template_code,  # Store the code directly in the template
             parameters=template.parameters,  # Store parameters
             variables=template.variables,  # Store variables
             current_version="1.0.0",  # Initial version
@@ -369,6 +374,7 @@ def create_template(
         # Verify the template was created correctly
         created_template = db.query(Template).filter(Template.id == new_template.id).first()
         logger.debug(f"Created template after save: type={created_template.type}, category={created_template.category}")
+        logger.debug(f"Created template code length: {len(created_template.code) if created_template.code else 0}")
         
         # Create initial version
         initial_version = TemplateVersion(
