@@ -69,7 +69,7 @@ class CloudAccountFrontendResponse(BaseModel):
 # Template schemas
 class TemplateCreate(TemplateBase):
     provider: str
-    type: Optional[str] = "terraform"  # Added type field with default value
+    type: str
     code: Optional[str] = None
     is_public: bool = False
     category: Optional[str] = None
@@ -80,7 +80,7 @@ class TemplateUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     provider: Optional[str] = None
-    type: Optional[str] = None  # Added type field
+    type: Optional[str] = None
     code: Optional[str] = None
     is_public: Optional[bool] = None
     category: Optional[str] = None

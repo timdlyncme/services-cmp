@@ -70,8 +70,8 @@ def get_cloud_accounts(
             connection_details = {}
             if account.cloud_settings:
                 connection_details = {
-                    "client_id": account.cloud_settings.client_id,
-                    "tenant_id": account.cloud_settings.tenant_id,
+                    "client_id": account.cloud_settings.connection_details.get("client_id", "") if account.cloud_settings.connection_details else "",
+                    "tenant_id": account.cloud_settings.connection_details.get("tenant_id", "") if account.cloud_settings.connection_details else "",
                 }
             
             # Format cloud IDs
@@ -553,9 +553,9 @@ def list_azure_subscriptions(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
             headers=headers,
             json={
-                "client_id": creds.client_id,
-                "client_secret": creds.client_secret,
-                "tenant_id": creds.tenant_id
+                "client_id": creds.connection_details.get("client_id", "") if creds.connection_details else "",
+                "client_secret": creds.connection_details.get("client_secret", "") if creds.connection_details else "",
+                "tenant_id": creds.connection_details.get("tenant_id", "") if creds.connection_details else ""
             }
         )
         
