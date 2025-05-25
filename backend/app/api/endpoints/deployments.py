@@ -741,11 +741,14 @@ def get_deployment(
 @router.post("/", response_model=CloudDeploymentResponse)
 def create_deployment(
     deployment: DeploymentCreate,
+    tenant_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
     """
     Create a new deployment
+    
+    If tenant_id is provided in the query string, it will be used instead of the current user's tenant_id.
     """
     # Check if user has permission to create deployments
     has_permission = any(p.name == "create:deployments" for p in current_user.role.permissions)
@@ -758,6 +761,7 @@ def create_deployment(
     try:
         # Debug: Print the deployment data
         print(f"Deployment data received: {deployment.dict()}")
+        print(f"Query param tenant_id: {tenant_id}")
         
         # Verify template exists
         print(f"Looking for template with template_id: {deployment.template_id}")
@@ -783,8 +787,33 @@ def create_deployment(
                 detail=f"Environment with ID {deployment.environment_id} not found"
             )
         
+        # Determine which tenant_id to use
+        deployment_tenant_id = current_user.tenant_id
+        if tenant_id:
+            # Verify the tenant exists and user has access to it
+            tenant_obj = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
+            if not tenant_obj:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Tenant with ID {tenant_id} not found"
+                )
+            
+            # Check if user has access to this tenant
+            if tenant_id != current_user.tenant_id:
+                # Only admin or MSP users can create deployments for other tenants
+                if current_user.role.name != "admin" and current_user.role.name != "msp":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Not authorized to create deployments for other tenants"
+                    )
+            
+            deployment_tenant_id = tenant_id
+            print(f"Using tenant_id from query parameter: {deployment_tenant_id}")
+        else:
+            print(f"Using current user's tenant_id: {deployment_tenant_id}")
+        
         # Get tenant for response
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == deployment_tenant_id).first()
         
         # Create new deployment
         import uuid
