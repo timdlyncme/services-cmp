@@ -152,7 +152,6 @@ class CloudDeploymentResponse(BaseModel):
     resources: List[Dict[str, Any]] = []
     tenantId: str
     region: Optional[str] = None
-    cloud_resources: List[Dict[str, Any]] = []
 
     class Config:
         orm_mode = True

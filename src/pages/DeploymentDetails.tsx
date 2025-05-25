@@ -82,7 +82,7 @@ const DeploymentDetails = () => {
         
         if (deploymentData) {
           console.log("Deployment data received:", deploymentData);
-          console.log("Cloud resources:", deploymentData.cloud_resources);
+          console.log("Resources:", deploymentData.resources);
           
           setDeployment(deploymentData);
           
@@ -334,8 +334,8 @@ const DeploymentDetails = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {deployment.cloud_resources && deployment.cloud_resources.length > 0 ? (
-                      deployment.cloud_resources.map((resource, index) => (
+                    {deployment.resources && deployment.resources.length > 0 ? (
+                      deployment.resources.map((resource, index) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">
                             {resource.name || 'Unknown'}
