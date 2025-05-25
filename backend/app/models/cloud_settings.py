@@ -15,10 +15,8 @@ class CloudSettings(Base):
     provider = Column(String)  # azure, aws, gcp - we'll only use azure for now
     name = Column(String, nullable=True)  # Friendly name for the credentials
     
-    # Azure credentials
-    client_id = Column(String, nullable=True)  # Service Principal Client ID
-    client_secret = Column(String, nullable=True)  # Service Principal Secret
-    tenant_id = Column(String, nullable=True)  # Azure AD Tenant ID
+    # Connection details as JSON
+    connection_details = Column(JSON, nullable=True)  # Contains client_id, client_secret, tenant_id, etc.
     
     # Status and metadata
     is_active = Column(Boolean, default=True)
@@ -31,6 +29,11 @@ class CloudSettings(Base):
     
     # Relationship with CloudAccount
     cloud_accounts = relationship("CloudAccount", back_populates="cloud_settings")
+
+    def __init__(self, **kwargs):
+        # Explicitly handle connection_details to ensure it's properly set
+        self.connection_details = kwargs.pop('connection_details', None)
+        super(CloudSettings, self).__init__(**kwargs)
 
 # Add relationship to Tenant model
 from app.models.user import Tenant
