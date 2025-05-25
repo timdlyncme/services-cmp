@@ -215,7 +215,7 @@ const TemplateDetails = () => {
       const deploymentData = {
         name: deployName,
         description: `Deployment of ${template.name}`,
-        template_id: template.template_id, // Use the GUID template_id instead of the numeric id
+        template_id: template.id, // Use the GUID template_id instead of the numeric id
         environment_id: selectedEnvironment.internal_id, // Use the internal_id from the environment
         environment_name: selectedEnvironment.name,
         provider: template.provider,
