@@ -125,7 +125,7 @@ def get_templates(
                     tenant_id = tenant.tenant_id
             
             # Get the template's code
-            template_code = template.code or ""
+            code = template.code or ""
             
             # Get deployment count
             deployment_count = deployment_counts.get(template.id, 0)
@@ -148,19 +148,19 @@ def get_templates(
                             last_updated_by = user.full_name or user.username
             
             result.append(CloudTemplateResponse(
-                id=template.template_id,
-                template_id=template.template_id,  # Explicitly include template_id
+                id=template.id,
                 name=template.name,
                 description=template.description or "",
-                type=template.type,  # Use the actual template type from the database
+                type=template.type,
                 provider=template.provider,
-                code=template_code,
+                code=code,
                 deploymentCount=deployment_count,
                 uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
                 updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
                 categories=categories,
                 tenantId=tenant_id,
-                lastUpdatedBy=last_updated_by
+                lastUpdatedBy=last_updated_by,
+                parameters=template.parameters
             ))
         
         return result
@@ -248,11 +248,10 @@ def get_template(
                         last_updated_by = user.full_name or user.username
         
         return CloudTemplateResponse(
-            id=template.template_id,
-            template_id=template.template_id,  # Explicitly include template_id
+            id=template.id,
             name=template.name,
             description=template.description or "",
-            type=template.type,  # Use the actual template type from the database
+            type=template.type,
             provider=template.provider,
             code=code,
             deploymentCount=deployment_count,
@@ -260,7 +259,8 @@ def get_template(
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
             categories=categories,
             tenantId=tenant_id,
-            lastUpdatedBy=last_updated_by
+            lastUpdatedBy=last_updated_by,
+            parameters=template.parameters
         )
     
     except HTTPException:
@@ -276,7 +276,8 @@ def get_template(
 def create_template(
     template: TemplateCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    tenant_id: Optional[str] = None
 ) -> Any:
     """
     Create a new template
@@ -301,14 +302,26 @@ def create_template(
         )
     
     try:
-        # Get the user's tenant
-        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
+        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+        template_tenant_id = tenant_id if tenant_id else current_user.tenant_id
+        
+        # Check if tenant exists
+        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == template_tenant_id).first()
         if not user_tenant and not template.is_public:
-            logger.warning(f"User's tenant not found: {current_user.tenant_id}")
+            logger.warning(f"Tenant not found: {template_tenant_id}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User's tenant not found"
+                detail="Tenant not found"
             )
+        
+        # Check if user has permission to create for this tenant
+        if template_tenant_id != current_user.tenant_id:
+            # Only admin or MSP users can create for other tenants
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to create templates for other tenants"
+                )
         
         # Debug: Print the template data
         logger.debug(f"Template data received: {template.dict()}")
@@ -322,9 +335,9 @@ def create_template(
             description=template.description,
             category=template.category,  # Store category as a string
             provider=template.provider,
-            type=template.type,  # Always use the provided type, don't default to terraform
+            type=template.type,  # Always use the provided type
             is_public=template.is_public,
-            tenant_id=None if template.is_public else user_tenant.tenant_id,
+            tenant_id=None if template.is_public else template_tenant_id,
             code=template.code,  # Store the code directly in the template
             parameters=template.parameters,  # Store parameters
             variables=template.variables,  # Store variables
@@ -371,10 +384,9 @@ def create_template(
         
         return CloudTemplateResponse(
             id=new_template.template_id,
-            template_id=new_template.template_id,  # Explicitly include template_id
             name=new_template.name,
             description=new_template.description or "",
-            type=new_template.type,  # Use the actual template type from the database
+            type=new_template.type,
             provider=new_template.provider,
             code=new_template.code or "",
             deploymentCount=0,
@@ -499,8 +511,7 @@ def update_template(
         last_updated_by = current_user.full_name or current_user.username
         
         return CloudTemplateResponse(
-            id=template.template_id,
-            template_id=template.template_id,  # Explicitly include template_id
+            id=template.id,
             name=template.name,
             description=template.description or "",
             type=template.type,  # Use the actual template type from the database
@@ -511,7 +522,8 @@ def update_template(
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
             categories=categories,
             tenantId=tenant_id,
-            lastUpdatedBy=last_updated_by
+            lastUpdatedBy=last_updated_by,
+            parameters=template.parameters
         )
     
     except HTTPException:

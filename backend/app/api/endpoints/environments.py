@@ -160,7 +160,8 @@ def create_environment(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    environment_in: EnvironmentCreate
+    environment_in: EnvironmentCreate,
+    tenant_id: Optional[str] = None
 ) -> Any:
     """
     Create a new environment
@@ -174,6 +175,26 @@ def create_environment(
         )
     
     try:
+        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+        env_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        
+        # Check if tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == env_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {env_tenant_id} not found"
+            )
+        
+        # Check if user has permission to create for this tenant
+        if env_tenant_id != current_user.tenant.tenant_id:
+            # Only admin or MSP users can create for other tenants
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to create environments for other tenants"
+                )
+        
         # Validate that cloud_account_ids is not empty
         if not environment_in.cloud_account_ids:
             raise HTTPException(
@@ -181,19 +202,19 @@ def create_environment(
                 detail="At least one cloud account must be selected"
             )
         
-        # Validate that all cloud accounts exist and belong to the user's tenant
+        # Validate that all cloud accounts exist and belong to the specified tenant
         valid_cloud_accounts = []
         for account_id in environment_in.cloud_account_ids:
             # Get cloud account by account_id (UUID) instead of internal id
             cloud_account = db.query(CloudAccount).filter(
                 CloudAccount.account_id == account_id,
-                CloudAccount.tenant_id == current_user.tenant.tenant_id
+                CloudAccount.tenant_id == env_tenant_id
             ).first()
             
             if not cloud_account:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Cloud account with ID {account_id} not found or does not belong to your tenant"
+                    detail=f"Cloud account with ID {account_id} not found or does not belong to the specified tenant"
                 )
             
             valid_cloud_accounts.append(cloud_account)
@@ -207,7 +228,7 @@ def create_environment(
             environment_variables=environment_in.environment_variables,
             logging_config=environment_in.logging_config,
             monitoring_integration=environment_in.monitoring_integration,
-            tenant_id=current_user.tenant.tenant_id
+            tenant_id=env_tenant_id
         )
         
         db.add(environment)

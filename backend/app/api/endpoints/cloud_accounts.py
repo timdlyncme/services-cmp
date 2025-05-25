@@ -207,7 +207,8 @@ def create_cloud_account(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    cloud_account_in: CloudAccountCreate
+    cloud_account_in: CloudAccountCreate,
+    tenant_id: Optional[str] = None
 ) -> Any:
     """
     Create a new cloud account
@@ -227,12 +228,32 @@ def create_cloud_account(
         )
     
     try:
+        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+        account_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        
+        # Check if tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == account_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {account_tenant_id} not found"
+            )
+        
+        # Check if user has permission to create for this tenant
+        if account_tenant_id != current_user.tenant.tenant_id:
+            # Only admin or MSP users can create for other tenants
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to create cloud accounts for other tenants"
+                )
+        
         # Get cloud settings if settings_id is provided
         cloud_settings = None
         if cloud_account_in.settings_id:
             cloud_settings = db.query(CloudSettings).filter(
                 CloudSettings.settings_id == cloud_account_in.settings_id,
-                CloudSettings.organization_tenant_id == current_user.tenant.tenant_id
+                CloudSettings.organization_tenant_id == account_tenant_id
             ).first()
             
             if not cloud_settings:
@@ -247,7 +268,7 @@ def create_cloud_account(
             provider=cloud_account_in.provider,
             status=cloud_account_in.status,
             description=cloud_account_in.description,
-            tenant_id=current_user.tenant.tenant_id,
+            tenant_id=account_tenant_id,
             settings_id=cloud_settings.id if cloud_settings else None,
             cloud_ids=cloud_account_in.cloud_ids if cloud_account_in.cloud_ids else cloud_account_in.subscription_ids
         )
