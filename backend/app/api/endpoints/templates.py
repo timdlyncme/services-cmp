@@ -125,15 +125,15 @@ def get_templates(
                     tenant_id = tenant.tenant_id
             
             # Get the template's code
-            code = template.code or ""
+            template_code = template.code or ""
             
             # Get deployment count
             deployment_count = deployment_counts.get(template.id, 0)
             
             # Convert category to categories list
             categories = []
-            if new_template.category:
-                categories = [new_template.category]  # Use the category directly instead of splitting
+            if template.category:
+                categories = [cat.strip() for cat in template.category.split(",")]
             
             # Get the last user who updated the template
             last_updated_by = None
@@ -148,19 +148,19 @@ def get_templates(
                             last_updated_by = user.full_name or user.username
             
             result.append(CloudTemplateResponse(
-                id=template.id,
+                id=template.template_id,
+                template_id=template.template_id,  # Explicitly include template_id
                 name=template.name,
                 description=template.description or "",
-                type=template.type,
+                type=template.type,  # Use the actual template type from the database
                 provider=template.provider,
-                code=code,
+                code=template_code,
                 deploymentCount=deployment_count,
                 uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
                 updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
                 categories=categories,
                 tenantId=tenant_id,
-                lastUpdatedBy=last_updated_by,
-                parameters=template.parameters
+                lastUpdatedBy=last_updated_by
             ))
         
         return result
@@ -248,10 +248,11 @@ def get_template(
                         last_updated_by = user.full_name or user.username
         
         return CloudTemplateResponse(
-            id=template.id,
+            id=template.template_id,
+            template_id=template.template_id,  # Explicitly include template_id
             name=template.name,
             description=template.description or "",
-            type=template.type,
+            type=template.type,  # Use the actual template type from the database
             provider=template.provider,
             code=code,
             deploymentCount=deployment_count,
@@ -259,8 +260,7 @@ def get_template(
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
             categories=categories,
             tenantId=tenant_id,
-            lastUpdatedBy=last_updated_by,
-            parameters=template.parameters
+            lastUpdatedBy=last_updated_by
         )
     
     except HTTPException:
@@ -276,8 +276,7 @@ def get_template(
 def create_template(
     template: TemplateCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    tenant_id: Optional[str] = None
+    db: Session = Depends(get_db)
 ) -> Any:
     """
     Create a new template
@@ -302,26 +301,14 @@ def create_template(
         )
     
     try:
-        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        template_tenant_id = tenant_id if tenant_id else current_user.tenant_id
-        
-        # Check if tenant exists
-        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == template_tenant_id).first()
+        # Get the user's tenant
+        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
         if not user_tenant and not template.is_public:
-            logger.warning(f"Tenant not found: {template_tenant_id}")
+            logger.warning(f"User's tenant not found: {current_user.tenant_id}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Tenant not found"
+                detail="User's tenant not found"
             )
-        
-        # Check if user has permission to create for this tenant
-        if template_tenant_id != current_user.tenant_id:
-            # Only admin or MSP users can create for other tenants
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to create templates for other tenants"
-                )
         
         # Debug: Print the template data
         logger.debug(f"Template data received: {template.dict()}")
@@ -335,9 +322,9 @@ def create_template(
             description=template.description,
             category=template.category,  # Store category as a string
             provider=template.provider,
-            type=template.type,  # Always use the provided type
+            type=template.type,  # Always use the provided type, don't default to terraform
             is_public=template.is_public,
-            tenant_id=None if template.is_public else template_tenant_id,
+            tenant_id=None if template.is_public else user_tenant.tenant_id,
             code=template.code,  # Store the code directly in the template
             parameters=template.parameters,  # Store parameters
             variables=template.variables,  # Store variables
@@ -380,13 +367,14 @@ def create_template(
         # Convert category to categories list
         categories = []
         if new_template.category:
-            categories = [new_template.category]  # Use the category directly instead of splitting
+            categories = [cat.strip() for cat in new_template.category.split(",")]
         
         return CloudTemplateResponse(
             id=new_template.template_id,
+            template_id=new_template.template_id,  # Explicitly include template_id
             name=new_template.name,
             description=new_template.description or "",
-            type=new_template.type,
+            type=new_template.type,  # Use the actual template type from the database
             provider=new_template.provider,
             code=new_template.code or "",
             deploymentCount=0,
@@ -511,7 +499,8 @@ def update_template(
         last_updated_by = current_user.full_name or current_user.username
         
         return CloudTemplateResponse(
-            id=template.id,
+            id=template.template_id,
+            template_id=template.template_id,  # Explicitly include template_id
             name=template.name,
             description=template.description or "",
             type=template.type,  # Use the actual template type from the database
@@ -522,8 +511,7 @@ def update_template(
             updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
             categories=categories,
             tenantId=tenant_id,
-            lastUpdatedBy=last_updated_by,
-            parameters=template.parameters
+            lastUpdatedBy=last_updated_by
         )
     
     except HTTPException:
