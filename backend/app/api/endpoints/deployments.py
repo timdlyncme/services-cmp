@@ -34,8 +34,7 @@ class AzureCredentialsCreate(BaseModel):
     tenant_id: str
 
 class AzureCredentialsResponse(BaseModel):
-    id: int
-    settings_id: str
+    id: str  # Changed from int to str to use UUID
     name: str
     client_id: str
     tenant_id: str
@@ -47,7 +46,8 @@ def set_azure_credentials(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    credentials: AzureCredentialsCreate
+    credentials: AzureCredentialsCreate,
+    tenant_id: Optional[str] = None
 ):
     """
     Set Azure credentials for deployments
@@ -57,6 +57,26 @@ def set_azure_credentials(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
+        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        
+        # Check if tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {creds_tenant_id} not found"
+            )
+        
+        # Check if user has permission to create for this tenant
+        if creds_tenant_id != current_user.tenant.tenant_id:
+            # Only admin or MSP users can create for other tenants
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to create credentials for other tenants"
+                )
+        
         # Create new credentials with connection_details as JSON
         new_creds = CloudSettings(
             provider="azure",
@@ -66,7 +86,7 @@ def set_azure_credentials(
                 "client_secret": credentials.client_secret,
                 "tenant_id": credentials.tenant_id
             },
-            organization_tenant_id=current_user.tenant.tenant_id
+            tenant_id=creds_tenant_id
         )
         db.add(new_creds)
         db.commit()
@@ -87,7 +107,7 @@ def set_azure_credentials(
         if response.status_code != 200:
             raise Exception(f"Deployment engine error: {response.text}")
         
-        return {"message": "Azure credentials added successfully", "settings_id": str(new_creds.settings_id)}
+        return {"message": "Azure credentials added successfully", "id": str(new_creds.settings_id)}
     
     except Exception as e:
         db.rollback()
@@ -97,7 +117,8 @@ def set_azure_credentials(
 def get_azure_credentials(
     *,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    tenant_id: Optional[str] = None
 ):
     """
     Get all Azure credentials for the tenant
@@ -107,9 +128,29 @@ def get_azure_credentials(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
+        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        
+        # Check if tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {creds_tenant_id} not found"
+            )
+        
+        # Check if user has permission to view credentials for this tenant
+        if creds_tenant_id != current_user.tenant.tenant_id:
+            # Only admin or MSP users can view credentials for other tenants
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to view credentials for other tenants"
+                )
+        
         # Get all credentials from database
         creds_list = db.query(CloudSettings).filter(
-            CloudSettings.organization_tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.tenant_id == creds_tenant_id,
             CloudSettings.provider == "azure"
         ).all()
         
@@ -138,8 +179,7 @@ def get_azure_credentials(
                 tenant_id = creds.connection_details.get("tenant_id", "")
             
             result.append({
-                "id": creds.id,
-                "settings_id": str(creds.settings_id),
+                "id": str(creds.settings_id),  # Use settings_id as the ID
                 "name": creds.name or "Azure Credentials",
                 "client_id": client_id,
                 "tenant_id": tenant_id,
@@ -157,7 +197,8 @@ def get_azure_credential(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    settings_id: str
+    settings_id: str,
+    tenant_id: Optional[str] = None
 ):
     """
     Get a specific Azure credential by settings_id
@@ -167,9 +208,29 @@ def get_azure_credential(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
+        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        
+        # Check if tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {creds_tenant_id} not found"
+            )
+        
+        # Check if user has permission to view credentials for this tenant
+        if creds_tenant_id != current_user.tenant.tenant_id:
+            # Only admin or MSP users can view credentials for other tenants
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to view credentials for other tenants"
+                )
+        
         # Get credential from database
         creds = db.query(CloudSettings).filter(
-            CloudSettings.organization_tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.tenant_id == creds_tenant_id,
             CloudSettings.provider == "azure",
             CloudSettings.settings_id == settings_id
         ).first()
@@ -189,8 +250,7 @@ def get_azure_credential(
             engine_status = response.json()
         
         return {
-            "id": creds.id,
-            "settings_id": str(creds.settings_id),
+            "id": str(creds.settings_id),  # Use settings_id as the ID
             "name": creds.name or "Azure Credentials",
             "client_id": creds.connection_details.get("client_id", "") if creds.connection_details else "",
             "tenant_id": creds.connection_details.get("tenant_id", "") if creds.connection_details else "",
@@ -198,8 +258,6 @@ def get_azure_credential(
             "message": engine_status.get("message", "")
         }
     
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -208,7 +266,8 @@ def delete_azure_credential(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    settings_id: str
+    settings_id: str,
+    tenant_id: Optional[str] = None
 ):
     """
     Delete a specific Azure credential by settings_id
@@ -218,9 +277,29 @@ def delete_azure_credential(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
+        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        
+        # Check if tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {creds_tenant_id} not found"
+            )
+        
+        # Check if user has permission to delete credentials for this tenant
+        if creds_tenant_id != current_user.tenant.tenant_id:
+            # Only admin or MSP users can delete credentials for other tenants
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to delete credentials for other tenants"
+                )
+        
         # Get credential from database
         creds = db.query(CloudSettings).filter(
-            CloudSettings.organization_tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.tenant_id == creds_tenant_id,
             CloudSettings.provider == "azure",
             CloudSettings.settings_id == settings_id
         ).first()
@@ -1050,7 +1129,7 @@ def list_azure_subscriptions(
     try:
         # Get credential from database
         creds = db.query(CloudSettings).filter(
-            CloudSettings.organization_tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.tenant_id == current_user.tenant.tenant_id,
             CloudSettings.provider == "azure",
             CloudSettings.settings_id == settings_id
         ).first()
