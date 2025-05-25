@@ -7,6 +7,7 @@ import requests
 import os
 import json
 from datetime import datetime
+from pydantic import BaseModel, Field
 
 from app.db.session import get_db
 from app.api.endpoints.auth import get_current_user
@@ -25,8 +26,6 @@ router = APIRouter()
 DEPLOYMENT_ENGINE_URL = os.getenv("DEPLOYMENT_ENGINE_URL", "http://deployment-engine:5000")
 
 # Cloud Settings Schemas
-from pydantic import BaseModel, Field
-
 class AzureCredentialsCreate(BaseModel):
     name: str = Field(..., description="Friendly name for the credentials")
     client_id: str
@@ -1089,7 +1088,7 @@ def options_deployments():
     """
     response = Response(status_code=200)
     response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
 
@@ -1117,19 +1116,43 @@ def list_azure_subscriptions(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    settings_id: str
+    settings_id: str,
+    tenant_id: Optional[str] = None
 ):
     """
     List available Azure subscriptions for a specific credential
+    
+    If tenant_id is provided, it will be used to filter the credentials.
+    Otherwise, the current user's tenant ID will be used.
     """
     # Check if user has permission to view credentials
     if not current_user.role or "deployment:read" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
+        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+        account_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        
+        # Check if tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == account_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Tenant with ID {account_tenant_id} not found"
+            )
+        
+        # Check if user has permission to access this tenant
+        if account_tenant_id != current_user.tenant.tenant_id:
+            # Only admin or MSP users can access other tenants
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Not authorized to access credentials for other tenants"
+                )
+        
         # Get credential from database
         creds = db.query(CloudSettings).filter(
-            CloudSettings.tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.tenant_id == account_tenant_id,
             CloudSettings.provider == "azure",
             CloudSettings.settings_id == settings_id
         ).first()
