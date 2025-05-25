@@ -226,12 +226,14 @@ export class CMPService {
         ...template,
         type: template.type, // Ensure type is explicitly set
         category: template.category, // Ensure category is explicitly set
-        tenant_id: formatTenantId(tenantId)
       };
 
       const response = await api.post('/templates', templateData, {
         headers: {
           Authorization: `Bearer ${token}`
+        },
+        params: {
+          tenant_id: formatTenantId(tenantId)
         }
       });
       return response.data;

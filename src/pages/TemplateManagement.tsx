@@ -12,6 +12,7 @@ import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, FileCode, Upload } f
 import { CloudTemplate, CloudProvider, TemplateType } from "@/types/cloud";
 import { cmpService } from "@/services/cmp-service";
 import { useNavigate } from "react-router-dom";
+import { TenantSwitcher } from "@/components/tenant-switcher";
 
 const TemplateManagement = () => {
   const { currentTenant, hasPermission } = useAuth();
@@ -215,123 +216,43 @@ const TemplateManagement = () => {
   };
   
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Template Management</h1>
-          <p className="text-muted-foreground">
-            Create and manage infrastructure templates
-          </p>
-        </div>
-        
-        <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={handleRefresh}>
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          
-          {canManageTemplates && (
-            <Dialog open={isNewTemplateDialogOpen} onOpenChange={setIsNewTemplateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Template
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Upload New Template</DialogTitle>
-                  <DialogDescription>
-                    Add a new infrastructure template to your catalog
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <label htmlFor="name" className="text-sm font-medium">Template Name</label>
-                    <Input
-                      id="name"
-                      value={newTemplateName}
-                      onChange={(e) => setNewTemplateName(e.target.value)}
-                      placeholder="e.g., Web App with Database"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label htmlFor="description" className="text-sm font-medium">Description</label>
-                    <Input
-                      id="description"
-                      value={newTemplateDescription}
-                      onChange={(e) => setNewTemplateDescription(e.target.value)}
-                      placeholder="Describe this template"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label htmlFor="provider" className="text-sm font-medium">Cloud Provider</label>
-                      <select
-                        id="provider"
-                        value={newTemplateProvider}
-                        onChange={(e) => setNewTemplateProvider(e.target.value as CloudProvider)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="azure">Azure</option>
-                        <option value="aws">AWS</option>
-                        <option value="gcp">GCP</option>
-                      </select>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <label htmlFor="type" className="text-sm font-medium">Template Type</label>
-                      <select
-                        id="type"
-                        value={newTemplateType}
-                        onChange={(e) => setNewTemplateType(e.target.value as TemplateType)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="terraform">Terraform</option>
-                        <option value="arm">ARM Template</option>
-                        <option value="cloudformation">CloudFormation</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label htmlFor="categories" className="text-sm font-medium">Categories</label>
-                    <Input
-                      id="categories"
-                      value={newTemplateCategories}
-                      onChange={(e) => setNewTemplateCategories(e.target.value)}
-                      placeholder="e.g., web, database, networking (comma separated)"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label htmlFor="file" className="text-sm font-medium">Template File</label>
-                    <Input
-                      id="file"
-                      type="file"
-                      accept=".tf,.json,.yaml,.yml"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Upload a Terraform, ARM, or CloudFormation template file
-                    </p>
-                  </div>
-                </div>
-                
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsNewTemplateDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={handleCreateTemplate}>Upload Template</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+    <div className="container mx-auto py-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Template Management</h1>
+        <div className="flex items-center space-x-2">
+          <div className="w-[200px]">
+            <TenantSwitcher />
+          </div>
+          {hasPermission("create:templates") && (
+            <Button onClick={() => setIsNewTemplateDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Template
+            </Button>
           )}
         </div>
+      </div>
+
+      {/* Search and filter */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+          <Input
+            type="search"
+            placeholder="Search templates..."
+            className="pl-8"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <Button variant="outline" onClick={fetchTemplates} disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
       
       <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
           <Input
             placeholder="Search templates..."
             className="pl-8"
