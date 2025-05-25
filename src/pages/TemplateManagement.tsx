@@ -123,11 +123,16 @@ const TemplateManagement = () => {
         name: newTemplateName,
         description: newTemplateDescription,
         provider: newTemplateProvider,
-        type: newTemplateType,
-        category: categories.join(','),  // Convert array to comma-separated string
-        code: fileContent,  // Include the file content
-        categories: categories  // Keep the array for frontend display
+        type: newTemplateType, // Make sure this is correctly set
+        category: categories.length > 0 ? categories.join(',') : undefined,  // Convert array to comma-separated string
+        code: fileContent || "",  // Include the file content, ensure it's not null
+        is_public: false
       };
+      
+      console.log("Sending template data:", {
+        ...newTemplate,
+        code: newTemplate.code ? `${newTemplate.code.substring(0, 100)}...` : 'No code'
+      });
       
       await cmpService.createTemplate(newTemplate, currentTenant!.tenant_id);
       

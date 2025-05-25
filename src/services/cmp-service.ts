@@ -221,16 +221,19 @@ export class CMPService {
         category: template.category
       });
 
-      const response = await api.post('/templates', {
+      // Make sure we're sending the correct template type and category
+      const templateData = {
         ...template,
+        type: template.type, // Ensure type is explicitly set
+        category: template.category, // Ensure category is explicitly set
         tenant_id: formatTenantId(tenantId)
-      }, {
+      };
+
+      const response = await api.post('/templates', templateData, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
-      
-      console.log("Template created successfully:", response.data);
       return response.data;
     } catch (error) {
       console.error('Create template error:', error);
@@ -824,17 +827,23 @@ export class CMPService {
   /**
    * Get Azure subscriptions for a specific credential
    */
-  async getAzureSubscriptions(settingsId: string): Promise<any[]> {
+  async getAzureSubscriptions(settingsId: string, tenantId?: string): Promise<any[]> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         return [];
       }
 
+      const params: Record<string, string> = {};
+      if (tenantId) {
+        params.tenant_id = formatTenantId(tenantId);
+      }
+
       const response = await api.get(`/deployments/azure_credentials/${settingsId}/subscriptions`, {
         headers: {
           Authorization: `Bearer ${token}`
-        }
+        },
+        params
       });
       return response.data;
     } catch (error) {
