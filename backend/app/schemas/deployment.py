@@ -115,7 +115,6 @@ class TemplateDetailResponse(TemplateResponse):
 
 class CloudTemplateResponse(BaseModel):
     id: str
-    template_id: str  # Added to ensure template_id is included in the response
     name: str
     description: str
     type: str
@@ -127,6 +126,7 @@ class CloudTemplateResponse(BaseModel):
     categories: List[str] = []
     tenantId: str
     lastUpdatedBy: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
 
     class Config:
         orm_mode = True
