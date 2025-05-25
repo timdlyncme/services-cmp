@@ -24,17 +24,21 @@ class CloudSettings(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    organization_tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))
-    organization_tenant = relationship("Tenant", back_populates="cloud_settings")
+    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))
+    tenant = relationship("Tenant", back_populates="cloud_settings")
     
     # Relationship with CloudAccount
     cloud_accounts = relationship("CloudAccount", back_populates="cloud_settings")
 
     def __init__(self, **kwargs):
+        # Handle backward compatibility for organization_tenant_id
+        if 'organization_tenant_id' in kwargs and 'tenant_id' not in kwargs:
+            kwargs['tenant_id'] = kwargs.pop('organization_tenant_id')
+        
         # Explicitly handle connection_details to ensure it's properly set
         self.connection_details = kwargs.pop('connection_details', None)
         super(CloudSettings, self).__init__(**kwargs)
 
 # Add relationship to Tenant model
 from app.models.user import Tenant
-Tenant.cloud_settings = relationship("CloudSettings", back_populates="organization_tenant")
+Tenant.cloud_settings = relationship("CloudSettings", back_populates="tenant")
