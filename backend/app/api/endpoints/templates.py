@@ -276,10 +276,14 @@ def get_template(
 def create_template(
     template: TemplateCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    tenant_id: Optional[str] = None
 ) -> Any:
     """
     Create a new template
+    
+    If tenant_id is provided, it will be used to create the template in that tenant.
+    Otherwise, the current user's tenant ID will be used.
     """
     # Set up logging for this endpoint
     import logging
@@ -290,6 +294,7 @@ def create_template(
     logger.debug(f"Template type: {template.type}")
     logger.debug(f"Template category: {template.category}")
     logger.debug(f"Template code length: {len(template.code) if template.code else 0}")
+    logger.debug(f"Requested tenant_id: {tenant_id}")
     
     # Check if user has permission to create templates
     has_permission = any(p.name == "create:templates" for p in current_user.role.permissions)
@@ -301,14 +306,28 @@ def create_template(
         )
     
     try:
-        # Get the user's tenant
-        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
-        if not user_tenant and not template.is_public:
-            logger.warning(f"User's tenant not found: {current_user.tenant_id}")
+        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+        template_tenant_id = tenant_id if tenant_id else current_user.tenant_id
+        logger.debug(f"Using tenant_id: {template_tenant_id}")
+        
+        # Get the tenant
+        template_tenant = db.query(Tenant).filter(Tenant.tenant_id == template_tenant_id).first()
+        if not template_tenant and not template.is_public:
+            logger.warning(f"Tenant not found: {template_tenant_id}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User's tenant not found"
+                detail=f"Tenant with ID {template_tenant_id} not found"
             )
+        
+        # Check if user has permission to create for this tenant
+        if template_tenant_id != current_user.tenant_id:
+            # Only admin or MSP users can create for other tenants
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                logger.warning(f"User {current_user.username} not authorized to create templates for tenant {template_tenant_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to create templates for other tenants"
+                )
         
         # Debug: Print the template data
         logger.debug(f"Template data received: {template.dict()}")
@@ -322,9 +341,9 @@ def create_template(
             description=template.description,
             category=template.category,  # Store category as a string
             provider=template.provider,
-            type=template.type,  # Always use the provided type, don't default to terraform
+            type=template.type,  # Always use the provided type
             is_public=template.is_public,
-            tenant_id=None if template.is_public else user_tenant.tenant_id,
+            tenant_id=None if template.is_public else template_tenant.tenant_id,
             code=template.code,  # Store the code directly in the template
             parameters=template.parameters,  # Store parameters
             variables=template.variables,  # Store variables
