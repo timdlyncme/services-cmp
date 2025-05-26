@@ -12,10 +12,9 @@ from pydantic import BaseModel, Field
 from app.db.session import get_db
 from app.api.endpoints.auth import get_current_user
 from app.models.user import User, Tenant
-from app.models.deployment import Deployment, DeploymentHistory, Template, Environment
+from app.models.deployment import Deployment, DeploymentHistory, Template, Environment, CloudAccount
 from app.models.deployment_details import DeploymentDetails
 from app.models.cloud_settings import CloudSettings
-from app.models.cloud_account import CloudAccount
 from app.schemas.deployment import (
     DeploymentResponse, DeploymentCreate, DeploymentUpdate,
     CloudDeploymentResponse
