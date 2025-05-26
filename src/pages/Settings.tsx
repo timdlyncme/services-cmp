@@ -92,7 +92,7 @@ const Settings = () => {
     addLog("Loading Azure credentials...");
     
     try {
-      const credentials = await cmpService.getAzureCredentials(currentTenant.id);
+      const credentials = await cmpService.getAzureCredentials(currentTenant.tenant_id);
       setAzureCredentials(credentials);
       addLog(`Loaded ${credentials.length} Azure credential sets`, "success");
     } catch (error) {
@@ -117,7 +117,7 @@ const Settings = () => {
     addLog(`Creating new Azure credential: ${newCredential.name}...`);
     
     try {
-      await cmpService.createAzureCredential(newCredential, currentTenant.id);
+      await cmpService.createAzureCredential(newCredential, currentTenant.tenant_id);
       addLog(`Created Azure credential: ${newCredential.name}`, "success");
       toast.success("Azure credential created successfully");
       
@@ -152,7 +152,7 @@ const Settings = () => {
     addLog(`Deleting Azure credential: ${credential.name}...`);
     
     try {
-      await cmpService.deleteAzureCredential(credential.id, currentTenant.id);
+      await cmpService.deleteAzureCredential(credential.id, currentTenant.tenant_id);
       addLog(`Deleted Azure credential: ${credential.name}`, "success");
       toast.success("Azure credential deleted successfully");
       
@@ -174,7 +174,7 @@ const Settings = () => {
     addLog(`Testing Azure connection for ${credential.name}...`);
     
     try {
-      const subs = await cmpService.getAzureSubscriptions(credential.id, currentTenant.id);
+      const subs = await cmpService.getAzureSubscriptions(credential.id, currentTenant.tenant_id);
       setSubscriptions(prev => ({ ...prev, [credential.id]: subs }));
       
       addLog(`Connection test successful for ${credential.name}`, "success");
