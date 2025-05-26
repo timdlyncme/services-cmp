@@ -564,36 +564,27 @@ def delete_deployment(
 @app.get("/resources/{resource_id}")
 def get_resource_details(
     resource_id: str,
-    subscription_id: Optional[str] = None,
     user: dict = Depends(get_current_user)
 ):
     """
-    Get details for a specific Azure resource
+    Get details for a specific resource
     
     Args:
-        resource_id: The Azure resource ID or resource name
-        subscription_id: Optional Azure subscription ID
+        resource_id: The resource ID
     """
     try:
-        logger.info(f"Getting details for resource: {resource_id}")
-        
         # Check if Azure credentials are configured
         if not azure_deployer.credential:
-            logger.error("Azure credentials not configured")
-            raise HTTPException(status_code=400, detail="Azure credentials not configured")
+            raise HTTPException(status_code=401, detail="Azure credentials not configured")
         
-        # Set credentials for resource manager
-        azure_resource_manager.set_credentials(
+        # Create resource manager
+        resource_manager = AzureResourceManager(
             credential=azure_deployer.credential,
-            subscription_id=subscription_id or azure_deployer.subscription_id
+            subscription_id=azure_deployer.subscription_id
         )
         
         # Get resource details
-        resource_details = azure_resource_manager.get_resource_details(resource_id)
-        
-        if "error" in resource_details:
-            logger.error(f"Error getting resource details: {resource_details['error']}")
-            raise HTTPException(status_code=500, detail=f"Error getting resource details: {resource_details['error']}")
+        resource_details = resource_manager.get_resource_details(resource_id)
         
         return resource_details
     

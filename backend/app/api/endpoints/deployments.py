@@ -917,10 +917,11 @@ def create_deployment(
         
         # Create deployment details
         db_deployment_details = DeploymentDetails(
-            deployment_id=deployment_id,
-            cloud_settings_id=cloud_settings.settings_id,
-            resource_group=deployment_data["resource_group"],
-            location=deployment_data["location"],
+            deployment_id=db_deployment.id,  # Use the numeric ID, not the UUID
+            provider="azure",
+            deployment_type=template.type.lower(),
+            cloud_region=deployment_data["location"],
+            status="pending",
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
