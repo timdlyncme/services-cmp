@@ -637,20 +637,39 @@ class AzureDeployer:
             dict: Deletion result with status
         """
         if not self.resource_client:
+            logging.error("Azure credentials not configured")
             raise ValueError("Azure credentials not configured")
         
         try:
+            logging.info(f"Deleting resources for deployment {deployment_name} in resource group {resource_group}")
+            
             # Get deployment to find resources
-            deployment = self.resource_client.deployments.get(
-                resource_group_name=resource_group,
-                deployment_name=deployment_name
-            )
+            try:
+                deployment = self.resource_client.deployments.get(
+                    resource_group_name=resource_group,
+                    deployment_name=deployment_name
+                )
+                logging.info(f"Found deployment: {deployment.name}")
+            except Exception as e:
+                logging.error(f"Error getting deployment: {str(e)}")
+                return {
+                    "status": "failed",
+                    "error_details": f"Error getting deployment: {str(e)}"
+                }
             
             # Get deployment operations to find resources
-            operations = list(self.resource_client.deployment_operations.list(
-                resource_group_name=resource_group,
-                deployment_name=deployment_name
-            ))
+            try:
+                operations = list(self.resource_client.deployment_operations.list(
+                    resource_group_name=resource_group,
+                    deployment_name=deployment_name
+                ))
+                logging.info(f"Found {len(operations)} deployment operations")
+            except Exception as e:
+                logging.error(f"Error getting deployment operations: {str(e)}")
+                return {
+                    "status": "failed",
+                    "error_details": f"Error getting deployment operations: {str(e)}"
+                }
             
             # Extract resources
             resources = []
@@ -664,19 +683,30 @@ class AzureDeployer:
                     }
                     resources.append(resource_info)
             
+            logging.info(f"Found {len(resources)} resources to delete")
+            
             # Delete each resource individually
             deleted_resources = []
             for resource in resources:
                 try:
                     # Skip if resource is already deleted
                     if resource["status"] == "Deleted":
+                        logging.info(f"Resource {resource['name']} is already deleted, skipping")
                         continue
+                    
+                    logging.info(f"Deleting resource: {resource['name']} ({resource['type']})")
+                    
+                    # Get the API version for this resource type
+                    api_version = self._get_api_version_for_resource_type(resource["type"])
+                    logging.info(f"Using API version {api_version} for resource type {resource['type']}")
                     
                     # Delete the resource
                     self.resource_client.resources.begin_delete_by_id(
                         resource_id=resource["id"],
-                        api_version=self._get_api_version_for_resource_type(resource["type"])
+                        api_version=api_version
                     )
+                    
+                    logging.info(f"Successfully initiated deletion of resource: {resource['name']}")
                     
                     # Mark as deleted
                     resource["status"] = "Deleting"
@@ -691,6 +721,7 @@ class AzureDeployer:
             }
             
         except Exception as e:
+            logging.error(f"Error in delete_deployment_resources: {str(e)}")
             return {
                 "status": "failed",
                 "error_details": str(e)

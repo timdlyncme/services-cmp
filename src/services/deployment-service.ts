@@ -184,12 +184,16 @@ export class DeploymentService {
         throw new Error('Authentication token not found');
       }
 
-      // Call the deployment engine to delete the resources
-      const response = await api.delete(`/deployments/${deploymentId}/resources`, {
+      console.log(`Deleting resources for deployment: ${deploymentId}`);
+      
+      // Call the backend API to delete the resources
+      const response = await api.delete(`/api/deployments/${deploymentId}/resources`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
+      
+      console.log('Delete resources response:', response.data);
       
       // Update the deployment status to "archived"
       await this.updateDeploymentStatus(deploymentId, "archived");
@@ -211,7 +215,9 @@ export class DeploymentService {
         throw new Error('Authentication token not found');
       }
 
-      const response = await api.put(`/deployments/${deploymentId}/status`, 
+      console.log(`Updating deployment status: ${deploymentId} to ${status}`);
+      
+      const response = await api.put(`/api/deployments/${deploymentId}/status`, 
         { status },
         {
           headers: {
@@ -219,6 +225,8 @@ export class DeploymentService {
           }
         }
       );
+      
+      console.log('Update status response:', response.data);
       
       return response.data;
     } catch (error) {

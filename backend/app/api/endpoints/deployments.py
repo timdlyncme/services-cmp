@@ -1242,23 +1242,23 @@ def list_azure_subscriptions(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.put("/engine/{deployment_id}/status", response_model=Dict[str, Any])
+@router.put("/{deployment_id}/status", response_model=Dict[str, Any])
 def update_deployment_status(
     deployment_id: str,
-    update_data: Dict[str, Any],
+    status_data: Dict[str, str],
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Update deployment status from the deployment engine
+    Update the status of a deployment
     """
     # Set up logging for this endpoint
     import logging
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
     
-    logger.debug(f"Received status update for deployment {deployment_id}")
-    logger.debug(f"Update data: {json.dumps(update_data, default=str)}")
+    logger.debug(f"Received request to update status for deployment {deployment_id}")
+    logger.debug(f"Status data: {status_data}")
     logger.debug(f"User: {current_user.username} (ID: {current_user.id})")
     
     # Check if user has permission to update deployments
@@ -1273,7 +1273,7 @@ def update_deployment_status(
         )
     
     try:
-        # Find the deployment
+        # Get the deployment
         logger.debug(f"Looking for deployment with ID: {deployment_id}")
         deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
         
@@ -1281,77 +1281,47 @@ def update_deployment_status(
             logger.warning(f"Deployment not found: {deployment_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Deployment not found"
+                detail=f"Deployment with ID {deployment_id} not found"
             )
         
         logger.debug(f"Found deployment: {deployment.name} (ID: {deployment.id}, DB ID: {deployment.deployment_id})")
         
-        # Get or create deployment details
-        logger.debug(f"Looking for deployment details for deployment ID: {deployment.id}")
-        deployment_details = db.query(DeploymentDetails).filter(
-            DeploymentDetails.deployment_id == deployment.id
-        ).first()
+        # Check if user has access to this deployment's tenant
+        if deployment.tenant_id != current_user.tenant_id:
+            # Admin users can update all deployments
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                logger.warning(f"User {current_user.username} is not authorized to update this deployment")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to update this deployment"
+                )
         
-        if not deployment_details:
-            logger.debug(f"Creating new deployment details for deployment ID: {deployment.id}")
-            deployment_details = DeploymentDetails(
-                deployment_id=deployment.id,
-                provider="azure",
-                deployment_type=deployment.deployment_type if hasattr(deployment, 'deployment_type') else "arm",
-                cloud_deployment_id=deployment.cloud_deployment_id if hasattr(deployment, 'cloud_deployment_id') else None,
-                cloud_region=deployment.region,
-                status="in_progress"
+        # Update the deployment status
+        new_status = status_data.get("status")
+        if not new_status:
+            logger.warning("No status provided in request")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Status is required"
             )
-            db.add(deployment_details)
-            logger.debug(f"Added new deployment details to session")
-        else:
-            logger.debug(f"Found existing deployment details: {deployment_details.id}")
         
-        # Update deployment status
-        status_value = update_data.get("status")
-        if status_value:
-            logger.debug(f"Updating status to: {status_value}")
-            deployment.status = status_value
-            deployment_details.status = status_value
-            
-            # If deployment is complete, update completed_at
-            if status_value in ["succeeded", "failed", "canceled"]:
-                logger.debug(f"Deployment is complete with status: {status_value}, updating completed_at")
-                deployment_details.completed_at = datetime.utcnow()
-        
-        # Update resources
-        resources = update_data.get("resources")
-        if resources:
-            logger.debug(f"Updating resources: {len(resources)} resources")
-            deployment_details.cloud_resources = resources
-        
-        # Update outputs
-        outputs = update_data.get("outputs")
-        if outputs:
-            logger.debug(f"Updating outputs: {len(outputs)} outputs")
-            deployment_details.outputs = outputs
-        
-        # Update logs
-        logs = update_data.get("logs")
-        if logs:
-            logger.debug(f"Updating logs: {len(logs)} log entries")
-            deployment_details.logs = logs
+        logger.debug(f"Updating deployment status from '{deployment.status}' to '{new_status}'")
+        deployment.status = new_status
         
         # Add to deployment history
-        logger.debug(f"Creating history entry for status: {status_value}")
+        logger.debug(f"Creating history entry for status update")
         history_entry = DeploymentHistory(
             deployment_id=deployment.id,
-            status=status_value,
-            message=f"Deployment status updated to {status_value}",
+            status=new_status,
+            message=f"Deployment status updated to {new_status}",
             details={
-                "resources": resources,
-                "outputs": outputs,
-                "logs": logs
+                "action": "update_status",
+                "user_id": current_user.id,
+                "timestamp": datetime.utcnow().isoformat()
             },
             user_id=current_user.id
         )
         db.add(history_entry)
-        logger.debug(f"Added history entry to session")
         
         # Commit changes
         logger.debug("Committing changes to database")
@@ -1367,9 +1337,11 @@ def update_deployment_status(
         return {
             "message": "Deployment status updated successfully",
             "deployment_id": deployment_id,
-            "status": status_value
+            "status": new_status
         }
     
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating deployment status: {str(e)}", exc_info=True)
         db.rollback()
@@ -1452,9 +1424,20 @@ def delete_deployment_resources(
     """
     Delete the resources of a deployment but keep the deployment record
     """
+    # Set up logging for this endpoint
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    
+    logger.debug(f"Received request to delete resources for deployment {deployment_id}")
+    logger.debug(f"User: {current_user.username} (ID: {current_user.id})")
+    
     # Check if user has permission to delete deployments
     has_permission = any(p.name == "delete:deployments" for p in current_user.role.permissions)
+    logger.debug(f"User has delete:deployments permission: {has_permission}")
+    
     if not has_permission:
+        logger.warning(f"User {current_user.username} does not have permission to delete deployments")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -1462,18 +1445,23 @@ def delete_deployment_resources(
     
     try:
         # First, get the deployment to check if it exists and if the user has access
+        logger.debug(f"Looking for deployment with ID: {deployment_id}")
         deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
         
         if not deployment:
+            logger.warning(f"Deployment not found: {deployment_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Deployment with ID {deployment_id} not found"
             )
         
+        logger.debug(f"Found deployment: {deployment.name} (ID: {deployment.id}, DB ID: {deployment.deployment_id})")
+        
         # Check if user has access to this deployment's tenant
         if deployment.tenant_id != current_user.tenant_id:
             # Admin users can delete all deployments
             if current_user.role.name != "admin" and current_user.role.name != "msp":
+                logger.warning(f"User {current_user.username} is not authorized to delete this deployment")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to delete this deployment"
@@ -1484,34 +1472,46 @@ def delete_deployment_resources(
         
         try:
             # Call the deployment engine to delete the resources
+            logger.debug(f"Calling deployment engine to delete resources: {DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}/resources")
             response = requests.delete(
                 f"{DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}/resources",
                 headers=headers
             )
             
+            logger.debug(f"Deployment engine response status: {response.status_code}")
+            logger.debug(f"Deployment engine response: {response.text}")
+            
             if response.status_code != 200:
+                logger.error(f"Error from deployment engine: {response.text}")
                 raise HTTPException(
                     status_code=response.status_code,
                     detail=f"Error deleting deployment resources: {response.text}"
                 )
             
             # Update deployment status to "archived"
+            logger.debug(f"Updating deployment status to 'archived'")
             deployment.status = "archived"
             
             # Get deployment details
+            logger.debug(f"Looking for deployment details for deployment ID: {deployment.id}")
             deployment_details = db.query(DeploymentDetails).filter(
                 DeploymentDetails.deployment_id == deployment.id
             ).first()
             
             if deployment_details:
+                logger.debug(f"Found deployment details: {deployment_details.id}")
                 # Update resources status to "Deleted"
                 if deployment_details.cloud_resources:
+                    logger.debug(f"Updating {len(deployment_details.cloud_resources)} resources to 'Deleted' status")
                     for resource in deployment_details.cloud_resources:
                         resource["status"] = "Deleted"
                     
                     deployment_details.cloud_resources = deployment_details.cloud_resources
+            else:
+                logger.warning(f"No deployment details found for deployment ID: {deployment.id}")
             
             # Add to deployment history
+            logger.debug(f"Creating history entry for archived deployment")
             history_entry = DeploymentHistory(
                 deployment_id=deployment.id,
                 status="archived",
@@ -1526,8 +1526,16 @@ def delete_deployment_resources(
             db.add(history_entry)
             
             # Commit changes
-            db.commit()
+            logger.debug("Committing changes to database")
+            try:
+                db.commit()
+                logger.debug("Successfully committed changes to database")
+            except Exception as commit_error:
+                logger.error(f"Error committing to database: {str(commit_error)}")
+                db.rollback()
+                raise commit_error
             
+            logger.debug(f"Resource deletion for deployment {deployment_id} completed successfully")
             return {
                 "message": "Deployment resources deleted successfully",
                 "deployment_id": deployment_id,
@@ -1535,6 +1543,7 @@ def delete_deployment_resources(
             }
             
         except requests.RequestException as e:
+            logger.error(f"Error communicating with deployment engine: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error communicating with deployment engine: {str(e)}"
@@ -1543,6 +1552,7 @@ def delete_deployment_resources(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error deleting deployment resources: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -595,12 +595,17 @@ def delete_deployment_resources(
     try:
         # Check if deployment exists
         if deployment_id not in deployments:
+            logger.error(f"Deployment {deployment_id} not found")
             raise HTTPException(status_code=404, detail="Deployment not found")
         
         # Check if user has access to this deployment
         deployment = deployments[deployment_id]
         if deployment["tenant_id"] != user["tenant_id"]:
+            logger.error(f"User {user['username']} does not have access to deployment {deployment_id}")
             raise HTTPException(status_code=403, detail="Access denied")
+        
+        logger.info(f"Deleting resources for deployment {deployment_id}")
+        logger.info(f"Resource group: {deployment.get('resource_group')}, Azure deployment ID: {deployment.get('azure_deployment_id')}")
         
         # Delete resources from Azure but keep the deployment record
         result = azure_deployer.delete_deployment_resources(
@@ -608,12 +613,15 @@ def delete_deployment_resources(
             deployment_name=deployment["azure_deployment_id"]
         )
         
+        logger.info(f"Resource deletion result: {result}")
+        
         # Update deployment status
         deployment["status"] = "archived"
         deployment["updated_at"] = datetime.utcnow().isoformat()
         
         # Update resources status
         if "resources" in deployment:
+            logger.info(f"Updating status for {len(deployment['resources'])} resources")
             for resource in deployment["resources"]:
                 resource["status"] = "Deleted"
         
@@ -623,7 +631,7 @@ def delete_deployment_resources(
             "message": result.get("message", "Deployment resources deleted successfully")
         }
     except Exception as e:
-        logger.error(f"Error deleting deployment resources: {str(e)}")
+        logger.error(f"Error deleting deployment resources: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

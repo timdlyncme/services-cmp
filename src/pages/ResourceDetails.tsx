@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,6 +48,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 
 const ResourceDetails = () => {
   const { deploymentId, resourceId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const [resource, setResource] = useState<CloudResource | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,20 +65,32 @@ const ResourceDetails = () => {
   useEffect(() => {
     const fetchResource = async () => {
       try {
-        if (!deploymentId || !resourceId) return;
+        // Get the resource ID from the URL
+        let actualResourceId = resourceId;
         
-        // Extract the resource name from the full resource ID if it's a long format
-        const resourceName = resourceId.includes('/') 
-          ? resourceId.split('/').pop() 
-          : resourceId;
+        // If we're on the /resources/:resourceId route, the resourceId might be the full path
+        // We'll use it as is since our backend should handle the full resource ID
+        console.log("Current path:", location.pathname);
+        console.log("Resource ID from params:", resourceId);
         
-        console.log("Resource ID:", resourceId);
+        if (!actualResourceId) {
+          toast.error("Resource ID is missing");
+          setLoading(false);
+          return;
+        }
+        
+        // Extract the resource name for display purposes
+        const resourceName = actualResourceId.includes('/') 
+          ? actualResourceId.split('/').pop() 
+          : actualResourceId;
+        
+        console.log("Resource ID:", actualResourceId);
         console.log("Extracted resource name:", resourceName);
         
         // In a real app, we would fetch the resource from the API using the full resource ID
         // For now, we'll create a mock resource
         const mockResource: CloudResource = {
-          id: resourceId, // Keep the full resource ID
+          id: actualResourceId, // Keep the full resource ID
           name: resourceName || "vm-app-server",
           type: "Microsoft.Compute/virtualMachines",
           location: "eastus",
@@ -137,7 +150,7 @@ const ResourceDetails = () => {
     };
     
     fetchResource();
-  }, [deploymentId, resourceId]);
+  }, [deploymentId, resourceId, location.pathname]);
   
   const handleAction = (action: string) => {
     toast.success(`${action} action initiated`);
