@@ -1415,37 +1415,18 @@ def get_deployment_logs(
         )
 
 
-@router.delete("/{deployment_id}/resources", response_model=Dict[str, Any])
+@router.delete("/{deployment_id}/resources", response_model=dict)
 def delete_deployment_resources(
-    deployment_id: str,
+    *,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-) -> Any:
+    deployment_id: str = Path(..., title="The ID of the deployment to delete resources for")
+):
     """
-    Delete the resources of a deployment but keep the deployment record
+    Delete deployment resources but keep the deployment record
     """
-    # Set up logging for this endpoint
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-    
-    logger.debug(f"Received request to delete resources for deployment {deployment_id}")
-    logger.debug(f"User: {current_user.username} (ID: {current_user.id})")
-    
-    # Check if user has permission to delete deployments
-    has_permission = any(p.name == "delete:deployments" for p in current_user.role.permissions)
-    logger.debug(f"User has delete:deployments permission: {has_permission}")
-    
-    if not has_permission:
-        logger.warning(f"User {current_user.username} does not have permission to delete deployments")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
     try:
-        # First, get the deployment to check if it exists and if the user has access
-        logger.debug(f"Looking for deployment with ID: {deployment_id}")
+        # Get the deployment
         deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
         
         if not deployment:
@@ -1460,18 +1441,20 @@ def delete_deployment_resources(
         # Check if user has access to this deployment's tenant
         if deployment.tenant_id != current_user.tenant_id:
             # Admin users can delete all deployments
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
-                logger.warning(f"User {current_user.username} is not authorized to delete this deployment")
+            if not current_user.is_admin:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to delete this deployment"
+                    detail="Not enough permissions"
                 )
         
-        # Forward request to deployment engine to delete the resources
-        headers = {"Authorization": f"Bearer {current_user.access_token}"}
-        
+        # Call deployment engine to delete resources
         try:
-            # Call the deployment engine to delete the resources
+            headers = {"Authorization": f"Bearer {current_user.access_token}"}
+            
+            # Log all possible IDs for debugging
+            logger.debug(f"Deployment IDs - deployment_id: {deployment_id}, DB ID: {deployment.id}, cloud_deployment_id: {deployment.cloud_deployment_id}")
+            
+            # Try with the deployment_id first (UUID from database)
             logger.debug(f"Calling deployment engine to delete resources: {DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}/resources")
             response = requests.delete(
                 f"{DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}/resources",
@@ -1483,17 +1466,35 @@ def delete_deployment_resources(
             
             if response.status_code != 200:
                 logger.error(f"Error from deployment engine: {response.text}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Error deleting deployment resources: {response.text}"
-                )
+                
+                # If the deployment was not found, try with the cloud_deployment_id
+                if response.status_code == 404 and deployment.cloud_deployment_id:
+                    logger.debug(f"Trying with cloud_deployment_id: {deployment.cloud_deployment_id}")
+                    response = requests.delete(
+                        f"{DEPLOYMENT_ENGINE_URL}/deployments/{deployment.cloud_deployment_id}/resources",
+                        headers=headers
+                    )
+                    
+                    logger.debug(f"Deployment engine response status (with cloud_deployment_id): {response.status_code}")
+                    logger.debug(f"Deployment engine response (with cloud_deployment_id): {response.text}")
+                    
+                    if response.status_code != 200:
+                        logger.error(f"Error from deployment engine with cloud_deployment_id: {response.text}")
+                        raise HTTPException(
+                            status_code=response.status_code,
+                            detail=f"Error from deployment engine: {response.text}"
+                        )
+                else:
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"Error from deployment engine: {response.text}"
+                    )
             
             # Update deployment status to "archived"
-            logger.debug(f"Updating deployment status to 'archived'")
             deployment.status = "archived"
+            db.commit()
             
-            # Get deployment details
-            logger.debug(f"Looking for deployment details for deployment ID: {deployment.id}")
+            # Update deployment details if they exist
             deployment_details = db.query(DeploymentDetails).filter(
                 DeploymentDetails.deployment_id == deployment.id
             ).first()
@@ -1506,54 +1507,33 @@ def delete_deployment_resources(
                     for resource in deployment_details.cloud_resources:
                         resource["status"] = "Deleted"
                     
-                    deployment_details.cloud_resources = deployment_details.cloud_resources
-            else:
-                logger.warning(f"No deployment details found for deployment ID: {deployment.id}")
+                    # Save the updated resources
+                    db.commit()
             
-            # Add to deployment history
-            logger.debug(f"Creating history entry for archived deployment")
+            # Add a history entry
             history_entry = DeploymentHistory(
                 deployment_id=deployment.id,
                 status="archived",
-                message="Deployment resources deleted and deployment archived",
-                details={
-                    "action": "delete_resources",
-                    "user_id": current_user.id,
-                    "timestamp": datetime.utcnow().isoformat()
-                },
+                message="Deployment resources deleted",
+                details={"action": "delete_resources"},
                 user_id=current_user.id
             )
             db.add(history_entry)
+            db.commit()
             
-            # Commit changes
-            logger.debug("Committing changes to database")
-            try:
-                db.commit()
-                logger.debug("Successfully committed changes to database")
-            except Exception as commit_error:
-                logger.error(f"Error committing to database: {str(commit_error)}")
-                db.rollback()
-                raise commit_error
-            
-            logger.debug(f"Resource deletion for deployment {deployment_id} completed successfully")
-            return {
-                "message": "Deployment resources deleted successfully",
-                "deployment_id": deployment_id,
-                "status": "archived"
-            }
+            return {"status": "success", "message": "Deployment resources deleted successfully"}
             
         except requests.RequestException as e:
-            logger.error(f"Error communicating with deployment engine: {str(e)}", exc_info=True)
+            logger.error(f"Error calling deployment engine: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error communicating with deployment engine: {str(e)}"
+                detail=f"Error calling deployment engine: {str(e)}"
             )
     
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error deleting deployment resources: {str(e)}", exc_info=True)
-        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting deployment resources: {str(e)}"
