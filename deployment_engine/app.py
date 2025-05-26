@@ -342,9 +342,9 @@ def create_deployment(
         tenant_id = deployment.get("tenant_id")
         subscription_id = deployment.get("subscription_id")
         
-        logger.info(f"Credentials provided: client_id={client_id is not None}, client_secret={client_secret is not None}, tenant_id={tenant_id is not None}, subscription_id={subscription_id is not None}")
+        logger.info(f"Credentials provided: client_id={bool(client_id)}, client_secret={bool(client_secret)}, tenant_id={bool(tenant_id)}, subscription_id={bool(subscription_id)}")
         
-        # Set Azure credentials if provided
+        # Set Azure credentials from deployment request
         if client_id and client_secret and tenant_id:
             logger.info("Setting Azure credentials from deployment request")
             azure_deployer.set_credentials(
@@ -355,6 +355,7 @@ def create_deployment(
             )
         else:
             logger.error(f"Missing required credentials: client_id={bool(client_id)}, client_secret={bool(client_secret)}, tenant_id={bool(tenant_id)}")
+            raise ValueError("Missing required Azure credentials")
         
         # Check if Azure credentials are configured
         cred_status = azure_deployer.get_credential_status()

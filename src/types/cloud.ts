@@ -62,7 +62,34 @@ export interface CloudResource {
   id: string;
   name: string;
   type: string;
+  location: string;
   status: string;
+  properties: {
+    vmSize?: string;
+    osType?: string;
+    adminUsername?: string;
+    networkProfile?: {
+      networkInterfaces: Array<{
+        id: string;
+      }>;
+    };
+    storageProfile?: {
+      osDisk: {
+        name: string;
+        createOption: string;
+        diskSizeGB: number;
+      };
+      dataDisks: Array<{
+        name: string;
+        diskSizeGB: number;
+        lun: number;
+      }>;
+    };
+    [key: string]: any;
+  };
+  tags: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DeploymentLog {
