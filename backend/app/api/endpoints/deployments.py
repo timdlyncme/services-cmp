@@ -810,6 +810,7 @@ def create_deployment(
             # Map to new format
             deployment_data = {
                 "name": deployment_data["name"],
+                "description": deployment_data.get("description", ""),
                 "template_id": template.template_id,
                 "environment": environment.name,
                 "resource_group": resource_group,
@@ -826,6 +827,14 @@ def create_deployment(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Missing required field: {field}"
                     )
+            
+            # For new format, we need to get the environment by name
+            environment = db.query(Environment).filter(Environment.name == deployment_data["environment"]).first()
+            if not environment:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Environment with name {deployment_data['environment']} not found"
+                )
         
         # Get template
         template = db.query(Template).filter(Template.template_id == deployment_data["template_id"]).first()
@@ -893,17 +902,14 @@ def create_deployment(
         db_deployment = Deployment(
             deployment_id=deployment_id,
             name=deployment_data["name"],
-            template_id=template.id,  # Use the template's numeric ID for the database relationship
-            provider=template.provider,
+            description=deployment_data.get("description", ""),
             status="pending",
-            environment=deployment_data["environment"],
+            template_id=template.id,  # Use the template's numeric ID for the database relationship
+            environment_id=environment.id if is_old_format else None,  # Set environment_id if using old format
             tenant_id=current_user.tenant_id,
-            parameters=json.dumps(deployment_data.get("parameters", {})),
-            resources=json.dumps([]),
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
-            deployment_type=template.type.lower(),  # Set deployment_type based on template type
-            created_by_id=current_user.id
+            created_by_id=current_user.id,
+            parameters=deployment_data.get("parameters", {}),
+            deployment_type=template.type.lower()  # Set deployment_type based on template type
         )
         
         db.add(db_deployment)
@@ -975,7 +981,8 @@ def create_deployment(
                 "updatedAt": db_deployment.updated_at.isoformat(),
                 "parameters": deployment_data.get("parameters", {}),
                 "resources": [],
-                "tenantId": current_user.tenant_id
+                "tenantId": current_user.tenant_id,
+                "region": deployment_data.get("location")
             }
         
         except Exception as e:
