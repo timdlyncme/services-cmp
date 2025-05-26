@@ -731,12 +731,14 @@ def get_deployment(
 
 @router.post("/")
 def create_deployment(
-    deployment_data: DeploymentCreate,
+    deployment_data: Dict[str, Any] = Body(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
     Create a new deployment
+    
+    This endpoint supports both the old and new deployment formats
     """
     # Check if user has permission to create deployments
     has_permission = any(p.name == "create:deployments" for p in current_user.role.permissions)
@@ -747,23 +749,101 @@ def create_deployment(
         )
     
     try:
+        # Determine if we're using the old or new format based on the presence of certain fields
+        is_old_format = "environment_id" in deployment_data and "deployment_type" in deployment_data
+        
+        if is_old_format:
+            # Handle old format
+            # Get template
+            template = db.query(Template).filter(Template.template_id == deployment_data["template_id"]).first()
+            if not template:
+                # Try to find the template by ID as a fallback
+                template = db.query(Template).filter(Template.id == deployment_data["template_id"]).first()
+                if not template:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Template with ID {deployment_data['template_id']} not found"
+                    )
+            
+            # Get environment
+            environment = db.query(Environment).filter(Environment.id == deployment_data["environment_id"]).first()
+            if not environment:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Environment with ID {deployment_data['environment_id']} not found"
+                )
+            
+            # Get cloud account for the environment
+            cloud_account = None
+            if environment.cloud_accounts:
+                # Get the first cloud account associated with this environment
+                cloud_account = environment.cloud_accounts[0]
+            
+            # Get cloud settings if available
+            cloud_settings = None
+            if cloud_account and cloud_account.settings_id:
+                cloud_settings = db.query(CloudSettings).filter(
+                    CloudSettings.id == cloud_account.settings_id
+                ).first()
+            
+            if not cloud_settings:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No cloud settings found for this environment"
+                )
+            
+            # Determine location/region from parameters or use default
+            location = "eastus"  # Default location
+            if deployment_data.get("parameters"):
+                if "location" in deployment_data["parameters"]:
+                    location = deployment_data["parameters"]["location"]
+                elif "region" in deployment_data["parameters"]:
+                    location = deployment_data["parameters"]["region"]
+            
+            # Create sanitized resource group name
+            sanitized_name = deployment_data["name"].lower().replace(' ', '-')
+            # Remove any other special characters
+            import re
+            sanitized_name = re.sub(r'[^a-z0-9\-]', '', sanitized_name)
+            resource_group = f"rg-{sanitized_name}"
+            
+            # Map to new format
+            deployment_data = {
+                "name": deployment_data["name"],
+                "template_id": template.template_id,
+                "environment": environment.name,
+                "resource_group": resource_group,
+                "location": location,
+                "cloud_settings_id": cloud_settings.settings_id,
+                "parameters": deployment_data.get("parameters", {})
+            }
+        else:
+            # New format - validate required fields
+            required_fields = ["name", "template_id", "environment", "resource_group", "location", "cloud_settings_id"]
+            for field in required_fields:
+                if field not in deployment_data:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Missing required field: {field}"
+                    )
+        
         # Get template
-        template = db.query(Template).filter(Template.template_id == deployment_data.template_id).first()
+        template = db.query(Template).filter(Template.template_id == deployment_data["template_id"]).first()
         if not template:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Template with ID {deployment_data.template_id} not found"
+                detail=f"Template with ID {deployment_data['template_id']} not found"
             )
         
         # Get cloud settings
         cloud_settings = db.query(CloudSettings).filter(
-            CloudSettings.settings_id == deployment_data.cloud_settings_id
+            CloudSettings.settings_id == deployment_data["cloud_settings_id"]
         ).first()
         
         if not cloud_settings:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Cloud settings with ID {deployment_data.cloud_settings_id} not found"
+                detail=f"Cloud settings with ID {deployment_data['cloud_settings_id']} not found"
             )
         
         # Check if user has access to these cloud settings
@@ -812,14 +892,14 @@ def create_deployment(
         # Create deployment in database
         db_deployment = Deployment(
             deployment_id=deployment_id,
-            name=deployment_data.name,
+            name=deployment_data["name"],
             template_id=template.template_id,
             template_name=template.name,
             provider=template.provider,
             status="pending",
-            environment=deployment_data.environment,
+            environment=deployment_data["environment"],
             tenant_id=current_user.tenant_id,
-            parameters=json.dumps(deployment_data.parameters),
+            parameters=json.dumps(deployment_data.get("parameters", {})),
             resources=json.dumps([]),
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
@@ -832,8 +912,8 @@ def create_deployment(
         db_deployment_details = DeploymentDetails(
             deployment_id=deployment_id,
             cloud_settings_id=cloud_settings.settings_id,
-            resource_group=deployment_data.resource_group,
-            location=deployment_data.location,
+            resource_group=deployment_data["resource_group"],
+            location=deployment_data["location"],
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -846,12 +926,12 @@ def create_deployment(
             # Prepare request data for deployment engine
             deployment_engine_data = {
                 "deployment_id": deployment_id,
-                "name": deployment_data.name,
+                "name": deployment_data["name"],
                 "type": template.type,
-                "resource_group": deployment_data.resource_group,
-                "location": deployment_data.location,
+                "resource_group": deployment_data["resource_group"],
+                "location": deployment_data["location"],
                 "template_code": template.code,
-                "parameters": deployment_data.parameters,
+                "parameters": deployment_data.get("parameters", {}),
                 "credentials": {
                     "client_id": client_id,
                     "client_secret": client_secret,
@@ -884,15 +964,15 @@ def create_deployment(
             # Return deployment details
             return {
                 "id": deployment_id,
-                "name": deployment_data.name,
+                "name": deployment_data["name"],
                 "templateId": template.template_id,
                 "templateName": template.name,
                 "provider": template.provider,
                 "status": "deploying",
-                "environment": deployment_data.environment,
+                "environment": deployment_data["environment"],
                 "createdAt": db_deployment.created_at.isoformat(),
                 "updatedAt": db_deployment.updated_at.isoformat(),
-                "parameters": deployment_data.parameters,
+                "parameters": deployment_data.get("parameters", {}),
                 "resources": [],
                 "tenantId": current_user.tenant_id
             }
