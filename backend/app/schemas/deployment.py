@@ -137,7 +137,6 @@ class TemplateVersionCreate(BaseModel):
     code: str
     commit_message: Optional[str] = None
 
-
 class TemplateVersionResponse(BaseModel):
     id: int
     version: str
