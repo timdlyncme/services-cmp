@@ -295,8 +295,7 @@ const TemplateDetails = () => {
       ...parameters,
       [newKey]: {
         value: "",
-        type: "string",
-        description: ""
+        type: "string"
       }
     });
   };
@@ -338,8 +337,7 @@ const TemplateDetails = () => {
       ...variables,
       [newKey]: {
         value: "",
-        type: "string",
-        description: ""
+        type: "string"
       }
     });
   };
