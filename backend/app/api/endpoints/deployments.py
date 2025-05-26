@@ -893,8 +893,7 @@ def create_deployment(
         db_deployment = Deployment(
             deployment_id=deployment_id,
             name=deployment_data["name"],
-            template_id=template.template_id,
-            template_name=template.name,
+            template_id=template.id,  # Use the template's numeric ID for the database relationship
             provider=template.provider,
             status="pending",
             environment=deployment_data["environment"],
@@ -902,7 +901,9 @@ def create_deployment(
             parameters=json.dumps(deployment_data.get("parameters", {})),
             resources=json.dumps([]),
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
+            deployment_type=template.type.lower(),  # Set deployment_type based on template type
+            created_by_id=current_user.id
         )
         
         db.add(db_deployment)
