@@ -220,42 +220,50 @@ const DeploymentDetails = () => {
         try {
           console.log("Starting resource deletion process");
           
-          // In a real app, we would call the API to delete the deployment resources
-          if (deployment && deployment.deployment_id) {
-            console.log(`Calling deleteDeploymentResources for deployment: ${deployment.deployment_id}`);
-            
-            // Call the deployment service to delete the resources
-            const result = await deploymentService.deleteDeploymentResources(deployment.deployment_id);
-            console.log("Delete resources result:", result);
-            
-            // Update the deployment status to "archived"
-            const updatedDeployment = {
-              ...deployment,
-              status: "archived"
-            };
-            setDeployment(updatedDeployment);
-            
-            // Update the resources status to "Deleted"
-            if (updatedDeployment.resources) {
-              console.log(`Updating status for ${updatedDeployment.resources.length} resources`);
-              const updatedResources = updatedDeployment.resources.map(resource => ({
-                ...resource,
-                status: "Deleted"
-              }));
-              updatedDeployment.resources = updatedResources;
-            }
-            
-            // Add to logs
-            const newLog = `${new Date().toISOString()} [INFO] Deployment resources deleted successfully`;
-            const archiveLog = `${new Date().toISOString()} [INFO] Deployment marked as archived`;
-            setLogs([...logs, newLog, archiveLog]);
-            
-            setStatusMessage("Deployment resources deleted and marked as archived");
-            toast.success("Deployment resources deleted successfully");
-          } else {
-            console.error("Deployment or deployment_id is missing");
-            toast.error("Failed to delete deployment resources: Missing deployment information");
+          // Check if deployment and deployment_id exist
+          if (!deployment) {
+            console.error("Deployment object is missing");
+            toast.error("Failed to delete deployment resources: Deployment object is missing");
+            return;
           }
+          
+          const deploymentId = deployment.deployment_id;
+          if (!deploymentId) {
+            console.error("Deployment ID is missing");
+            toast.error("Failed to delete deployment resources: Deployment ID is missing");
+            return;
+          }
+          
+          console.log(`Calling deleteDeploymentResources for deployment: ${deploymentId}`);
+          
+          // Call the deployment service to delete the resources
+          const result = await deploymentService.deleteDeploymentResources(deploymentId);
+          console.log("Delete resources result:", result);
+          
+          // Update the deployment status to "archived"
+          const updatedDeployment = {
+            ...deployment,
+            status: "archived"
+          };
+          setDeployment(updatedDeployment);
+          
+          // Update the resources status to "Deleted"
+          if (updatedDeployment.resources) {
+            console.log(`Updating status for ${updatedDeployment.resources.length} resources`);
+            const updatedResources = updatedDeployment.resources.map(resource => ({
+              ...resource,
+              status: "Deleted"
+            }));
+            updatedDeployment.resources = updatedResources;
+          }
+          
+          // Add to logs
+          const newLog = `${new Date().toISOString()} [INFO] Deployment resources deleted successfully`;
+          const archiveLog = `${new Date().toISOString()} [INFO] Deployment marked as archived`;
+          setLogs([...logs, newLog, archiveLog]);
+          
+          setStatusMessage("Deployment resources deleted and marked as archived");
+          toast.success("Deployment resources deleted successfully");
         } catch (error) {
           console.error("Error deleting deployment resources:", error);
           toast.error("Failed to delete deployment resources");
@@ -267,10 +275,12 @@ const DeploymentDetails = () => {
           setStatusMessage("Failed to delete deployment resources");
           
           // Revert deployment status
-          setDeployment({
-            ...deployment!,
-            status: "failed"
-          });
+          if (deployment) {
+            setDeployment({
+              ...deployment,
+              status: "failed"
+            });
+          }
         }
       };
       
@@ -497,7 +507,7 @@ const DeploymentDetails = () => {
                               </TableCell>
                               <TableCell>
                                 <Button variant="ghost" size="sm" asChild>
-                                  <Link to={`/resources/${resource.id}`}>
+                                  <Link to={`/resources/${encodeURIComponent(resource.id)}`}>
                                     <ChevronRight className="h-4 w-4" />
                                   </Link>
                                 </Button>

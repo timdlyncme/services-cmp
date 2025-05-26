@@ -2,7 +2,7 @@ import axios from 'axios';
 import { CloudDeployment, CloudAccount, CloudTemplate, DeploymentLog } from '@/types/cloud';
 
 // API base URL
-const API_URL = 'http://localhost:8000/api';
+const API_URL = 'http://localhost:8000';
 
 // Create axios instance with default config
 const api = axios.create({
@@ -40,7 +40,7 @@ export class DeploymentService {
         return [];
       }
 
-      const response = await api.get('/deployments', {
+      const response = await api.get('/api/deployments', {
         headers: {
           Authorization: `Bearer ${token}`
         },
@@ -65,7 +65,7 @@ export class DeploymentService {
         return null;
       }
 
-      const response = await api.get(`/deployments/${deploymentId}`, {
+      const response = await api.get(`/api/deployments/${deploymentId}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -87,7 +87,7 @@ export class DeploymentService {
         return [];
       }
 
-      const response = await api.get(`/deployments/${deploymentId}/logs`, {
+      const response = await api.get(`/api/deployments/${deploymentId}/logs`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -109,7 +109,7 @@ export class DeploymentService {
         return [];
       }
 
-      const response = await api.get('/cloud-accounts', {
+      const response = await api.get('/api/cloud-accounts', {
         headers: {
           Authorization: `Bearer ${token}`
         },
@@ -134,7 +134,7 @@ export class DeploymentService {
         return [];
       }
 
-      const response = await api.get('/templates', {
+      const response = await api.get('/api/templates', {
         headers: {
           Authorization: `Bearer ${token}`
         },
@@ -159,7 +159,7 @@ export class DeploymentService {
         throw new Error('Authentication token not found');
       }
 
-      const response = await api.post('/deployments', deploymentData, {
+      const response = await api.post('/api/deployments', deploymentData, {
         headers: {
           Authorization: `Bearer ${token}`
         },
@@ -179,8 +179,14 @@ export class DeploymentService {
    */
   async deleteDeploymentResources(deploymentId: string): Promise<any> {
     try {
+      if (!deploymentId) {
+        console.error('Deployment ID is required');
+        throw new Error('Deployment ID is required');
+      }
+
       const token = localStorage.getItem('token');
       if (!token) {
+        console.error('Authentication token not found');
         throw new Error('Authentication token not found');
       }
 
@@ -210,8 +216,14 @@ export class DeploymentService {
    */
   async updateDeploymentStatus(deploymentId: string, status: string): Promise<any> {
     try {
+      if (!deploymentId) {
+        console.error('Deployment ID is required');
+        throw new Error('Deployment ID is required');
+      }
+
       const token = localStorage.getItem('token');
       if (!token) {
+        console.error('Authentication token not found');
         throw new Error('Authentication token not found');
       }
 

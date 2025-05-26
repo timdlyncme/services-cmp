@@ -71,7 +71,7 @@ const ResourceDetails = () => {
         // If we're on the /resources/:resourceId route, the resourceId might be the full path
         // We'll use it as is since our backend should handle the full resource ID
         console.log("Current path:", location.pathname);
-        console.log("Resource ID from params:", resourceId);
+        console.log("Resource ID from params (encoded):", resourceId);
         
         if (!actualResourceId) {
           toast.error("Resource ID is missing");
@@ -79,12 +79,21 @@ const ResourceDetails = () => {
           return;
         }
         
+        // Decode the resource ID if it's encoded
+        try {
+          actualResourceId = decodeURIComponent(actualResourceId);
+          console.log("Decoded resource ID:", actualResourceId);
+        } catch (e) {
+          console.warn("Resource ID was not URL-encoded:", e);
+          // Continue with the original ID if decoding fails
+        }
+        
         // Extract the resource name for display purposes
         const resourceName = actualResourceId.includes('/') 
           ? actualResourceId.split('/').pop() 
           : actualResourceId;
         
-        console.log("Resource ID:", actualResourceId);
+        console.log("Resource ID (decoded):", actualResourceId);
         console.log("Extracted resource name:", resourceName);
         
         // In a real app, we would fetch the resource from the API using the full resource ID
