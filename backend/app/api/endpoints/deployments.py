@@ -888,12 +888,27 @@ def create_deployment(
                 engine_deployment["settings_id"] = str(cloud_settings.settings_id)
                 # Extract credentials from connection_details
                 if cloud_settings.connection_details:
-                    engine_deployment["client_id"] = cloud_settings.connection_details.get("client_id", "")
-                    engine_deployment["client_secret"] = cloud_settings.connection_details.get("client_secret", "")
-                    engine_deployment["tenant_id"] = cloud_settings.connection_details.get("tenant_id", "")
+                    # Debug: Print the connection_details structure
+                    print(f"Connection details structure: {json.dumps(cloud_settings.connection_details, default=str)}")
+                    
+                    # Check if connection_details is a string (JSON) and parse it
+                    if isinstance(cloud_settings.connection_details, str):
+                        try:
+                            connection_details = json.loads(cloud_settings.connection_details)
+                            print(f"Parsed connection_details from JSON string: {json.dumps(connection_details, default=str)}")
+                        except json.JSONDecodeError as e:
+                            print(f"Error parsing connection_details JSON: {str(e)}")
+                            connection_details = {}
+                    else:
+                        connection_details = cloud_settings.connection_details
+                    
+                    # Extract credentials from the connection_details
+                    engine_deployment["client_id"] = connection_details.get("client_id", "")
+                    engine_deployment["client_secret"] = connection_details.get("client_secret", "")
+                    engine_deployment["tenant_id"] = connection_details.get("tenant_id", "")
                     # If subscription_id is already set from cloud_account, don't override it
                     if "subscription_id" not in engine_deployment or not engine_deployment["subscription_id"]:
-                        engine_deployment["subscription_id"] = cloud_settings.connection_details.get("subscription_id", "")
+                        engine_deployment["subscription_id"] = connection_details.get("subscription_id", "")
                     
                     # Debug log for credentials
                     print(f"Extracted credentials from connection_details: client_id={engine_deployment['client_id'] != ''}, client_secret={engine_deployment['client_secret'] != ''}, tenant_id={engine_deployment['tenant_id'] != ''}, subscription_id={engine_deployment.get('subscription_id', '') != ''}")
