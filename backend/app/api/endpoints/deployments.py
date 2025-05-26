@@ -660,9 +660,9 @@ def get_deployment(
     deployment_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-) -> Any:
+) -> Dict[str, Any]:
     """
-    Get a specific deployment by ID
+    Get a deployment by ID
     """
     # Check if user has permission to view deployments
     has_permission = any(p.name == "view:deployments" for p in current_user.role.permissions)
@@ -672,83 +672,61 @@ def get_deployment(
             detail="Not enough permissions"
         )
     
-    try:
-        result = db.query(
-            Deployment, Template, Environment, Tenant
-        ).join(
-            Template, Deployment.template_id == Template.id
-        ).join(
-            Environment, Deployment.environment_id == Environment.id
-        ).join(
-            Tenant, Deployment.tenant_id == Tenant.tenant_id  # Join on tenant_id (UUID) instead of id (Integer)
-        ).filter(
-            Deployment.deployment_id == deployment_id
-        ).first()
-        
-        if not result:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Deployment with ID {deployment_id} not found"
-            )
-        
-        deployment, template, environment, tenant = result
-        
-        # Check if user has access to this deployment's tenant
-        if deployment.tenant_id != current_user.tenant_id:
-            # Admin users can view all deployments
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to access this deployment"
-                )
-        
-        # Get deployment details if available
-        deployment_details = db.query(DeploymentDetails).filter(
-            DeploymentDetails.deployment_id == deployment.id
-        ).first()
-        
-        # Get resources from deployment details
-        resources = []
-        if deployment_details and deployment_details.cloud_resources:
-            resources = deployment_details.cloud_resources
-        
-        # Convert to frontend-compatible format
-        return CloudDeploymentResponse(
-            id=deployment.deployment_id,
-            name=deployment.name,
-            templateId=template.template_id,
-            templateName=template.name,
-            provider=deployment.deployment_type,
-            status=deployment.status,
-            environment=environment.name,
-            createdAt=deployment.created_at.isoformat(),
-            updatedAt=deployment.updated_at.isoformat(),
-            parameters=deployment.parameters or {},
-            resources=resources,
-            tenantId=tenant.tenant_id,
-            region=deployment.region
+    # Find the deployment
+    deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
+    if not deployment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Deployment with ID {deployment_id} not found"
         )
     
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving deployment: {str(e)}"
-        )
+    # Check if user has access to this deployment's tenant
+    if deployment.tenant_id != current_user.tenant_id:
+        # Admin users can view all deployments
+        if current_user.role.name != "admin" and current_user.role.name != "msp":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view this deployment"
+            )
+    
+    # Get deployment details
+    deployment_details = db.query(DeploymentDetails).filter(
+        DeploymentDetails.deployment_id == deployment_id
+    ).first()
+    
+    # Get cloud settings ID
+    cloud_settings_id = None
+    if deployment_details and deployment_details.cloud_settings_id:
+        cloud_settings_id = deployment_details.cloud_settings_id
+    
+    # Format the response
+    response = {
+        "id": deployment.deployment_id,
+        "name": deployment.name,
+        "templateId": deployment.template_id,
+        "templateName": deployment.template_name,
+        "provider": deployment.provider,
+        "status": deployment.status,
+        "environment": deployment.environment,
+        "createdAt": deployment.created_at.isoformat(),
+        "updatedAt": deployment.updated_at.isoformat(),
+        "parameters": json.loads(deployment.parameters) if deployment.parameters else {},
+        "resources": json.loads(deployment.resources) if deployment.resources else [],
+        "tenantId": deployment.tenant_id,
+        "cloudSettingsId": cloud_settings_id
+    }
+    
+    return response
 
 
-@router.post("/", response_model=CloudDeploymentResponse)
+@router.post("/")
 def create_deployment(
-    deployment: DeploymentCreate,
-    tenant_id: Optional[str] = None,
+    deployment_data: DeploymentCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-) -> Any:
+) -> Dict[str, Any]:
     """
     Create a new deployment
-    
-    If tenant_id is provided in the query string, it will be used instead of the current user's tenant_id.
     """
     # Check if user has permission to create deployments
     has_permission = any(p.name == "create:deployments" for p in current_user.role.permissions)
@@ -759,231 +737,169 @@ def create_deployment(
         )
     
     try:
-        # Debug: Print the deployment data
-        print(f"Deployment data received: {deployment.dict()}")
-        print(f"Query param tenant_id: {tenant_id}")
-        
-        # Verify template exists
-        print(f"Looking for template with template_id: {deployment.template_id}")
-        template = db.query(Template).filter(Template.template_id == deployment.template_id).first()
+        # Get template
+        template = db.query(Template).filter(Template.template_id == deployment_data.template_id).first()
         if not template:
-            # Try to find the template by ID as a fallback
-            print(f"Template not found by template_id, trying to find by id")
-            template = db.query(Template).filter(Template.id == deployment.template_id).first()
-            if not template:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Template with ID {deployment.template_id} not found"
-                )
-            print(f"Template found by id: {template.id}, template_id: {template.template_id}")
-        else:
-            print(f"Template found by template_id: {template.template_id}, id: {template.id}")
-        
-        # Verify environment exists
-        environment = db.query(Environment).filter(Environment.id == deployment.environment_id).first()
-        if not environment:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Environment with ID {deployment.environment_id} not found"
+                detail=f"Template with ID {deployment_data.template_id} not found"
             )
         
-        # Determine which tenant_id to use
-        deployment_tenant_id = current_user.tenant_id
-        if tenant_id:
-            # Verify the tenant exists and user has access to it
-            tenant_obj = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
-            if not tenant_obj:
+        # Get cloud settings
+        cloud_settings = db.query(CloudSettings).filter(
+            CloudSettings.settings_id == deployment_data.cloud_settings_id
+        ).first()
+        
+        if not cloud_settings:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Cloud settings with ID {deployment_data.cloud_settings_id} not found"
+            )
+        
+        # Check if user has access to these cloud settings
+        if cloud_settings.tenant_id != current_user.tenant_id:
+            # Admin users can access all cloud settings
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Tenant with ID {tenant_id} not found"
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to access these cloud settings"
                 )
-            
-            # Check if user has access to this tenant
-            if tenant_id != current_user.tenant_id:
-                # Only admin or MSP users can create deployments for other tenants
-                if current_user.role.name != "admin" and current_user.role.name != "msp":
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Not authorized to create deployments for other tenants"
-                    )
-            
-            deployment_tenant_id = tenant_id
-            print(f"Using tenant_id from query parameter: {deployment_tenant_id}")
+        
+        # Extract credentials from connection_details
+        if not cloud_settings.connection_details:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cloud settings do not contain connection details"
+            )
+        
+        # Check if connection_details is a string (JSON) and parse it
+        if isinstance(cloud_settings.connection_details, str):
+            try:
+                connection_details = json.loads(cloud_settings.connection_details)
+            except json.JSONDecodeError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid connection details format"
+                )
         else:
-            print(f"Using current user's tenant_id: {deployment_tenant_id}")
+            connection_details = cloud_settings.connection_details
         
-        # Get tenant for response
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == deployment_tenant_id).first()
+        # Extract credentials
+        client_id = connection_details.get("client_id", "")
+        client_secret = connection_details.get("client_secret", "")
+        tenant_id = connection_details.get("tenant_id", "")
+        subscription_id = connection_details.get("subscription_id", "")
         
-        # Create new deployment
-        import uuid
-        new_deployment = Deployment(
-            deployment_id=str(uuid.uuid4()),
-            name=deployment.name,
-            description=deployment.description,
-            status="pending",  # Default status for new deployments
-            template_id=template.id,  # Use the template's numeric ID for the database relationship
-            environment_id=deployment.environment_id,
-            tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
-            created_by_id=current_user.id,
-            parameters=deployment.parameters,
-            deployment_type=template.type.lower()  # Set deployment_type based on template type
+        if not client_id or not client_secret or not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing required credentials in cloud settings"
+            )
+        
+        # Generate deployment ID
+        deployment_id = str(uuid.uuid4())
+        
+        # Create deployment in database
+        db_deployment = Deployment(
+            deployment_id=deployment_id,
+            name=deployment_data.name,
+            template_id=template.template_id,
+            template_name=template.name,
+            provider=template.provider,
+            status="pending",
+            environment=deployment_data.environment,
+            tenant_id=current_user.tenant_id,
+            parameters=json.dumps(deployment_data.parameters),
+            resources=json.dumps([]),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
         )
         
-        db.add(new_deployment)
+        db.add(db_deployment)
+        db.flush()
+        
+        # Create deployment details
+        db_deployment_details = DeploymentDetails(
+            deployment_id=deployment_id,
+            cloud_settings_id=cloud_settings.settings_id,
+            resource_group=deployment_data.resource_group,
+            location=deployment_data.location,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        db.add(db_deployment_details)
         db.commit()
-        db.refresh(new_deployment)
         
-        # Get cloud account for the environment
-        cloud_account = None
-        if environment.cloud_accounts:
-            # Get the first cloud account associated with this environment
-            cloud_account = environment.cloud_accounts[0]
-        
-        # Get cloud settings if available
-        cloud_settings = None
-        if cloud_account and cloud_account.settings_id:
-            cloud_settings = db.query(CloudSettings).filter(
-                CloudSettings.id == cloud_account.settings_id
-            ).first()
-        
-        # Forward deployment to deployment engine
+        # Forward request to deployment engine
         try:
-            # Determine location/region from parameters or use default
-            location = "eastus"  # Default location
-            if deployment.parameters:
-                if "location" in deployment.parameters:
-                    location = deployment.parameters["location"]
-                elif "region" in deployment.parameters:
-                    location = deployment.parameters["region"]
-            
-            # Ensure template_code is a string and not empty
-            template_code = template.code if template.code else ""
-            
-            # Create deployment engine request
-            engine_deployment = {
-                "deployment_id": new_deployment.deployment_id,  # Pass the backend-generated deployment ID
-                "name": new_deployment.name,
-                "description": new_deployment.description,
-                "deployment_type": template.type.lower(),  # Use template type (terraform, arm, etc.)
-                "resource_group": f"rg-{new_deployment.name.lower().replace(' ', '-')}",
-                "location": location,
-                "template": {
-                    "source": "code",
-                    "code": template_code
-                },
-                "parameters": new_deployment.parameters if new_deployment.parameters else {}
+            # Prepare request data for deployment engine
+            deployment_engine_data = {
+                "deployment_id": deployment_id,
+                "name": deployment_data.name,
+                "type": template.type,
+                "resource_group": deployment_data.resource_group,
+                "location": deployment_data.location,
+                "template_code": template.code,
+                "parameters": deployment_data.parameters,
+                "credentials": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "tenant_id": tenant_id,
+                    "subscription_id": subscription_id
+                }
             }
             
-            # Debug: Log that we're passing the deployment ID to the engine
-            print(f"Passing deployment_id to engine: {new_deployment.deployment_id}")
-            
-            # Add cloud account details if available
-            if cloud_account:
-                engine_deployment["subscription_id"] = cloud_account.cloud_ids[0] if cloud_account.cloud_ids else None
-            
-            # Add cloud settings (credentials) if available
-            if cloud_settings:
-                engine_deployment["settings_id"] = str(cloud_settings.settings_id)
-                # Extract credentials from connection_details
-                if cloud_settings.connection_details:
-                    # Debug: Print the connection_details structure
-                    print(f"Connection details structure: {json.dumps(cloud_settings.connection_details, default=str)}")
-                    
-                    # Check if connection_details is a string (JSON) and parse it
-                    if isinstance(cloud_settings.connection_details, str):
-                        try:
-                            connection_details = json.loads(cloud_settings.connection_details)
-                            print(f"Parsed connection_details from JSON string: {json.dumps(connection_details, default=str)}")
-                        except json.JSONDecodeError as e:
-                            print(f"Error parsing connection_details JSON: {str(e)}")
-                            connection_details = {}
-                    else:
-                        connection_details = cloud_settings.connection_details
-                    
-                    # Extract credentials from the connection_details
-                    engine_deployment["client_id"] = connection_details.get("client_id", "")
-                    engine_deployment["client_secret"] = connection_details.get("client_secret", "")
-                    engine_deployment["tenant_id"] = connection_details.get("tenant_id", "")
-                    # If subscription_id is already set from cloud_account, don't override it
-                    if "subscription_id" not in engine_deployment or not engine_deployment["subscription_id"]:
-                        engine_deployment["subscription_id"] = connection_details.get("subscription_id", "")
-                    
-                    # Debug log for credentials
-                    print(f"Extracted credentials from connection_details: client_id={engine_deployment['client_id'] != ''}, client_secret={engine_deployment['client_secret'] != ''}, tenant_id={engine_deployment['tenant_id'] != ''}, subscription_id={engine_deployment.get('subscription_id', '') != ''}")
-            
-            # Debug: Print engine deployment data (redact sensitive info)
-            debug_data = engine_deployment.copy()
-            if "client_secret" in debug_data:
-                debug_data["client_secret"] = "***REDACTED***"
-            print(f"Engine deployment data: {debug_data}")
-            
-            # Send to deployment engine
-            headers = {"Authorization": f"Bearer {current_user.access_token}"}
+            # Send request to deployment engine
             response = requests.post(
                 f"{DEPLOYMENT_ENGINE_URL}/deployments",
-                headers=headers,
-                json=engine_deployment
+                headers={"Authorization": f"Bearer {current_user.access_token}"},
+                json=deployment_engine_data
             )
             
-            # Debug: Print deployment engine response
-            print(f"Deployment engine response status: {response.status_code}")
-            print(f"Deployment engine response: {response.text}")
-            
             if response.status_code != 200:
-                # Log the error but don't fail the deployment creation
-                print(f"Deployment engine error: {response.text}")
-                # Update deployment status to reflect the error
-                new_deployment.status = "failed"
+                # Update deployment status to failed
+                db_deployment.status = "failed"
                 db.commit()
-            else:
-                # Update deployment with engine response
-                engine_result = response.json()
-                new_deployment.status = engine_result.get("status", "pending")
                 
-                # Store the Azure deployment ID in the cloud_deployment_id field
-                if "azure_deployment_id" in engine_result:
-                    new_deployment.cloud_deployment_id = engine_result["azure_deployment_id"]
-                    print(f"Stored Azure deployment ID: {engine_result['azure_deployment_id']}")
-                
-                db.commit()
-        except Exception as e:
-            # Log the error but don't fail the deployment creation
-            print(f"Error forwarding to deployment engine: {str(e)}")
-            # Update deployment status to reflect the error
-            new_deployment.status = "failed"
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error from deployment engine: {response.text}"
+                )
+            
+            # Update deployment status to deploying
+            db_deployment.status = "deploying"
             db.commit()
+            
+            # Return deployment details
+            return {
+                "id": deployment_id,
+                "name": deployment_data.name,
+                "templateId": template.template_id,
+                "templateName": template.name,
+                "provider": template.provider,
+                "status": "deploying",
+                "environment": deployment_data.environment,
+                "createdAt": db_deployment.created_at.isoformat(),
+                "updatedAt": db_deployment.updated_at.isoformat(),
+                "parameters": deployment_data.parameters,
+                "resources": [],
+                "tenantId": current_user.tenant_id
+            }
         
-        # Extract region from parameters if available
-        region = None
-        if new_deployment.parameters:
-            if "region" in new_deployment.parameters:
-                region = new_deployment.parameters["region"]
-            elif "location" in new_deployment.parameters:
-                region = new_deployment.parameters["location"]
-        
-        # Return frontend-compatible response
-        return CloudDeploymentResponse(
-            id=new_deployment.deployment_id,
-            name=new_deployment.name,
-            templateId=template.template_id,
-            templateName=template.name,
-            provider=template.provider,
-            status=new_deployment.status,
-            environment=environment.name,
-            createdAt=new_deployment.created_at.isoformat(),
-            updatedAt=new_deployment.updated_at.isoformat(),
-            parameters=new_deployment.parameters or {},
-            resources=[],  # Default empty list for new deployments
-            tenantId=tenant.tenant_id,
-            region=region
-        )
+        except Exception as e:
+            # Update deployment status to failed
+            db_deployment.status = "failed"
+            db.commit()
+            
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error creating deployment: {str(e)}"
+            )
     
     except HTTPException:
-        db.rollback()
         raise
     except Exception as e:
-        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating deployment: {str(e)}"

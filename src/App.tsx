@@ -50,6 +50,8 @@ const App = () => (
                 <Route path="/deployments" element={<Deployments />} />
                 <Route path="/deployments/:deploymentId" element={<DeploymentDetails />} />
                 <Route path="/deployments/:deploymentId/resources/:resourceId" element={<ResourceDetails />} />
+                {/* Support for long Azure resource IDs */}
+                <Route path="/resources/*" element={<ResourceDetails />} />
                 <Route path="/settings" element={
                   <ProtectedRoute requiredPermission="view:settings">
                     <Settings />

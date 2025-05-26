@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { deploymentService } from "@/services/deployment-service";
 import { CloudResource } from "@/types/cloud";
+import axios from "axios";
 import {
   Activity,
   AlertCircle,
@@ -40,6 +41,7 @@ import {
   PowerOff,
   Maximize,
   Minimize,
+  Loader2
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -49,6 +51,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 const ResourceDetails = () => {
   const { deploymentId, resourceId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [resource, setResource] = useState<CloudResource | null>(null);
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<string[]>([]);
@@ -64,62 +67,74 @@ const ResourceDetails = () => {
   useEffect(() => {
     const fetchResource = async () => {
       try {
-        if (!deploymentId || !resourceId) return;
+        setLoading(true);
         
-        // In a real app, we would fetch the resource from the API
-        // For now, we'll create a mock resource
-        const mockResource: CloudResource = {
-          id: resourceId,
-          name: "vm-app-server",
-          type: "Microsoft.Compute/virtualMachines",
-          location: "eastus",
-          status: "Succeeded",
-          properties: {
-            vmSize: "Standard_DS2_v2",
-            osType: "Linux",
-            adminUsername: "adminuser",
-            networkProfile: {
-              networkInterfaces: [
-                {
-                  id: "/subscriptions/12345/resourceGroups/rg-test/providers/Microsoft.Network/networkInterfaces/nic-app-server"
-                }
-              ]
-            },
-            storageProfile: {
-              osDisk: {
-                name: "os-disk-app-server",
-                createOption: "FromImage",
-                diskSizeGB: 128
-              },
-              dataDisks: [
-                {
-                  name: "data-disk-app-server-1",
-                  diskSizeGB: 256,
-                  lun: 0
-                }
-              ]
+        // Extract the resource ID from the URL
+        let actualResourceId = resourceId;
+        
+        // If we're using the /resources/* route, extract the resource ID from the path
+        if (!deploymentId && location.pathname.startsWith('/resources/')) {
+          actualResourceId = location.pathname.substring('/resources/'.length);
+        }
+        
+        if (!actualResourceId) {
+          toast.error("Resource ID is missing");
+          setLoading(false);
+          return;
+        }
+        
+        // First, get the deployment if we have a deployment ID
+        let cloudSettingsId = '';
+        let deploymentDetails = null;
+        
+        if (deploymentId) {
+          deploymentDetails = await deploymentService.getDeployment(deploymentId);
+          if (!deploymentDetails) {
+            toast.error("Failed to load deployment details");
+            setLoading(false);
+            return;
+          }
+          cloudSettingsId = deploymentDetails.cloudSettingsId;
+        } else {
+          // If no deployment ID, use the first available cloud settings
+          // In a real app, you would have a way to select or determine which cloud settings to use
+          const cloudSettings = await axios.get('/api/deployments/azure_credentials', {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`
             }
+          });
+          
+          if (cloudSettings.data && cloudSettings.data.length > 0) {
+            cloudSettingsId = cloudSettings.data[0].id;
+          } else {
+            toast.error("No cloud settings available");
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // Fetch the resource details from the API
+        const response = await axios.get(`/api/resources/${actualResourceId}`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
           },
-          tags: {
-            environment: "development",
-            application: "web-app",
-            owner: "devops-team"
-          },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
+          params: {
+            cloud_settings_id: cloudSettingsId,
+            deployment_id: deploymentId
+          }
+        });
         
-        setResource(mockResource);
+        setResource(response.data);
         
-        // Mock logs
-        setLogs([
-          `${new Date().toISOString()} [INFO] Resource provisioning started`,
-          `${new Date().toISOString()} [INFO] Creating virtual machine`,
-          `${new Date().toISOString()} [INFO] Configuring network interfaces`,
-          `${new Date().toISOString()} [INFO] Attaching storage disks`,
-          `${new Date().toISOString()} [INFO] VM provisioning completed successfully`
-        ]);
+        // Generate some mock logs based on the resource
+        const mockLogs = [
+          `${new Date().toISOString()} [INFO] Resource details retrieved successfully`,
+          `${new Date().toISOString()} [INFO] Resource type: ${response.data.type}`,
+          `${new Date().toISOString()} [INFO] Resource location: ${response.data.location}`,
+          `${new Date().toISOString()} [INFO] Resource status: ${response.data.status || 'Unknown'}`
+        ];
         
+        setLogs(mockLogs);
         setLoading(false);
       } catch (error) {
         console.error("Error fetching resource:", error);
@@ -129,7 +144,7 @@ const ResourceDetails = () => {
     };
     
     fetchResource();
-  }, [deploymentId, resourceId]);
+  }, [deploymentId, resourceId, location.pathname]);
   
   const handleAction = (action: string) => {
     toast.success(`${action} action initiated`);
@@ -681,4 +696,3 @@ const ResourceDetails = () => {
 };
 
 export default ResourceDetails;
-

@@ -10,6 +10,7 @@ import logging
 import threading
 import time
 from deploy.azure import AzureDeployer
+from deploy.resources import AzureResourceManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +29,9 @@ app.add_middleware(
 
 # Initialize Azure deployer
 azure_deployer = AzureDeployer()
+
+# Initialize Azure resource manager
+azure_resource_manager = AzureResourceManager()
 
 # API settings
 API_URL = os.getenv("API_URL", "http://api:8000")
@@ -297,54 +301,41 @@ def list_subscriptions(user: dict = Depends(check_permission("deployment:read"))
 # Deployment endpoints
 @app.post("/deployments")
 def create_deployment(
-    deployment: Dict[str, Any],
-    background_tasks: BackgroundTasks,
-    user: dict = Depends(check_permission("deployment:create"))
+    deployment_request: dict,
+    user: dict = Depends(get_current_user)
 ):
+    """
+    Create a new deployment
+    
+    Args:
+        deployment_request: The deployment request data
+    """
     try:
-        # Use the deployment ID from the backend if provided, otherwise generate a new one
-        deployment_id = deployment.get("deployment_id")
-        if not deployment_id:
-            deployment_id = str(uuid.uuid4())
-            logger.warning(f"No deployment_id provided by backend, generating new ID: {deployment_id}")
-        else:
-            logger.info(f"Using deployment_id provided by backend: {deployment_id}")
-        
-        logger.info(f"Creating deployment with ID: {deployment_id}")
-        
         # Extract deployment details
-        name = deployment.get("name", "Unnamed deployment")
-        description = deployment.get("description", "")
-        deployment_type = deployment.get("deployment_type", "arm")
+        deployment_id = deployment_request.get("deployment_id") or str(uuid.uuid4())
+        name = deployment_request.get("name", "Unnamed Deployment")
+        deployment_type = deployment_request.get("type", "arm")
+        resource_group = deployment_request.get("resource_group", f"rg-{name.lower()}")
+        location = deployment_request.get("location", "eastus")
+        template_code = deployment_request.get("template_code", "")
+        parameters = deployment_request.get("parameters", {})
         
+        # Extract credentials from the request
+        credentials = deployment_request.get("credentials", {})
+        client_id = credentials.get("client_id", "")
+        client_secret = credentials.get("client_secret", "")
+        tenant_id = credentials.get("tenant_id", "")
+        subscription_id = credentials.get("subscription_id", "")
+        
+        # Log deployment information (without sensitive data)
+        logger.info(f"Using deployment_id provided by backend: {deployment_id}")
+        logger.info(f"Creating deployment with ID: {deployment_id}")
         logger.info(f"Deployment details: name={name}, type={deployment_type}")
-        
-        # Create a sanitized resource group name (no spaces or special characters)
-        sanitized_name = name.lower().replace(' ', '-')
-        # Remove any other special characters
-        import re
-        sanitized_name = re.sub(r'[^a-z0-9\-]', '', sanitized_name)
-        resource_group = deployment.get("resource_group", f"rg-{sanitized_name}")
-        
-        # Use UUID for Azure deployment name to avoid issues with spaces and special characters
-        azure_deployment_name = f"deploy-{deployment_id}"
-        
-        location = deployment.get("location", "eastus")
-        template = deployment.get("template", {})
-        parameters = deployment.get("parameters", {})
-        
         logger.info(f"Resource group: {resource_group}, Location: {location}")
-        logger.info(f"Azure deployment name: {azure_deployment_name}")
-        
-        # Extract Azure credentials if provided
-        client_id = deployment.get("client_id")
-        client_secret = deployment.get("client_secret")
-        tenant_id = deployment.get("tenant_id")
-        subscription_id = deployment.get("subscription_id")
-        
+        logger.info(f"Azure deployment name: deploy-{deployment_id}")
         logger.info(f"Credentials provided: client_id={bool(client_id)}, client_secret={bool(client_secret)}, tenant_id={bool(tenant_id)}, subscription_id={bool(subscription_id)}")
         
-        # Set Azure credentials from deployment request
+        # Set Azure credentials
         if client_id and client_secret and tenant_id:
             logger.info("Setting Azure credentials from deployment request")
             azure_deployer.set_credentials(
@@ -354,88 +345,71 @@ def create_deployment(
                 subscription_id=subscription_id
             )
         else:
-            logger.error(f"Missing required credentials: client_id={bool(client_id)}, client_secret={bool(client_secret)}, tenant_id={bool(tenant_id)}")
-            raise ValueError("Missing required Azure credentials")
+            # Check if credentials are already set
+            if not azure_deployer.credential:
+                logger.error("Azure credentials not configured")
+                raise ValueError("Azure credentials not configured")
         
-        # Check if Azure credentials are configured
-        cred_status = azure_deployer.get_credential_status()
-        if not cred_status.get("configured", False):
-            logger.error("Azure credentials not configured")
-            raise ValueError("Azure credentials not configured")
+        # Validate template code
+        if not template_code:
+            raise ValueError("Template code is required")
         
-        # Set subscription if provided and not already set
-        if subscription_id and azure_deployer.subscription_id != subscription_id:
-            logger.info(f"Setting subscription ID: {subscription_id}")
-            azure_deployer.set_subscription(subscription_id)
+        logger.info(f"Using template code (length: {len(template_code)})")
+        logger.info(f"Deployment parameters: {parameters}...")
         
-        # Prepare template data
-        template_data = {}
-        if template.get("source") == "url" and template.get("url"):
-            template_data["template_url"] = template["url"]
-            logger.info(f"Using template URL: {template['url']}")
-        elif template.get("source") == "code" and template.get("code"):
-            template_data["template_body"] = template["code"]
-            logger.info(f"Using template code (length: {len(template['code'])})")
-        else:
-            logger.error("Invalid template data")
-            raise HTTPException(status_code=400, detail="Invalid template data")
+        # Create Azure deployment name
+        azure_deployment_name = f"deploy-{deployment_id}"
         
-        # Log parameters
-        logger.info(f"Deployment parameters: {json.dumps(parameters, default=str)[:500]}...")
-        
-        # Deploy to Azure
+        # Start the deployment
         logger.info(f"Starting Azure deployment: {azure_deployment_name}")
         result = azure_deployer.deploy(
             resource_group=resource_group,
             deployment_name=azure_deployment_name,
-            location=location,
-            template_data=template_data,
+            template=template_code,
             parameters=parameters,
-            deployment_type=deployment_type
+            location=location
         )
         
-        logger.info(f"Azure deployment result: {json.dumps(result, default=str)}")
-        
-        # Store deployment details
+        # Store deployment information
         deployments[deployment_id] = {
-            "deployment_id": deployment_id,  # Use the consistent deployment ID
+            "id": deployment_id,
             "name": name,
-            "description": description,
+            "type": deployment_type,
             "resource_group": resource_group,
             "location": location,
-            "deployment_type": deployment_type,
-            "status": result.get("status", "in_progress"),
-            "azure_deployment_id": azure_deployment_name,
-            "tenant_id": user["tenant_id"],
-            "created_by": user["user_id"],
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
-            "resources": [],
-            "outputs": {},
-            "logs": []
+            "status": "deploying",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "azure_deployment_id": result.get("id", ""),
+            "properties": result
         }
         
-        logger.info(f"Stored deployment details in memory: {deployment_id}")
-        
-        # Start status polling in a background thread
-        logger.info(f"Starting background polling thread for deployment {deployment_id}")
-        thread = threading.Thread(
-            target=poll_deployment_status,
-            args=(deployment_id, resource_group, azure_deployment_name, user["token"])
-        )
-        thread.daemon = True
-        thread.start()
-        
-        # Store thread reference
-        polling_threads[deployment_id] = thread
-        logger.info(f"Background polling thread started for deployment {deployment_id}")
+        # Start background polling for deployment status
+        if result.get("id"):
+            # Create a new thread for polling
+            thread = threading.Thread(
+                target=poll_deployment_status,
+                args=(deployment_id, resource_group, result.get("id"), user.get("access_token", ""))
+            )
+            thread.daemon = True
+            thread.start()
+            
+            # Store the thread
+            polling_threads[deployment_id] = thread
         
         return {
-            "deployment_id": deployment_id,  # Return the consistent deployment ID
-            "status": result.get("status", "in_progress"),
-            "azure_deployment_id": azure_deployment_name,
-            "created_at": deployments[deployment_id]["created_at"]
+            "id": deployment_id,
+            "name": name,
+            "type": deployment_type,
+            "resource_group": resource_group,
+            "location": location,
+            "status": "deploying",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "azure_deployment_id": result.get("id", ""),
+            "properties": result
         }
+    
     except Exception as e:
         logger.error(f"Error creating deployment: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -585,6 +559,46 @@ def delete_deployment(
         }
     except Exception as e:
         logger.error(f"Error deleting deployment: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/resources/{resource_id}")
+def get_resource_details(
+    resource_id: str,
+    subscription_id: Optional[str] = None,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Get details for a specific Azure resource
+    
+    Args:
+        resource_id: The Azure resource ID or resource name
+        subscription_id: Optional Azure subscription ID
+    """
+    try:
+        logger.info(f"Getting details for resource: {resource_id}")
+        
+        # Check if Azure credentials are configured
+        if not azure_deployer.credential:
+            logger.error("Azure credentials not configured")
+            raise HTTPException(status_code=400, detail="Azure credentials not configured")
+        
+        # Set credentials for resource manager
+        azure_resource_manager.set_credentials(
+            credential=azure_deployer.credential,
+            subscription_id=subscription_id or azure_deployer.subscription_id
+        )
+        
+        # Get resource details
+        resource_details = azure_resource_manager.get_resource_details(resource_id)
+        
+        if "error" in resource_details:
+            logger.error(f"Error getting resource details: {resource_details['error']}")
+            raise HTTPException(status_code=500, detail=f"Error getting resource details: {resource_details['error']}")
+        
+        return resource_details
+    
+    except Exception as e:
+        logger.error(f"Error getting resource details: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

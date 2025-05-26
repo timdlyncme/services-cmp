@@ -56,6 +56,7 @@ export interface CloudDeployment {
   resources: CloudResource[];
   tenantId: string;
   logs?: DeploymentLog[];
+  cloudSettingsId?: string; // ID of the cloud settings used for this deployment
 }
 
 export interface CloudResource {

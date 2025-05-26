@@ -171,102 +171,87 @@ class AzureDeployer:
         
         return result
 
-    def deploy(self, resource_group, deployment_name, location, template_data, parameters=None, deployment_type="arm"):
+    def deploy(self, resource_group, deployment_name, template, parameters, location="eastus"):
         """
-        Deploy an Azure ARM or Bicep template
+        Deploy an ARM template to Azure
         
         Args:
             resource_group (str): The resource group name
             deployment_name (str): The deployment name
+            template (str): The ARM template JSON as a string
+            parameters (dict): The parameters for the template
             location (str): The Azure region
-            template_data (dict): The template data, either URL or template body
-            parameters (dict, optional): Parameters for the template
-            deployment_type (str): 'arm' or 'bicep'
             
         Returns:
-            dict: Deployment result with status and details
+            dict: The deployment result
         """
-        # Check if credentials are properly configured
-        if not self.resource_client:
-            logging.error(f"Azure credentials not configured. client_id={bool(self.client_id)}, client_secret={bool(self.client_secret)}, tenant_id={bool(self.tenant_id)}, subscription_id={bool(self.subscription_id)}, credential={self.credential is not None}")
+        # Check if credentials are configured
+        if not self.credential:
             raise ValueError("Azure credentials not configured")
         
-        # Ensure resource group exists
-        self._ensure_resource_group(resource_group, location)
+        # Check if subscription ID is set
+        if not self.subscription_id:
+            raise ValueError("Azure subscription ID not configured")
         
-        # Prepare template
-        if deployment_type == "bicep" and "template_body" in template_data:
-            # Convert Bicep to ARM template
-            template_content = self._convert_bicep_to_arm(template_data["template_body"])
-        elif "template_url" in template_data:
-            # Use template URL directly for ARM templates
-            template_uri = template_data["template_url"]
-            return self._deploy_from_template_uri(resource_group, deployment_name, template_uri, parameters)
-        elif "template_body" in template_data:
-            # Use template body directly for ARM templates
-            template_content = template_data["template_body"]
-        else:
-            raise ValueError("Invalid template data. Must provide either template_url or template_body")
+        # Create resource client if not already created
+        if not self.resource_client:
+            self.resource_client = ResourceManagementClient(self.credential, self.subscription_id)
         
-        # Prepare parameters - extract just the value from complex parameter objects
-        params = {}
-        if parameters:
-            print(f"Original parameters: {parameters}")
-            for key, value in parameters.items():
-                # Check if the parameter is a complex object with a 'value' field
-                if isinstance(value, dict) and 'value' in value:
-                    # Extract just the value for Azure
-                    params[key] = {
-                        "value": value['value']
-                    }
-                    print(f"Parameter {key}: Extracted value '{value['value']}' from complex object")
-                else:
-                    # Use the parameter value directly
-                    params[key] = {
-                        "value": value
-                    }
-                    print(f"Parameter {key}: Using direct value '{value}'")
-            print(f"Processed parameters for Azure: {params}")
-        
-        # Create deployment
         try:
-            # Ensure template is a valid JSON object
-            if isinstance(template_content, str):
-                try:
-                    template_json = json.loads(template_content)
-                except json.JSONDecodeError:
-                    raise ValueError("Template content is not valid JSON")
-            else:
-                template_json = template_content
+            # Create or update resource group
+            logging.info(f"Creating/updating resource group: {resource_group} in {location}")
+            self.resource_client.resource_groups.create_or_update(
+                resource_group,
+                {"location": location}
+            )
             
-            # Create deployment properties with the required 'properties' field
+            # Parse template JSON
+            try:
+                template_json = json.loads(template)
+            except json.JSONDecodeError as e:
+                logging.error(f"Error parsing template JSON: {str(e)}")
+                raise ValueError(f"Invalid template JSON: {str(e)}")
+            
+            # Format parameters for ARM deployment
+            arm_parameters = {}
+            for key, value in parameters.items():
+                arm_parameters[key] = {"value": value}
+            
+            # Create deployment
+            logging.info(f"Creating deployment: {deployment_name}")
             deployment_properties = {
-                "properties": {
-                    "mode": DeploymentMode.incremental,
-                    "template": template_json,
-                    "parameters": params
-                }
+                'mode': DeploymentMode.incremental,
+                'template': template_json,
+                'parameters': arm_parameters
             }
             
             # Start deployment
             deployment_async_operation = self.resource_client.deployments.begin_create_or_update(
-                resource_group_name=resource_group,
-                deployment_name=deployment_name,
-                parameters=deployment_properties
+                resource_group,
+                deployment_name,
+                {
+                    'properties': deployment_properties
+                }
             )
             
-            # Return initial status
-            return {
-                "status": "in_progress",
-                "azure_deployment_id": deployment_name,
-                "resource_group": resource_group
-            }
+            # Get initial deployment state
+            deployment = deployment_async_operation.result(timeout=10)
             
-        except Exception as e:
+            # Return deployment details
             return {
-                "status": "failed",
-                "error_details": str(e)
+                "id": deployment.id,
+                "name": deployment.name,
+                "properties": {
+                    "provisioningState": deployment.properties.provisioning_state,
+                    "timestamp": deployment.properties.timestamp.isoformat() if deployment.properties.timestamp else None,
+                    "duration": deployment.properties.duration,
+                    "correlationId": deployment.properties.correlation_id
+                }
             }
+        
+        except Exception as e:
+            logging.error(f"Error deploying to Azure: {str(e)}", exc_info=True)
+            raise
     
     def _deploy_from_template_uri(self, resource_group, deployment_name, template_uri, parameters=None):
         """Deploy using a template URI"""

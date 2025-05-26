@@ -440,8 +440,8 @@ const DeploymentDetails = () => {
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <Button variant="ghost" size="sm" asChild>
-                                  <Link to={`/deployments/${deploymentId}/resources/${resource.id}`}>
+                                <Button variant="ghost" size="icon" asChild>
+                                  <Link to={`/resources/${resource.id}`}>
                                     <ChevronRight className="h-4 w-4" />
                                   </Link>
                                 </Button>
