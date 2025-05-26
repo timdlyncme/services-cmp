@@ -16,7 +16,7 @@ from app.models.deployment import Deployment, DeploymentHistory, Template, Envir
 from app.models.deployment_details import DeploymentDetails
 from app.models.cloud_settings import CloudSettings
 from app.schemas.deployment import (
-    DeploymentResponse, DeploymentCreate, DeploymentUpdate,
+    DeploymentResponse, DeploymentCreate as OldDeploymentCreate, DeploymentUpdate,
     CloudDeploymentResponse
 )
 
@@ -39,6 +39,16 @@ class AzureCredentialsResponse(BaseModel):
     tenant_id: str
     configured: bool = False
     message: str = ""
+
+# Updated deployment create model
+class DeploymentCreate(BaseModel):
+    name: str
+    template_id: str
+    environment: str
+    resource_group: str
+    location: str
+    cloud_settings_id: str
+    parameters: Dict[str, Any] = {}
 
 @router.post("/azure_credentials", response_model=Dict[str, str])
 def set_azure_credentials(
