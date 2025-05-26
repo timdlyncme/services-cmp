@@ -215,11 +215,57 @@ const DeploymentDetails = () => {
       
       setStatusMessage("Deployment deletion in progress");
       
-      // Simulate deletion and navigate back after 3 seconds
-      setTimeout(() => {
-        toast.success("Deployment deleted successfully");
-        navigate("/deployments");
-      }, 3000);
+      // Call the deployment engine to delete the resources
+      const deleteResources = async () => {
+        try {
+          // In a real app, we would call the API to delete the deployment resources
+          if (deployment && deployment.deployment_id) {
+            // Call the deployment service to delete the resources
+            await deploymentService.deleteDeploymentResources(deployment.deployment_id);
+            
+            // Update the deployment status to "archived"
+            const updatedDeployment = {
+              ...deployment,
+              status: "archived"
+            };
+            setDeployment(updatedDeployment);
+            
+            // Update the resources status to "Deleted"
+            if (updatedDeployment.resources) {
+              const updatedResources = updatedDeployment.resources.map(resource => ({
+                ...resource,
+                status: "Deleted"
+              }));
+              updatedDeployment.resources = updatedResources;
+            }
+            
+            // Add to logs
+            const newLog = `${new Date().toISOString()} [INFO] Deployment resources deleted successfully`;
+            setLogs([...logs, newLog, `${new Date().toISOString()} [INFO] Deployment marked as archived`]);
+            
+            setStatusMessage("Deployment resources deleted and marked as archived");
+            toast.success("Deployment resources deleted successfully");
+          }
+        } catch (error) {
+          console.error("Error deleting deployment resources:", error);
+          toast.error("Failed to delete deployment resources");
+          
+          // Add to logs
+          const newLog = `${new Date().toISOString()} [ERROR] Failed to delete deployment resources: ${error}`;
+          setLogs([...logs, newLog]);
+          
+          setStatusMessage("Failed to delete deployment resources");
+          
+          // Revert deployment status
+          setDeployment({
+            ...deployment!,
+            status: "failed"
+          });
+        }
+      };
+      
+      // Execute the deletion
+      deleteResources();
     }
   };
   

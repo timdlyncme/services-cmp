@@ -587,6 +587,45 @@ def delete_deployment(
         logger.error(f"Error deleting deployment: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/deployments/{deployment_id}/resources")
+def delete_deployment_resources(
+    deployment_id: str,
+    user: dict = Depends(check_permission("deployment:delete"))
+):
+    try:
+        # Check if deployment exists
+        if deployment_id not in deployments:
+            raise HTTPException(status_code=404, detail="Deployment not found")
+        
+        # Check if user has access to this deployment
+        deployment = deployments[deployment_id]
+        if deployment["tenant_id"] != user["tenant_id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Delete resources from Azure but keep the deployment record
+        result = azure_deployer.delete_deployment_resources(
+            resource_group=deployment["resource_group"],
+            deployment_name=deployment["azure_deployment_id"]
+        )
+        
+        # Update deployment status
+        deployment["status"] = "archived"
+        deployment["updated_at"] = datetime.utcnow().isoformat()
+        
+        # Update resources status
+        if "resources" in deployment:
+            for resource in deployment["resources"]:
+                resource["status"] = "Deleted"
+        
+        return {
+            "deployment_id": deployment_id,
+            "status": "archived",
+            "message": result.get("message", "Deployment resources deleted successfully")
+        }
+    except Exception as e:
+        logger.error(f"Error deleting deployment resources: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=5000)

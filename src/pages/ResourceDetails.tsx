@@ -66,11 +66,19 @@ const ResourceDetails = () => {
       try {
         if (!deploymentId || !resourceId) return;
         
-        // In a real app, we would fetch the resource from the API
+        // Extract the resource name from the full resource ID if it's a long format
+        const resourceName = resourceId.includes('/') 
+          ? resourceId.split('/').pop() 
+          : resourceId;
+        
+        console.log("Resource ID:", resourceId);
+        console.log("Extracted resource name:", resourceName);
+        
+        // In a real app, we would fetch the resource from the API using the full resource ID
         // For now, we'll create a mock resource
         const mockResource: CloudResource = {
-          id: resourceId,
-          name: "vm-app-server",
+          id: resourceId, // Keep the full resource ID
+          name: resourceName || "vm-app-server",
           type: "Microsoft.Compute/virtualMachines",
           location: "eastus",
           status: "Succeeded",
@@ -681,4 +689,3 @@ const ResourceDetails = () => {
 };
 
 export default ResourceDetails;
-

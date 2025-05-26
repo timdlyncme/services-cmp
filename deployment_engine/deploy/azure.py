@@ -625,6 +625,94 @@ class AzureDeployer:
                 "error_details": str(e)
             }
     
+    def delete_deployment_resources(self, resource_group, deployment_name):
+        """
+        Delete the resources of an Azure deployment but keep the deployment record
+        
+        Args:
+            resource_group (str): The resource group name
+            deployment_name (str): The deployment name
+            
+        Returns:
+            dict: Deletion result with status
+        """
+        if not self.resource_client:
+            raise ValueError("Azure credentials not configured")
+        
+        try:
+            # Get deployment to find resources
+            deployment = self.resource_client.deployments.get(
+                resource_group_name=resource_group,
+                deployment_name=deployment_name
+            )
+            
+            # Get deployment operations to find resources
+            operations = list(self.resource_client.deployment_operations.list(
+                resource_group_name=resource_group,
+                deployment_name=deployment_name
+            ))
+            
+            # Extract resources
+            resources = []
+            for operation in operations:
+                if operation.properties.target_resource:
+                    resource_info = {
+                        "id": operation.properties.target_resource.id,
+                        "name": operation.properties.target_resource.resource_name,
+                        "type": operation.properties.target_resource.resource_type,
+                        "status": operation.properties.provisioning_state
+                    }
+                    resources.append(resource_info)
+            
+            # Delete each resource individually
+            deleted_resources = []
+            for resource in resources:
+                try:
+                    # Skip if resource is already deleted
+                    if resource["status"] == "Deleted":
+                        continue
+                    
+                    # Delete the resource
+                    self.resource_client.resources.begin_delete_by_id(
+                        resource_id=resource["id"],
+                        api_version=self._get_api_version_for_resource_type(resource["type"])
+                    )
+                    
+                    # Mark as deleted
+                    resource["status"] = "Deleting"
+                    deleted_resources.append(resource)
+                except Exception as e:
+                    logging.error(f"Error deleting resource {resource['name']}: {str(e)}")
+            
+            return {
+                "status": "in_progress",
+                "message": f"Deletion of {len(deleted_resources)} resources initiated",
+                "deleted_resources": deleted_resources
+            }
+            
+        except Exception as e:
+            return {
+                "status": "failed",
+                "error_details": str(e)
+            }
+    
+    def _get_api_version_for_resource_type(self, resource_type):
+        """Get the latest API version for a resource type"""
+        # This is a simplified version - in a real app, we would query the Azure API
+        # to get the latest API version for each resource type
+        resource_type_api_versions = {
+            "Microsoft.Compute/virtualMachines": "2023-03-01",
+            "Microsoft.Network/virtualNetworks": "2023-04-01",
+            "Microsoft.Network/networkInterfaces": "2023-04-01",
+            "Microsoft.Network/publicIPAddresses": "2023-04-01",
+            "Microsoft.Network/networkSecurityGroups": "2023-04-01",
+            "Microsoft.Storage/storageAccounts": "2023-01-01",
+            "Microsoft.Resources/deployments": "2022-09-01"
+        }
+        
+        # Default to a recent API version if not found
+        return resource_type_api_versions.get(resource_type, "2022-09-01")
+    
     def _map_status(self, azure_status):
         """Map Azure deployment status to our standard status"""
         if azure_status == "Running":

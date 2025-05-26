@@ -173,6 +173,59 @@ export class DeploymentService {
       throw error;
     }
   }
+
+  /**
+   * Delete deployment resources but keep the deployment record
+   */
+  async deleteDeploymentResources(deploymentId: string): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      // Call the deployment engine to delete the resources
+      const response = await api.delete(`/deployments/${deploymentId}/resources`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      // Update the deployment status to "archived"
+      await this.updateDeploymentStatus(deploymentId, "archived");
+      
+      return response.data;
+    } catch (error) {
+      console.error(`Delete deployment resources for ${deploymentId} error:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Update deployment status
+   */
+  async updateDeploymentStatus(deploymentId: string, status: string): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await api.put(`/deployments/${deploymentId}/status`, 
+        { status },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+      
+      return response.data;
+    } catch (error) {
+      console.error(`Update deployment status for ${deploymentId} error:`, error);
+      throw error;
+    }
+  }
 }
 
 // Create a singleton instance
