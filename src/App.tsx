@@ -13,6 +13,7 @@ import Catalog from "@/pages/Catalog";
 import TemplateDetails from "@/pages/TemplateDetails";
 import Deployments from "@/pages/Deployments";
 import DeploymentDetails from "@/pages/DeploymentDetails";
+import ResourceDetails from "@/pages/ResourceDetails";
 import Settings from "@/pages/Settings";
 import Tenants from "@/pages/Tenants";
 import TemplateManagement from "@/pages/TemplateManagement";
@@ -48,6 +49,7 @@ const App = () => (
                 <Route path="/catalog/:templateId" element={<TemplateDetails />} />
                 <Route path="/deployments" element={<Deployments />} />
                 <Route path="/deployments/:deploymentId" element={<DeploymentDetails />} />
+                <Route path="/deployments/:deploymentId/resources/:resourceId" element={<ResourceDetails />} />
                 <Route path="/settings" element={
                   <ProtectedRoute requiredPermission="view:settings">
                     <Settings />
