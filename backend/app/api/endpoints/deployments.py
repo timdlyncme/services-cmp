@@ -11,3 +11,16 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.db.session import get_db
+from app.api.deps import get_current_user
+from app.models.user import User, Tenant
+from app.models.deployment import Deployment, DeploymentHistory, Environment, Template
+from app.schemas.deployment import (
+    DeploymentBase,
+    DeploymentCreate,
+    DeploymentUpdate,
+    DeploymentResponse,
+    CloudDeploymentResponse,
+    DeploymentStatusUpdate
+)
+
+router = APIRouter()
