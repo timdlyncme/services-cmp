@@ -1,5 +1,6 @@
 from typing import Any, List, Optional, Dict
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Query, Body, Path
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Query, Body
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 import uuid
@@ -10,14 +11,18 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.db.session import get_db
-from app.api.endpoints.auth import get_current_user
+from app.api.deps import get_current_user
 from app.models.user import User, Tenant
-from app.models.deployment import Deployment, DeploymentHistory, Template, Environment, CloudAccount
-from app.models.deployment_details import DeploymentDetails
-from app.models.cloud_settings import CloudSettings
+from app.models.environment import Environment
+from app.models.template import Template
+from app.models.deployment import Deployment, DeploymentHistory
 from app.schemas.deployment import (
-    DeploymentResponse, DeploymentCreate, DeploymentUpdate,
-    CloudDeploymentResponse
+    DeploymentBase,
+    DeploymentCreate,
+    DeploymentUpdate,
+    DeploymentResponse,
+    CloudDeploymentResponse,
+    DeploymentStatusUpdate
 )
 
 router = APIRouter()
@@ -619,14 +624,16 @@ def get_deployments(
                 region = deployment.parameters["region"]
             
             # Get deployment details if available to fetch cloud_resources
-            deployment_details = db.query(DeploymentDetails).filter(
+            # Consolidated model - no need to query DeploymentDetails
+            # deployment_details = db.query(DeploymentDetails).filter(
                 DeploymentDetails.deployment_id == deployment.id
             ).first()
             
             # Get resources from deployment details
             resources = []
-            if deployment_details and deployment_details.cloud_resources:
-                resources = deployment_details.cloud_resources
+            # Use cloud_resources from deployment
+            if deployment.cloud_resources:
+                resources = deployment.cloud_resources
             
             deployments.append(CloudDeploymentResponse(
                 id=deployment.deployment_id,
@@ -640,12 +647,12 @@ def get_deployments(
                 createdAt=deployment.created_at.isoformat(),
                 updatedAt=deployment.updated_at.isoformat(),
                 parameters=deployment.parameters or {},
-                resources=resources,  # Use resources from deployment_details
+                resources=deployment.cloud_resources or resources,  # Use cloud_resources or resources
                 tenantId=tenant.tenant_id,
                 region=region,
                 details={
-                    "outputs": deployment_details.outputs if deployment_details else {}
-                } if deployment_details else None
+                    "outputs": deployment.outputs or {}
+                } if deployment.outputs else None
             ))
         
         return deployments
@@ -707,14 +714,16 @@ def get_deployment(
                 )
         
         # Get deployment details if available
-        deployment_details = db.query(DeploymentDetails).filter(
+        # Consolidated model - no need to query DeploymentDetails
+            # deployment_details = db.query(DeploymentDetails).filter(
             DeploymentDetails.deployment_id == deployment.id
         ).first()
         
         # Get resources from deployment details
         resources = []
-        if deployment_details and deployment_details.cloud_resources:
-            resources = deployment_details.cloud_resources
+        # Use cloud_resources from deployment
+            if deployment.cloud_resources:
+            resources = deployment.cloud_resources
         
         # Convert to frontend-compatible format
         return CloudDeploymentResponse(
@@ -722,19 +731,19 @@ def get_deployment(
             name=deployment.name,
             templateId=template.template_id,
             templateName=template.name,
-            templateVersion=getattr(deployment, 'template_version', None),  # Safely get template_version if it exists
-            provider=deployment.deployment_type,
+            templateVersion=deployment.template_version,  # Add template version
+            provider=deployment.provider or deployment.deployment_type,
             status=deployment.status,
             environment=environment.name,
             createdAt=deployment.created_at.isoformat(),
             updatedAt=deployment.updated_at.isoformat(),
             parameters=deployment.parameters or {},
-            resources=resources,
+            resources=deployment.cloud_resources or resources,  # Use cloud_resources or resources
             tenantId=tenant.tenant_id,
             region=deployment.region,
             details={
-                "outputs": deployment_details.outputs if deployment_details else {}
-            } if deployment_details else None
+                "outputs": deployment.outputs or {}
+            } if deployment.outputs else None
         )
     
     except HTTPException:
@@ -988,8 +997,8 @@ def create_deployment(
             tenantId=tenant.tenant_id,
             region=region,
             details={
-                "outputs": deployment_details.outputs if deployment_details else {}
-            } if deployment_details else None
+                "outputs": deployment.outputs or {}
+            } if deployment.outputs else None
         )
     
     except HTTPException:
@@ -1069,18 +1078,18 @@ def update_deployment(
             templateId=template.template_id,
             templateName=template.name,
             templateVersion=deployment.template_version,  # Add template version
-            provider=template.provider,
+            provider=deployment.provider or deployment.deployment_type,
             status=deployment.status,
             environment=environment.name,
             createdAt=deployment.created_at.isoformat(),
             updatedAt=deployment.updated_at.isoformat(),
             parameters=deployment.parameters or {},
-            resources=[],  # Default empty list if not available
+            resources=deployment.cloud_resources or [],  # Default empty list if not available
             tenantId=tenant.tenant_id,
             region=deployment.region,
             details={
-                "outputs": deployment_details.outputs if deployment_details else {}
-            } if deployment_details else None
+                "outputs": deployment.outputs or {}
+            } if deployment.outputs else None
         )
     
     except HTTPException:
@@ -1301,91 +1310,85 @@ def update_deployment_status(
                 detail="Deployment not found"
             )
         
-        logger.debug(f"Found deployment: {deployment.name} (ID: {deployment.id}, DB ID: {deployment.deployment_id})")
+        logger.debug(f"Found deployment: {deployment.id}")
         
-        # Get or create deployment details
-        logger.debug(f"Looking for deployment details for deployment ID: {deployment.id}")
-        deployment_details = db.query(DeploymentDetails).filter(
-            DeploymentDetails.deployment_id == deployment.id
-        ).first()
-        
-        if not deployment_details:
-            logger.debug(f"Creating new deployment details for deployment ID: {deployment.id}")
-            deployment_details = DeploymentDetails(
-                deployment_id=deployment.id,
-                provider="azure",
-                deployment_type=deployment.deployment_type if hasattr(deployment, 'deployment_type') else "arm",
-                cloud_deployment_id=deployment.cloud_deployment_id if hasattr(deployment, 'cloud_deployment_id') else None,
-                cloud_region=deployment.region,
-                status="in_progress"
-            )
-            db.add(deployment_details)
-            logger.debug(f"Added new deployment details to session")
-        else:
-            logger.debug(f"Found existing deployment details: {deployment_details.id}")
-        
-        # Update deployment status
-        status_value = update_data.get("status")
-        if status_value:
-            logger.debug(f"Updating status to: {status_value}")
-            deployment.status = status_value
-            deployment_details.status = status_value
+        # Update deployment with Azure deployment details
+        if update_data:
+            logger.debug(f"Updating deployment with data: {update_data}")
             
-            # If deployment is complete, update completed_at
-            if status_value in ["succeeded", "failed", "canceled"]:
-                logger.debug(f"Deployment is complete with status: {status_value}, updating completed_at")
-                deployment_details.completed_at = datetime.utcnow()
-        
-        # Update resources
-        resources = update_data.get("resources")
-        if resources:
-            logger.debug(f"Updating resources: {len(resources)} resources")
-            deployment_details.cloud_resources = resources
-        
-        # Update outputs
-        outputs = update_data.get("outputs")
-        if outputs:
-            logger.debug(f"Updating outputs: {len(outputs)} outputs")
-            deployment_details.outputs = outputs
-        
-        # Update logs
-        logs = update_data.get("logs")
-        if logs:
-            logger.debug(f"Updating logs: {len(logs)} log entries")
-            deployment_details.logs = logs
-        
-        # Add to deployment history
-        logger.debug(f"Creating history entry for status: {status_value}")
-        history_entry = DeploymentHistory(
-            deployment_id=deployment.id,
-            status=status_value,
-            message=f"Deployment status updated to {status_value}",
-            details={
-                "resources": resources,
-                "outputs": outputs,
-                "logs": logs,
-                "deployment_result": update_data.get("deployment_result", {})  # Store the deployment result
-            },
-            user_id=current_user.id
-        )
-        db.add(history_entry)
-        logger.debug(f"Added history entry to session")
-        
-        # Commit changes
-        logger.debug("Committing changes to database")
-        try:
+            # Update deployment status
+            status_value = update_data.get("status")
+            if status_value:
+                deployment.status = status_value
+                logger.debug(f"Updated deployment status to: {status_value}")
+                
+                # If completed, set completed_at timestamp
+                if status_value.lower() in ["completed", "succeeded", "failed", "canceled"]:
+                    deployment.completed_at = datetime.utcnow()
+                    logger.debug(f"Set completed_at timestamp: {deployment.completed_at}")
+            
+            # Update cloud deployment ID
+            cloud_deployment_id = update_data.get("cloud_deployment_id")
+            if cloud_deployment_id:
+                deployment.cloud_deployment_id = cloud_deployment_id
+                logger.debug(f"Updated cloud_deployment_id to: {cloud_deployment_id}")
+            
+            # Update provider
+            provider = update_data.get("provider")
+            if provider:
+                deployment.provider = provider
+                logger.debug(f"Updated provider to: {provider}")
+            
+            # Update resources
+            resources = update_data.get("resources")
+            if resources:
+                deployment.cloud_resources = resources
+                logger.debug(f"Updated cloud_resources")
+            
+            # Update logs
+            logs = update_data.get("logs")
+            if logs:
+                deployment.logs = logs
+                logger.debug(f"Updated logs")
+            
+            # Update outputs
+            outputs = update_data.get("outputs")
+            if outputs:
+                deployment.outputs = outputs
+                logger.debug(f"Updated outputs")
+            
+            # Update error details
+            error_details = update_data.get("error_details")
+            if error_details:
+                deployment.error_details = error_details
+                logger.debug(f"Updated error_details")
+            
             db.commit()
-            logger.debug("Successfully committed changes to database")
-        except Exception as commit_error:
-            logger.error(f"Error committing to database: {str(commit_error)}")
-            db.rollback()
-            raise commit_error
+            logger.debug(f"Committed deployment updates to database")
         
-        logger.debug(f"Status update for deployment {deployment_id} completed successfully")
+        # Get logs from deployment_history table
+        logger.debug(f"Looking for logs for deployment ID: {deployment.id}")
+        logs = db.query(DeploymentHistory).filter(
+            DeploymentHistory.deployment_id == deployment.id
+        ).order_by(DeploymentHistory.created_at.desc()).all()
+        
+        # Format logs for response
+        formatted_logs = []
+        for log in logs:
+            formatted_logs.append({
+                "id": log.id,
+                "status": log.status,
+                "message": log.message,
+                "details": log.details,
+                "timestamp": log.created_at.isoformat(),
+                "user_id": log.user_id
+            })
+        
         return {
             "message": "Deployment status updated successfully",
             "deployment_id": deployment_id,
-            "status": status_value
+            "status": deployment.status,
+            "logs": formatted_logs
         }
     
     except Exception as e:

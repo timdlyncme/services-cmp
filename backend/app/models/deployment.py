@@ -141,6 +141,17 @@ class Deployment(Base):
     cloud_deployment_id = Column(String, nullable=True)  # ID from the cloud provider
     deployment_type = Column(String, default="arm")  # arm, terraform, etc.
     template_version = Column(String, nullable=True)  # Store the template version used for deployment
+    
+    # Fields migrated from DeploymentDetails
+    provider = Column(String, nullable=True)  # azure, aws, gcp
+    template_source = Column(String, nullable=True)  # url, code
+    template_url = Column(String, nullable=True)
+    cloud_resources = Column(JSON, nullable=True)  # List of resources created
+    logs = Column(JSON, nullable=True)  # Deployment logs
+    outputs = Column(JSON, nullable=True)  # Deployment outputs
+    error_details = Column(JSON, nullable=True)  # Error details if failed
+    completed_at = Column(DateTime, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
