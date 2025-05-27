@@ -468,12 +468,7 @@ const TemplateDetails = () => {
                     Template Code
                   </CardTitle>
                   <div className="flex space-x-2">
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        {codeExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </Button>
-                    </CollapsibleTrigger>
-                    <Button 
+                  <Button 
                       variant="outline" 
                       size="sm"
                       onClick={handleSaveTemplate}
@@ -691,6 +686,12 @@ const TemplateDetails = () => {
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        {codeExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </Button>
+                    </CollapsibleTrigger>
+                    
                   </div>
                 </div>
                 <CardDescription>
@@ -713,7 +714,7 @@ const TemplateDetails = () => {
             open={paramsExpanded}
             onOpenChange={setParamsExpanded}
             className="w-full"
-          >
+          > 
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -1036,7 +1037,8 @@ const TemplateDetails = () => {
                 Version History
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-2 pt-0">
+              <div className="h-[200px] overflow-auto">
               {loadingVersions ? (
                 <div className="text-center py-4">
                   <p>Loading versions...</p>
@@ -1046,7 +1048,7 @@ const TemplateDetails = () => {
                   <p className="text-muted-foreground">No version history available</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4" style={{ padding: "0px 20px 0px 0px"}}>
                   {versions.map((version) => (
                     <div key={version.id} className="flex justify-between items-center">
                       <div>
@@ -1076,6 +1078,7 @@ const TemplateDetails = () => {
                   ))}
                 </div>
               )}
+              </div>
             </CardContent>
           </Card>
         </div>
