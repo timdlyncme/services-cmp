@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, Header, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 import requests
 import os
 import json
@@ -132,6 +132,77 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
         if deployment_id in polling_threads:
             del polling_threads[deployment_id]
         logger.info(f"Stopped status polling for deployment {deployment_id}")
+
+# Helper function to find a deployment by ID with various matching methods
+def find_deployment_by_id(deployment_id: str) -> Tuple[Dict[str, Any], str]:
+    """
+    Find a deployment by ID using various matching methods.
+    Returns a tuple of (deployment, deployment_key)
+    Raises HTTPException if deployment not found.
+    """
+    # First, try to find the deployment with the exact ID
+    if deployment_id in deployments:
+        return deployments[deployment_id], deployment_id
+    
+    # If not found, try to find by matching the deployment_id field
+    matching_deployments = [
+        d for d in deployments.values() 
+        if d.get("deployment_id") == deployment_id
+    ]
+    
+    if matching_deployments:
+        # Use the first matching deployment
+        deployment = matching_deployments[0]
+        # Get the key used in the deployments dictionary
+        deployment_key = next(
+            k for k, v in deployments.items() 
+            if v.get("deployment_id") == deployment_id
+        )
+        logger.info(f"Found deployment with ID {deployment_id} using key {deployment_key}")
+        return deployment, deployment_key
+    
+    # If still not found, check if it's a cloud_deployment_id
+    matching_deployments = [
+        d for d in deployments.values() 
+        if d.get("azure_deployment_id") == deployment_id
+    ]
+    
+    if matching_deployments:
+        # Use the first matching deployment
+        deployment = matching_deployments[0]
+        # Get the key used in the deployments dictionary
+        deployment_key = next(
+            k for k, v in deployments.items() 
+            if v.get("azure_deployment_id") == deployment_id
+        )
+        logger.info(f"Found deployment with azure_deployment_id {deployment_id} using key {deployment_key}")
+        return deployment, deployment_key
+    
+    # If still not found, try to match by removing any prefix
+    if "-" in deployment_id:
+        # Try to extract UUID part if it's in format "prefix-uuid"
+        parts = deployment_id.split("-", 1)
+        if len(parts) > 1:
+            uuid_part = parts[1]
+            matching_deployments = [
+                d for d in deployments.values() 
+                if d.get("deployment_id", "").endswith(uuid_part)
+            ]
+            
+            if matching_deployments:
+                # Use the first matching deployment
+                deployment = matching_deployments[0]
+                # Get the key used in the deployments dictionary
+                deployment_key = next(
+                    k for k, v in deployments.items() 
+                    if v.get("deployment_id", "").endswith(uuid_part)
+                )
+                logger.info(f"Found deployment with UUID part {uuid_part} using key {deployment_key}")
+                return deployment, deployment_key
+    
+    # If we get here, the deployment was not found
+    logger.error(f"Deployment {deployment_id} not found after trying all matching methods")
+    raise HTTPException(status_code=404, detail="Deployment not found")
 
 # Authentication dependency
 def get_current_user(authorization: str = Header(None)):
@@ -475,32 +546,34 @@ def get_deployment(
     user: dict = Depends(check_permission("deployment:read"))
 ):
     try:
-        # Check if deployment exists
-        if deployment_id not in deployments:
-            raise HTTPException(status_code=404, detail="Deployment not found")
+        # Find the deployment using our helper function
+        deployment, _ = find_deployment_by_id(deployment_id)
         
         # Check if user has access to this deployment
-        deployment = deployments[deployment_id]
         if deployment["tenant_id"] != user["tenant_id"]:
             raise HTTPException(status_code=403, detail="Access denied")
         
         # Get deployment status from Azure
         if deployment.get("azure_deployment_id") and deployment.get("resource_group"):
-            azure_status = azure_deployer.get_deployment_status(
-                resource_group=deployment["resource_group"],
-                deployment_name=deployment["azure_deployment_id"]
-            )
-            
-            # Update deployment status
-            deployment["status"] = azure_status.get("status", deployment["status"])
-            deployment["resources"] = azure_status.get("resources", [])
-            deployment["outputs"] = azure_status.get("outputs", {})
-            deployment["logs"] = azure_status.get("logs", [])
-            deployment["updated_at"] = datetime.utcnow().isoformat()
+            try:
+                azure_status = azure_deployer.get_deployment_status(
+                    resource_group=deployment["resource_group"],
+                    deployment_name=deployment["azure_deployment_id"]
+                )
+                
+                # Update deployment status
+                deployment["status"] = azure_status.get("status", deployment["status"])
+                deployment["resources"] = azure_status.get("resources", [])
+                deployment["outputs"] = azure_status.get("outputs", {})
+                deployment["logs"] = azure_status.get("logs", [])
+                deployment["updated_at"] = datetime.utcnow().isoformat()
+            except Exception as e:
+                logger.warning(f"Error getting Azure deployment status: {str(e)}")
+                # Continue with the existing deployment data
         
         return deployment
     except Exception as e:
-        logger.error(f"Error getting deployment: {str(e)}")
+        logger.error(f"Error getting deployment: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/deployments/{deployment_id}")
@@ -510,12 +583,10 @@ def update_deployment(
     user: dict = Depends(check_permission("deployment:update"))
 ):
     try:
-        # Check if deployment exists
-        if deployment_id not in deployments:
-            raise HTTPException(status_code=404, detail="Deployment not found")
+        # Find the deployment using our helper function
+        deployment, _ = find_deployment_by_id(deployment_id)
         
         # Check if user has access to this deployment
-        deployment = deployments[deployment_id]
         if deployment["tenant_id"] != user["tenant_id"]:
             raise HTTPException(status_code=403, detail="Access denied")
         
@@ -550,7 +621,7 @@ def update_deployment(
             "message": result.get("message", "Deployment update initiated")
         }
     except Exception as e:
-        logger.error(f"Error updating deployment: {str(e)}")
+        logger.error(f"Error updating deployment: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/deployments/{deployment_id}")
@@ -559,12 +630,10 @@ def delete_deployment(
     user: dict = Depends(check_permission("deployment:delete"))
 ):
     try:
-        # Check if deployment exists
-        if deployment_id not in deployments:
-            raise HTTPException(status_code=404, detail="Deployment not found")
+        # Find the deployment using our helper function
+        deployment, _ = find_deployment_by_id(deployment_id)
         
         # Check if user has access to this deployment
-        deployment = deployments[deployment_id]
         if deployment["tenant_id"] != user["tenant_id"]:
             raise HTTPException(status_code=403, detail="Access denied")
         
@@ -584,7 +653,7 @@ def delete_deployment(
             "message": result.get("message", "Deployment deletion initiated")
         }
     except Exception as e:
-        logger.error(f"Error deleting deployment: {str(e)}")
+        logger.error(f"Error deleting deployment: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/deployments/{deployment_id}/resources")
@@ -593,72 +662,8 @@ def delete_deployment_resources(
     user: dict = Depends(check_permission("deployment:delete"))
 ):
     try:
-        # Check if deployment exists - handle both raw UUID and prefixed format
-        # First, try to find the deployment with the exact ID
-        if deployment_id in deployments:
-            deployment = deployments[deployment_id]
-        else:
-            # If not found, try to find by matching the deployment_id field
-            matching_deployments = [
-                d for d in deployments.values() 
-                if d.get("deployment_id") == deployment_id
-            ]
-            
-            if matching_deployments:
-                # Use the first matching deployment
-                deployment = matching_deployments[0]
-                # Get the key used in the deployments dictionary
-                deployment_key = next(
-                    k for k, v in deployments.items() 
-                    if v.get("deployment_id") == deployment_id
-                )
-                logger.info(f"Found deployment with ID {deployment_id} using key {deployment_key}")
-            else:
-                # If still not found, check if it's a cloud_deployment_id
-                matching_deployments = [
-                    d for d in deployments.values() 
-                    if d.get("azure_deployment_id") == deployment_id
-                ]
-                
-                if matching_deployments:
-                    # Use the first matching deployment
-                    deployment = matching_deployments[0]
-                    # Get the key used in the deployments dictionary
-                    deployment_key = next(
-                        k for k, v in deployments.items() 
-                        if v.get("azure_deployment_id") == deployment_id
-                    )
-                    logger.info(f"Found deployment with azure_deployment_id {deployment_id} using key {deployment_key}")
-                else:
-                    # If still not found, try to match by removing any prefix
-                    if "-" in deployment_id:
-                        # Try to extract UUID part if it's in format "prefix-uuid"
-                        parts = deployment_id.split("-", 1)
-                        if len(parts) > 1:
-                            uuid_part = parts[1]
-                            matching_deployments = [
-                                d for d in deployments.values() 
-                                if d.get("deployment_id", "").endswith(uuid_part)
-                            ]
-                            
-                            if matching_deployments:
-                                # Use the first matching deployment
-                                deployment = matching_deployments[0]
-                                # Get the key used in the deployments dictionary
-                                deployment_key = next(
-                                    k for k, v in deployments.items() 
-                                    if v.get("deployment_id", "").endswith(uuid_part)
-                                )
-                                logger.info(f"Found deployment with UUID part {uuid_part} using key {deployment_key}")
-                            else:
-                                logger.error(f"Deployment {deployment_id} not found after trying all matching methods")
-                                raise HTTPException(status_code=404, detail="Deployment not found")
-                        else:
-                            logger.error(f"Deployment {deployment_id} not found and couldn't parse UUID part")
-                            raise HTTPException(status_code=404, detail="Deployment not found")
-                    else:
-                        logger.error(f"Deployment {deployment_id} not found")
-                        raise HTTPException(status_code=404, detail="Deployment not found")
+        # Find the deployment using our helper function
+        deployment, _ = find_deployment_by_id(deployment_id)
         
         # Check if user has access to this deployment
         if deployment["tenant_id"] != user["tenant_id"]:
