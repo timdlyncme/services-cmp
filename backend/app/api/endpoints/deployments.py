@@ -13,9 +13,7 @@ from pydantic import BaseModel, Field
 from app.db.session import get_db
 from app.api.deps import get_current_user
 from app.models.user import User, Tenant
-from app.models.environment import Environment
-from app.models.template import Template
-from app.models.deployment import Deployment, DeploymentHistory
+from app.models.deployment import Deployment, DeploymentHistory, Environment, Template
 from app.schemas.deployment import (
     DeploymentBase,
     DeploymentCreate,
