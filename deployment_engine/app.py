@@ -133,64 +133,18 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
             del polling_threads[deployment_id]
         logger.info(f"Stopped status polling for deployment {deployment_id}")
 
+# Stop status polling for a deployment
+def stop_status_polling(deployment_id: str):
+    """
+    Stop status polling for a deployment
+    """
+    if deployment_id in polling_threads:
+        polling_threads[deployment_id].stop()
+        if deployment_id in polling_threads:
+            del polling_threads[deployment_id]
+        logger.info(f"Stopped status polling for deployment {deployment_id}")
+
 # Helper function to find a deployment by ID with various matching methods
-def find_deployment_by_id(deployment_id: str) -> Tuple[Dict[str, Any], str]:
-    """
-    Find a deployment by ID using various matching methods.
-    Returns a tuple of (deployment, deployment_key)
-    Raises HTTPException if deployment not found.
-    """
-    # First, try to find the deployment with the exact ID
-    if deployment_id in deployments:
-        return deployments[deployment_id], deployment_id
-    
-    # If not found, try to find by matching the deployment_id field
-    matching_deployments = [
-        d for d in deployments.values() 
-        if d.get("deployment_id") == deployment_id
-    ]
-    
-    if matching_deployments:
-        # Use the first matching deployment
-        deployment = matching_deployments[0]
-        # Get the key used in the deployments dictionary
-        deployment_key = next(
-            k for k, v in deployments.items() 
-            if v.get("deployment_id") == deployment_id
-        )
-        logger.info(f"Found deployment with ID {deployment_id} using key {deployment_key}")
-        return deployment, deployment_key
-    
-    # If still not found, check if it's a cloud_deployment_id
-    matching_deployments = [
-        d for d in deployments.values() 
-        if d.get("azure_deployment_id") == deployment_id
-    ]
-    
-    if matching_deployments:
-        # Use the first matching deployment
-        deployment = matching_deployments[0]
-        # Get the key used in the deployments dictionary
-        deployment_key = next(
-            k for k, v in deployments.items() 
-            if v.get("azure_deployment_id") == deployment_id
-        )
-        logger.info(f"Found deployment with azure_deployment_id {deployment_id} using key {deployment_key}")
-        return deployment, deployment_key
-    
-    # If still not found, try to match by removing any prefix
-    if "-" in deployment_id:
-        # Try to extract UUID part if it's in format "prefix-uuid"
-        parts = deployment_id.split("-", 1)
-        if len(parts) > 1:
-            uuid_part = parts[1]
-            matching_deployments = [
-                d for d in deployments.values() 
-                if d.get("deployment_id", "").endswith(uuid_part)
-            ]
-            
-            if matching_deployments:
-                # Use the first matching deployment
                 deployment = matching_deployments[0]
                 # Get the key used in the deployments dictionary
                 deployment_key = next(
@@ -203,6 +157,36 @@ def find_deployment_by_id(deployment_id: str) -> Tuple[Dict[str, Any], str]:
     # If we get here, the deployment was not found
     logger.error(f"Deployment {deployment_id} not found after trying all matching methods")
     raise HTTPException(status_code=404, detail="Deployment not found")
+
+# Helper function to extract resource group and deployment name from ID
+def extract_deployment_info(deployment_id: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Extract resource group and deployment name from a deployment ID.
+    
+    Args:
+        deployment_id (str): The deployment ID
+        
+    Returns:
+        Tuple[Optional[str], Optional[str]]: A tuple of (resource_group, deployment_name)
+    """
+    # Format: /subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Resources/deployments/{deployment_name}
+    parts = deployment_id.split('/')
+    
+    resource_group = None
+    deployment_name = None
+    
+    # Try to extract resource group and deployment name from the ID
+    for i, part in enumerate(parts):
+        if part.lower() == 'resourcegroups' and i + 1 < len(parts):
+            resource_group = parts[i + 1]
+        elif part.lower() == 'deployments' and i + 1 < len(parts):
+            deployment_name = parts[i + 1]
+    
+    # If we couldn't extract from the path, the deployment_id might be just the name
+    if not deployment_name:
+        deployment_name = deployment_id
+    
+    return resource_group, deployment_name
 
 # Authentication dependency
 def get_current_user(authorization: str = Header(None)):
@@ -521,64 +505,16 @@ def list_deployments(
     try:
         logger.info(f"Listing deployments for tenant {user['tenant_id']}")
         
-        # Get deployments from Azure
-        try:
-            # Fetch deployments from Azure
-            azure_deployments = azure_deployer.list_deployments()
-            logger.info(f"Found {len(azure_deployments)} deployments in Azure")
-            
-            # Update in-memory deployments with Azure data
-            for azure_deployment in azure_deployments:
-                # Generate a unique ID for the deployment
-                deployment_id = azure_deployment.get("deployment_id")
-                if not deployment_id:
-                    continue
-                
-                # Check if deployment already exists in memory
-                existing_deployment = None
-                for d in deployments.values():
-                    if d.get("azure_deployment_id") == azure_deployment.get("name"):
-                        existing_deployment = d
-                        break
-                
-                if existing_deployment:
-                    # Update existing deployment
-                    logger.info(f"Updating existing deployment {deployment_id}")
-                    existing_deployment.update({
-                        "status": azure_deployment.get("status", existing_deployment.get("status")),
-                        "resources": azure_deployment.get("resources", existing_deployment.get("resources", [])),
-                        "outputs": azure_deployment.get("outputs", existing_deployment.get("outputs", {})),
-                        "logs": azure_deployment.get("logs", existing_deployment.get("logs", [])),
-                        "updated_at": datetime.utcnow().isoformat()
-                    })
-                else:
-                    # Create new deployment
-                    logger.info(f"Adding new deployment {deployment_id}")
-                    new_deployment = {
-                        "deployment_id": deployment_id,
-                        "name": azure_deployment.get("name"),
-                        "resource_group": azure_deployment.get("resource_group"),
-                        "azure_deployment_id": azure_deployment.get("name"),
-                        "status": azure_deployment.get("status", "unknown"),
-                        "resources": azure_deployment.get("resources", []),
-                        "outputs": azure_deployment.get("outputs", {}),
-                        "logs": azure_deployment.get("logs", []),
-                        "created_at": azure_deployment.get("created_at", datetime.utcnow().isoformat()),
-                        "updated_at": datetime.utcnow().isoformat(),
-                        "tenant_id": user["tenant_id"]  # Assign to current user's tenant
-                    }
-                    deployments[deployment_id] = new_deployment
-            
-            logger.info(f"In-memory deployments after Azure sync: {len(deployments)}")
-        except Exception as e:
-            logger.error(f"Error fetching deployments from Azure: {str(e)}", exc_info=True)
-            # Continue with in-memory deployments
+        # Get deployments directly from Azure
+        azure_deployments = azure_deployer.list_deployments()
+        logger.info(f"Found {len(azure_deployments)} deployments in Azure")
         
-        # Filter deployments by tenant
-        tenant_deployments = [
-            d for d in deployments.values()
-            if d["tenant_id"] == user["tenant_id"]
-        ]
+        # Filter deployments by tenant (assign all to current tenant for now)
+        tenant_deployments = []
+        for deployment in azure_deployments:
+            # Add tenant_id to each deployment
+            deployment["tenant_id"] = user["tenant_id"]
+            tenant_deployments.append(deployment)
         
         # Filter by status if provided
         if status:
@@ -612,30 +548,46 @@ def get_deployment(
     user: dict = Depends(check_permission("deployment:read"))
 ):
     try:
-        # Find the deployment using our helper function
-        deployment, _ = find_deployment_by_id(deployment_id)
+        logger.info(f"Getting deployment {deployment_id}")
         
-        # Check if user has access to this deployment
-        if deployment["tenant_id"] != user["tenant_id"]:
-            raise HTTPException(status_code=403, detail="Access denied")
+        # Extract resource group and deployment name from the ID
+        resource_group, deployment_name = extract_deployment_info(deployment_id)
+        
+        # If we couldn't extract resource group, try to find it by listing deployments
+        if not resource_group:
+            try:
+                all_deployments = azure_deployer.list_deployments()
+                for deployment in all_deployments:
+                    if deployment.get("name") == deployment_name:
+                        resource_group = deployment.get("resource_group")
+                        break
+            except Exception as e:
+                logger.warning(f"Error finding resource group for deployment {deployment_name}: {str(e)}")
+        
+        if not resource_group:
+            logger.error(f"Could not determine resource group for deployment {deployment_id}")
+            raise HTTPException(status_code=404, detail="Deployment not found or resource group could not be determined")
+        
+        logger.info(f"Getting deployment {deployment_name} in resource group {resource_group}")
         
         # Get deployment status from Azure
-        if deployment.get("azure_deployment_id") and deployment.get("resource_group"):
-            try:
-                azure_status = azure_deployer.get_deployment_status(
-                    resource_group=deployment["resource_group"],
-                    deployment_name=deployment["azure_deployment_id"]
-                )
-                
-                # Update deployment status
-                deployment["status"] = azure_status.get("status", deployment["status"])
-                deployment["resources"] = azure_status.get("resources", [])
-                deployment["outputs"] = azure_status.get("outputs", {})
-                deployment["logs"] = azure_status.get("logs", [])
-                deployment["updated_at"] = datetime.utcnow().isoformat()
-            except Exception as e:
-                logger.warning(f"Error getting Azure deployment status: {str(e)}")
-                # Continue with the existing deployment data
+        deployment_status = azure_deployer.get_deployment_status(
+            resource_group=resource_group,
+            deployment_name=deployment_name
+        )
+        
+        # Format the deployment
+        deployment = {
+            "deployment_id": deployment_id,
+            "name": deployment_name,
+            "resource_group": resource_group,
+            "status": deployment_status.get("status", "unknown"),
+            "resources": deployment_status.get("resources", []),
+            "outputs": deployment_status.get("outputs", {}),
+            "logs": deployment_status.get("logs", []),
+            "tenant_id": user["tenant_id"],
+            "updated_at": datetime.utcnow().isoformat()
+        }
         
         return deployment
     except Exception as e:
@@ -649,12 +601,27 @@ def update_deployment(
     user: dict = Depends(check_permission("deployment:update"))
 ):
     try:
-        # Find the deployment using our helper function
-        deployment, _ = find_deployment_by_id(deployment_id)
+        logger.info(f"Updating deployment {deployment_id}")
         
-        # Check if user has access to this deployment
-        if deployment["tenant_id"] != user["tenant_id"]:
-            raise HTTPException(status_code=403, detail="Access denied")
+        # Extract resource group and deployment name from the ID
+        resource_group, deployment_name = extract_deployment_info(deployment_id)
+        
+        # If we couldn't extract resource group, try to find it by listing deployments
+        if not resource_group:
+            try:
+                all_deployments = azure_deployer.list_deployments()
+                for deployment in all_deployments:
+                    if deployment.get("name") == deployment_name:
+                        resource_group = deployment.get("resource_group")
+                        break
+            except Exception as e:
+                logger.warning(f"Error finding resource group for deployment {deployment_name}: {str(e)}")
+        
+        if not resource_group:
+            logger.error(f"Could not determine resource group for deployment {deployment_id}")
+            raise HTTPException(status_code=404, detail="Deployment not found or resource group could not be determined")
+        
+        logger.info(f"Updating deployment {deployment_name} in resource group {resource_group}")
         
         # Extract update details
         template = update_data.get("template")
@@ -671,19 +638,17 @@ def update_deployment(
         
         # Update deployment in Azure
         result = azure_deployer.update_deployment(
-            resource_group=deployment["resource_group"],
-            deployment_name=deployment["azure_deployment_id"],
+            resource_group=resource_group,
+            deployment_name=deployment_name,
             template_data=template_data,
             parameters=parameters
         )
         
-        # Update deployment status
-        deployment["status"] = result.get("status", deployment["status"])
-        deployment["updated_at"] = datetime.utcnow().isoformat()
+        logger.info(f"Deployment update result: {result}")
         
         return {
             "deployment_id": deployment_id,
-            "status": deployment["status"],
+            "status": result.get("status", "updating"),
             "message": result.get("message", "Deployment update initiated")
         }
     except Exception as e:
@@ -696,22 +661,35 @@ def delete_deployment(
     user: dict = Depends(check_permission("deployment:delete"))
 ):
     try:
-        # Find the deployment using our helper function
-        deployment, _ = find_deployment_by_id(deployment_id)
+        logger.info(f"Deleting deployment {deployment_id}")
         
-        # Check if user has access to this deployment
-        if deployment["tenant_id"] != user["tenant_id"]:
-            raise HTTPException(status_code=403, detail="Access denied")
+        # Extract resource group and deployment name from the ID
+        resource_group, deployment_name = extract_deployment_info(deployment_id)
+        
+        # If we couldn't extract resource group, try to find it by listing deployments
+        if not resource_group:
+            try:
+                all_deployments = azure_deployer.list_deployments()
+                for deployment in all_deployments:
+                    if deployment.get("name") == deployment_name:
+                        resource_group = deployment.get("resource_group")
+                        break
+            except Exception as e:
+                logger.warning(f"Error finding resource group for deployment {deployment_name}: {str(e)}")
+        
+        if not resource_group:
+            logger.error(f"Could not determine resource group for deployment {deployment_id}")
+            raise HTTPException(status_code=404, detail="Deployment not found or resource group could not be determined")
+        
+        logger.info(f"Deleting deployment {deployment_name} in resource group {resource_group}")
         
         # Delete deployment from Azure
         result = azure_deployer.delete_deployment(
-            resource_group=deployment["resource_group"],
-            deployment_name=deployment["azure_deployment_id"]
+            resource_group=resource_group,
+            deployment_name=deployment_name
         )
         
-        # Update deployment status
-        deployment["status"] = "deleting"
-        deployment["updated_at"] = datetime.utcnow().isoformat()
+        logger.info(f"Deployment deletion result: {result}")
         
         return {
             "deployment_id": deployment_id,
@@ -728,21 +706,32 @@ def delete_deployment_resources(
     user: dict = Depends(check_permission("deployment:delete"))
 ):
     try:
-        # Find the deployment using our helper function
-        deployment, _ = find_deployment_by_id(deployment_id)
-        
-        # Check if user has access to this deployment
-        if deployment["tenant_id"] != user["tenant_id"]:
-            logger.error(f"User {user['username']} does not have access to deployment {deployment_id}")
-            raise HTTPException(status_code=403, detail="Access denied")
-        
         logger.info(f"Deleting resources for deployment {deployment_id}")
-        logger.info(f"Resource group: {deployment.get('resource_group')}, Azure deployment ID: {deployment.get('azure_deployment_id')}")
+        
+        # Extract resource group and deployment name from the ID
+        resource_group, deployment_name = extract_deployment_info(deployment_id)
+        
+        # If we couldn't extract resource group, try to find it by listing deployments
+        if not resource_group:
+            try:
+                all_deployments = azure_deployer.list_deployments()
+                for deployment in all_deployments:
+                    if deployment.get("name") == deployment_name:
+                        resource_group = deployment.get("resource_group")
+                        break
+            except Exception as e:
+                logger.warning(f"Error finding resource group for deployment {deployment_name}: {str(e)}")
+        
+        if not resource_group:
+            logger.error(f"Could not determine resource group for deployment {deployment_id}")
+            raise HTTPException(status_code=404, detail="Deployment not found or resource group could not be determined")
+        
+        logger.info(f"Deleting resources for deployment {deployment_name} in resource group {resource_group}")
         
         # Delete resources from Azure but keep the deployment record
         result = azure_deployer.delete_deployment_resources(
-            resource_group=deployment["resource_group"],
-            deployment_name=deployment["azure_deployment_id"]
+            resource_group=resource_group,
+            deployment_name=deployment_name
         )
         
         logger.info(f"Resource deletion result: {result}")
