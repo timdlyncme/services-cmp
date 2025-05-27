@@ -626,8 +626,8 @@ def get_deployments(
             # Get deployment details if available to fetch cloud_resources
             # Consolidated model - no need to query DeploymentDetails
             # deployment_details = db.query(DeploymentDetails).filter(
-                DeploymentDetails.deployment_id == deployment.id
-            ).first()
+            #    DeploymentDetails.deployment_id == deployment.id
+            # ).first()
             
             # Get resources from deployment details
             resources = []
@@ -716,13 +716,13 @@ def get_deployment(
         # Get deployment details if available
         # Consolidated model - no need to query DeploymentDetails
             # deployment_details = db.query(DeploymentDetails).filter(
-            DeploymentDetails.deployment_id == deployment.id
-        ).first()
+        #    DeploymentDetails.deployment_id == deployment.id
+        # ).first()
         
         # Get resources from deployment details
         resources = []
         # Use cloud_resources from deployment
-            if deployment.cloud_resources:
+        if deployment.cloud_resources:
             resources = deployment.cloud_resources
         
         # Convert to frontend-compatible format
