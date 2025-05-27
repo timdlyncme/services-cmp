@@ -267,13 +267,24 @@ class DeploymentDetailResponse(DeploymentResponse):
     cloud_region: Optional[str] = None
     cloud_resources: Optional[List[Dict[str, Any]]] = None
     outputs: Optional[Dict[str, Any]] = None
-    logs: Optional[str] = None
+    logs: Optional[Dict[str, Any]] = None
     error_details: Optional[Dict[str, Any]] = None
     completed_at: Optional[datetime] = None
     history: List[DeploymentHistoryItem] = []
+    template: Optional[TemplateResponse] = None
+    environment: Optional[EnvironmentResponse] = None
+    parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
 
     class Config:
         orm_mode = True
+
+class DeploymentStatusUpdate(BaseModel):
+    status: str
+    message: Optional[str] = None
+    logs: Optional[Dict[str, Any]] = None
+    outputs: Optional[Dict[str, Any]] = None
+    error_details: Optional[Dict[str, Any]] = None
 
 # Environment schemas
 class EnvironmentCreate(EnvironmentBase):
