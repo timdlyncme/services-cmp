@@ -86,6 +86,7 @@ class TemplateUpdate(BaseModel):
     category: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
     variables: Optional[Dict[str, Any]] = None
+    create_new_version: Optional[bool] = True  # Flag to control version creation
 
 class TemplateResponse(TemplateBase):
     id: int
@@ -151,6 +152,7 @@ class CloudDeploymentResponse(BaseModel):
     name: str
     templateId: str
     templateName: str
+    templateVersion: Optional[str] = None  # Add template version
     provider: str
     status: str
     environment: str
@@ -160,6 +162,7 @@ class CloudDeploymentResponse(BaseModel):
     resources: List[Dict[str, Any]] = []
     tenantId: str
     region: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None  # Add details field for outputs
 
     class Config:
         orm_mode = True

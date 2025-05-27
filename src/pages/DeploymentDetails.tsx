@@ -36,6 +36,8 @@ import {
   GitCompare,
   Maximize,
   Minimize,
+  Code,
+  ExternalLink
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -116,6 +118,14 @@ const DeploymentDetails = () => {
               const associatedTemplate = templates.find(t => t.id === deploymentData.templateId);
               
               if (associatedTemplate) {
+                // Add the template version from the deployment data if available
+                if (deploymentData.templateVersion) {
+                  associatedTemplate.version = deploymentData.templateVersion;
+                } else if (associatedTemplate.current_version) {
+                  // If the deployment doesn't have the version but the template has current_version
+                  associatedTemplate.version = associatedTemplate.current_version;
+                }
+                
                 setTemplate(associatedTemplate);
               }
             } catch (error) {
@@ -334,15 +344,18 @@ const DeploymentDetails = () => {
         </div>
       </div>
       
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
+      {/* Main tabs */}
+      <Tabs defaultValue="overview" className="mt-6">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="resources">Resources</TabsTrigger>
+          <TabsTrigger value="outputs">Outputs</TabsTrigger>
+          <TabsTrigger value="logs">Logs</TabsTrigger>
           <TabsTrigger value="template">Template</TabsTrigger>
           <TabsTrigger value="parameters">Parameters</TabsTrigger>
-          <TabsTrigger value="logs">Logs</TabsTrigger>
-          <TabsTrigger value="diagram">Diagram</TabsTrigger>
         </TabsList>
         
+        {/* Overview tab */}
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Collapsible className="w-full">
@@ -531,67 +544,114 @@ const DeploymentDetails = () => {
           </Collapsible>
         </TabsContent>
         
-        <TabsContent value="template" className="space-y-6 pt-4">
+        {/* Resources tab */}
+        <TabsContent value="resources" className="space-y-6 pt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Template Code</CardTitle>
+              <CardTitle>Resources</CardTitle>
               <CardDescription>
-                The infrastructure as code template used for this deployment
+                Overview of all resources deployed by this deployment
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {template ? (
-                <ScrollArea className="h-[400px] rounded-md border bg-muted">
-                  <pre className="p-4 text-sm">
-                    <code>{template.code || "No code available"}</code>
-                  </pre>
-                </ScrollArea>
+              <ScrollArea className="h-[400px] rounded-md border bg-muted">
+                <div className="space-y-4">
+                  {deployment.resources && deployment.resources.length > 0 ? (
+                    deployment.resources.map((resource, index) => (
+                      <div key={index} className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">{resource.name}</p>
+                          <p className="text-sm text-muted-foreground">{resource.type}</p>
+                        </div>
+                        <div>
+                          <div className="flex items-center">
+                            {resource.status === 'Succeeded' ? (
+                              <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+                            ) : resource.status === 'Failed' ? (
+                              <XCircle className="h-4 w-4 text-red-500 mr-1" />
+                            ) : (
+                              <Clock className="h-4 w-4 text-yellow-500 mr-1" />
+                            )}
+                            <span>{resource.status || 'Unknown'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Code className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <h3 className="text-lg font-medium mb-2">No resources available</h3>
+                      <p className="max-w-md mx-auto">
+                        This deployment doesn't have any resources defined or they haven't been generated yet.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* Outputs tab */}
+        <TabsContent value="outputs" className="space-y-6 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Deployment Outputs</CardTitle>
+              <CardDescription>
+                Values and resources produced by this deployment
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {deployment?.details?.outputs && Object.keys(deployment.details.outputs).length > 0 ? (
+                <div className="space-y-6">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Output Name</TableHead>
+                        <TableHead>Value</TableHead>
+                        <TableHead>Type</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.entries(deployment.details.outputs).map(([key, value], index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{key}</TableCell>
+                          <TableCell>
+                            {typeof value === 'object' ? (
+                              <pre className="bg-muted p-2 rounded text-xs overflow-auto max-h-20">
+                                {JSON.stringify(value, null, 2)}
+                              </pre>
+                            ) : (
+                              <span>{String(value)}</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{typeof value}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  
+                  <div className="flex justify-end">
+                    <Button variant="outline" size="sm">
+                      <Download className="h-4 w-4 mr-2" />
+                      Export Outputs
+                    </Button>
+                  </div>
+                </div>
               ) : (
-                <div className="text-muted-foreground">Template not found</div>
+                <div className="text-center py-8 text-muted-foreground">
+                  <Code className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <h3 className="text-lg font-medium mb-2">No outputs available</h3>
+                  <p className="max-w-md mx-auto">
+                    This deployment doesn't have any outputs defined or they haven't been generated yet.
+                  </p>
+                </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
         
-        <TabsContent value="parameters" className="space-y-6 pt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Deployment Parameters</CardTitle>
-              <CardDescription>
-                Parameters used when deploying this template
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Parameter</TableHead>
-                    <TableHead>Value</TableHead>
-                    <TableHead>Type</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {deployment.parameters && Object.keys(deployment.parameters).length > 0 ? (
-                    Object.entries(deployment.parameters).map(([key, value], index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{key}</TableCell>
-                        <TableCell>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</TableCell>
-                        <TableCell>{typeof value}</TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={3} className="text-center text-muted-foreground">
-                        No parameters found
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
+        {/* Logs tab */}
         <TabsContent value="logs" className="space-y-6 pt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -644,6 +704,70 @@ const DeploymentDetails = () => {
           </Card>
         </TabsContent>
         
+        {/* Template tab */}
+        <TabsContent value="template" className="space-y-6 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Template Code</CardTitle>
+              <CardDescription>
+                The infrastructure as code template used for this deployment
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {template ? (
+                <ScrollArea className="h-[400px] rounded-md border bg-muted">
+                  <pre className="p-4 text-sm">
+                    <code>{template.code || "No code available"}</code>
+                  </pre>
+                </ScrollArea>
+              ) : (
+                <div className="text-muted-foreground">Template not found</div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* Parameters tab */}
+        <TabsContent value="parameters" className="space-y-6 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Deployment Parameters</CardTitle>
+              <CardDescription>
+                Parameters used when deploying this template
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Parameter</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead>Type</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deployment.parameters && Object.keys(deployment.parameters).length > 0 ? (
+                    Object.entries(deployment.parameters).map(([key, value], index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">{key}</TableCell>
+                        <TableCell>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</TableCell>
+                        <TableCell>{typeof value}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-muted-foreground">
+                        No parameters found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* Diagram tab */}
         <TabsContent value="diagram" className="space-y-6 pt-4">
           <Card>
             <CardHeader>
