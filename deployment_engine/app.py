@@ -144,19 +144,6 @@ def stop_status_polling(deployment_id: str):
             del polling_threads[deployment_id]
         logger.info(f"Stopped status polling for deployment {deployment_id}")
 
-# Helper function to find a deployment by ID with various matching methods
-                deployment = matching_deployments[0]
-                # Get the key used in the deployments dictionary
-                deployment_key = next(
-                    k for k, v in deployments.items() 
-                    if v.get("deployment_id", "").endswith(uuid_part)
-                )
-                logger.info(f"Found deployment with UUID part {uuid_part} using key {deployment_key}")
-                return deployment, deployment_key
-    
-    # If we get here, the deployment was not found
-    logger.error(f"Deployment {deployment_id} not found after trying all matching methods")
-    raise HTTPException(status_code=404, detail="Deployment not found")
 
 # Helper function to extract resource group and deployment name from ID
 def extract_deployment_info(deployment_id: str) -> Tuple[Optional[str], Optional[str]]:
