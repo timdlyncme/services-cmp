@@ -754,3 +754,79 @@ class AzureDeployer:
             return "failed"
         else:
             return "unknown"
+    
+    def list_deployments(self, resource_group=None):
+        """
+        List all deployments in a subscription or resource group
+        
+        Args:
+            resource_group (str, optional): The resource group name. If None, list all deployments in the subscription.
+            
+        Returns:
+            list: List of deployments
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not self.resource_client:
+            logger.error("Azure credentials not configured")
+            raise ValueError("Azure credentials not configured")
+        
+        try:
+            deployments = []
+            
+            if resource_group:
+                logger.info(f"Listing deployments in resource group {resource_group}")
+                # List deployments in a specific resource group
+                deployment_list = list(self.resource_client.deployments.list_by_resource_group(
+                    resource_group_name=resource_group
+                ))
+            else:
+                logger.info("Listing deployments across all resource groups")
+                # List all resource groups
+                resource_groups = list(self.resource_client.resource_groups.list())
+                
+                # List deployments in each resource group
+                deployment_list = []
+                for rg in resource_groups:
+                    logger.info(f"Checking resource group: {rg.name}")
+                    try:
+                        rg_deployments = list(self.resource_client.deployments.list_by_resource_group(
+                            resource_group_name=rg.name
+                        ))
+                        deployment_list.extend(rg_deployments)
+                    except Exception as e:
+                        logger.warning(f"Error listing deployments in resource group {rg.name}: {str(e)}")
+            
+            logger.info(f"Found {len(deployment_list)} deployments")
+            
+            # Format deployments
+            for deployment in deployment_list:
+                try:
+                    # Get deployment details
+                    deployment_status = self.get_deployment_status(
+                        resource_group=deployment.resource_group,
+                        deployment_name=deployment.name
+                    )
+                    
+                    # Format deployment
+                    formatted_deployment = {
+                        "deployment_id": deployment.id,
+                        "name": deployment.name,
+                        "resource_group": deployment.resource_group,
+                        "status": deployment_status.get("status", "unknown"),
+                        "resources": deployment_status.get("resources", []),
+                        "outputs": deployment_status.get("outputs", {}),
+                        "logs": deployment_status.get("logs", []),
+                        "created_at": deployment.properties.timestamp.isoformat() if deployment.properties.timestamp else None,
+                        "updated_at": datetime.utcnow().isoformat()
+                    }
+                    
+                    deployments.append(formatted_deployment)
+                except Exception as e:
+                    logger.warning(f"Error processing deployment {deployment.name}: {str(e)}")
+            
+            return deployments
+        except Exception as e:
+            logger.error(f"Error listing deployments: {str(e)}", exc_info=True)
+            raise

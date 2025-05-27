@@ -519,6 +519,61 @@ def list_deployments(
     user: dict = Depends(check_permission("deployment:read"))
 ):
     try:
+        logger.info(f"Listing deployments for tenant {user['tenant_id']}")
+        
+        # Get deployments from Azure
+        try:
+            # Fetch deployments from Azure
+            azure_deployments = azure_deployer.list_deployments()
+            logger.info(f"Found {len(azure_deployments)} deployments in Azure")
+            
+            # Update in-memory deployments with Azure data
+            for azure_deployment in azure_deployments:
+                # Generate a unique ID for the deployment
+                deployment_id = azure_deployment.get("deployment_id")
+                if not deployment_id:
+                    continue
+                
+                # Check if deployment already exists in memory
+                existing_deployment = None
+                for d in deployments.values():
+                    if d.get("azure_deployment_id") == azure_deployment.get("name"):
+                        existing_deployment = d
+                        break
+                
+                if existing_deployment:
+                    # Update existing deployment
+                    logger.info(f"Updating existing deployment {deployment_id}")
+                    existing_deployment.update({
+                        "status": azure_deployment.get("status", existing_deployment.get("status")),
+                        "resources": azure_deployment.get("resources", existing_deployment.get("resources", [])),
+                        "outputs": azure_deployment.get("outputs", existing_deployment.get("outputs", {})),
+                        "logs": azure_deployment.get("logs", existing_deployment.get("logs", [])),
+                        "updated_at": datetime.utcnow().isoformat()
+                    })
+                else:
+                    # Create new deployment
+                    logger.info(f"Adding new deployment {deployment_id}")
+                    new_deployment = {
+                        "deployment_id": deployment_id,
+                        "name": azure_deployment.get("name"),
+                        "resource_group": azure_deployment.get("resource_group"),
+                        "azure_deployment_id": azure_deployment.get("name"),
+                        "status": azure_deployment.get("status", "unknown"),
+                        "resources": azure_deployment.get("resources", []),
+                        "outputs": azure_deployment.get("outputs", {}),
+                        "logs": azure_deployment.get("logs", []),
+                        "created_at": azure_deployment.get("created_at", datetime.utcnow().isoformat()),
+                        "updated_at": datetime.utcnow().isoformat(),
+                        "tenant_id": user["tenant_id"]  # Assign to current user's tenant
+                    }
+                    deployments[deployment_id] = new_deployment
+            
+            logger.info(f"In-memory deployments after Azure sync: {len(deployments)}")
+        except Exception as e:
+            logger.error(f"Error fetching deployments from Azure: {str(e)}", exc_info=True)
+            # Continue with in-memory deployments
+        
         # Filter deployments by tenant
         tenant_deployments = [
             d for d in deployments.values()
@@ -527,17 +582,28 @@ def list_deployments(
         
         # Filter by status if provided
         if status:
-            tenant_deployments = [d for d in tenant_deployments if d["status"] == status]
+            tenant_deployments = [
+                d for d in tenant_deployments
+                if d.get("status", "").lower() == status.lower()
+            ]
         
-        # Sort by created_at in descending order
-        tenant_deployments.sort(key=lambda x: x["created_at"], reverse=True)
+        # Sort by created_at (newest first)
+        tenant_deployments.sort(
+            key=lambda d: d.get("created_at", ""),
+            reverse=True
+        )
         
         # Apply pagination
         paginated_deployments = tenant_deployments[offset:offset + limit]
         
-        return paginated_deployments
+        return {
+            "deployments": paginated_deployments,
+            "total": len(tenant_deployments),
+            "limit": limit,
+            "offset": offset
+        }
     except Exception as e:
-        logger.error(f"Error listing deployments: {str(e)}")
+        logger.error(f"Error listing deployments: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/deployments/{deployment_id}")
