@@ -633,7 +633,7 @@ def get_deployments(
                 name=deployment.name,
                 templateId=template.template_id,
                 templateName=template.name,
-                templateVersion=deployment.template_version,  # Add template version
+                templateVersion=getattr(deployment, 'template_version', None),  # Safely get template_version if it exists
                 provider=provider,
                 status=deployment.status,
                 environment=environment.name,
@@ -722,7 +722,7 @@ def get_deployment(
             name=deployment.name,
             templateId=template.template_id,
             templateName=template.name,
-            templateVersion=deployment.template_version,  # Add template version
+            templateVersion=getattr(deployment, 'template_version', None),  # Safely get template_version if it exists
             provider=deployment.deployment_type,
             status=deployment.status,
             environment=environment.name,
@@ -835,7 +835,8 @@ def create_deployment(
             tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
             created_by_id=current_user.id,
             parameters=deployment.parameters,
-            deployment_type=template.type.lower()  # Set deployment_type based on template type
+            deployment_type=template.type.lower(),  # Set deployment_type based on template type
+            template_version=template.current_version  # Store the template version
         )
         
         db.add(new_deployment)
