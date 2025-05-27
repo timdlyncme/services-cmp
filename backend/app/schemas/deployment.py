@@ -15,6 +15,8 @@ class TemplateBase(BaseModel):
 class EnvironmentBase(BaseModel):
     name: str
     description: Optional[str] = None
+    cloud_provider: str
+    cloud_region: Optional[str] = None
 
 # Cloud Account schemas
 class CloudAccountBase(BaseModel):
@@ -288,38 +290,33 @@ class DeploymentStatusUpdate(BaseModel):
 
 # Environment schemas
 class EnvironmentCreate(EnvironmentBase):
-    update_strategy: Optional[str] = None
-    scaling_policies: Optional[Dict[str, Any]] = None
-    environment_variables: Optional[Dict[str, Any]] = None
-    logging_config: Optional[Dict[str, Any]] = None
-    monitoring_integration: Optional[Dict[str, Any]] = None
-    cloud_account_ids: List[Union[int, str]]  # Accept both int and string IDs
+    tenant_id: Optional[str] = None
+    cloud_account_id: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
 
 class EnvironmentUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    update_strategy: Optional[str] = None
-    scaling_policies: Optional[Dict[str, Any]] = None
-    environment_variables: Optional[Dict[str, Any]] = None
-    logging_config: Optional[Dict[str, Any]] = None
-    monitoring_integration: Optional[Dict[str, Any]] = None
-    cloud_account_ids: Optional[List[Union[int, str]]] = None
+    cloud_provider: Optional[str] = None
+    cloud_region: Optional[str] = None
+    cloud_account_id: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
 
 class EnvironmentResponse(EnvironmentBase):
-    id: str  # Changed from int to str to use environment_id
-    internal_id: Optional[int] = None  # Added to store the internal ID if needed
-    update_strategy: Optional[str] = None
-    cloud_accounts: List[Dict[str, Any]] = []
+    id: str
+    tenant_id: str
+    cloud_account_id: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         orm_mode = True
 
 class EnvironmentDetailResponse(EnvironmentResponse):
-    scaling_policies: Optional[Dict[str, Any]] = None
-    environment_variables: Optional[Dict[str, Any]] = None
-    logging_config: Optional[Dict[str, Any]] = None
-    monitoring_integration: Optional[Dict[str, Any]] = None
-    deployments: List[Dict[str, Any]] = []
+    parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
 
     class Config:
         orm_mode = True
