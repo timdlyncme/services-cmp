@@ -201,6 +201,54 @@ const TemplateDetails = () => {
       toast.error("Failed to save template");
     }
   };
+
+  const handleSaveCodeWithNewVersion = async () => {
+    if (!template) return;
+    
+    try {
+      const updatedTemplate = await cmpService.updateTemplate(template.id, {
+        ...template,
+        code: code,
+        // Always create a new version when using this function
+        create_new_version: true
+      });
+      
+      if (updatedTemplate) {
+        setTemplate(updatedTemplate);
+        toast.success("New template version created successfully");
+        
+        // Refresh versions
+        if (templateId) {
+          await fetchVersions(templateId);
+        }
+      }
+    } catch (err) {
+      console.error("Error creating new template version:", err);
+      toast.error("Failed to create new template version");
+    }
+  };
+
+  const handleSaveParamsAndVariables = async () => {
+    if (!template) return;
+    
+    try {
+      const updatedTemplate = await cmpService.updateTemplate(template.id, {
+        ...template,
+        parameters: parameters,
+        variables: variables,
+        // Never create a new version when using this function
+        create_new_version: false
+      });
+      
+      if (updatedTemplate) {
+        setTemplate(updatedTemplate);
+        toast.success("Template parameters and variables saved successfully");
+      }
+    } catch (err) {
+      console.error("Error saving template parameters and variables:", err);
+      toast.error("Failed to save template parameters and variables");
+    }
+  };
   
   const handleDeployTemplate = async () => {
     if (!template || !deployEnv || !deployName) {
@@ -236,7 +284,8 @@ const TemplateDetails = () => {
         deployment_type: backendDeploymentType,
         template_source: "code",
         template_code: templateCode,
-        parameters: parameters || {}
+        parameters: parameters || {},
+        template_version: template.currentVersion // Add the template version to the deployment data
       };
       
       console.log("Deployment data:", JSON.stringify(deploymentData));
@@ -446,518 +495,268 @@ const TemplateDetails = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={() => navigate("/catalog")}
-          >
-            <ChevronLeft className="h-4 w-4" />
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <Button variant="outline" onClick={() => navigate(-1)}>
+          <ChevronLeft className="mr-2 h-4 w-4" />
+          Back to Templates
+        </Button>
+        <div className="space-x-2">
+          <Button onClick={() => setDeployDialogOpen(true)}>
+            <Play className="mr-2 h-4 w-4" />
+            Deploy
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{template.name}</h1>
-            <p className="text-muted-foreground">{template.description}</p>
-          </div>
         </div>
       </div>
       
-      <div className="flex flex-wrap gap-2">
-        <Badge className={providerColor(template.provider)}>
-          {template.provider.toUpperCase()}
-        </Badge>
-        
-        <Badge variant="outline">
-          {template.type === "terraform" ? "Terraform" : 
-           template.type === "arm" ? "ARM Template" : "CloudFormation"}
-        </Badge>
-        
-        {template.categories && template.categories.map(category => (
-          <Badge key={category} variant="secondary">
-            {category}
-          </Badge>
-        ))}
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <Collapsible
-            open={codeExpanded}
-            onOpenChange={setCodeExpanded}
-            className="w-full"
-          >
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 space-y-6">
+          <Collapsible open={codeExpanded} onOpenChange={setCodeExpanded}>
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-center">
                   <CardTitle className="flex items-center">
                     <FileEdit className="mr-2 h-5 w-5" />
                     Template Code
                   </CardTitle>
-                  <div className="flex space-x-2">
-                  <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={handleSaveTemplate}
-                    >
-                      <Save className="mr-2 h-4 w-4" />
-                      Save
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      {codeExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
-                    
-                    <Dialog open={deployDialogOpen} onOpenChange={setDeployDialogOpen}>
-                      <DialogTrigger asChild>
-                        <Button size="sm">
-                          <Play className="mr-2 h-4 w-4" />
-                          Deploy
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Deploy Template</DialogTitle>
-                          <DialogDescription>
-                            Configure deployment settings for this template.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="deployName">Deployment Name</Label>
-                            <Input 
-                              id="deployName" 
-                              value={deployName} 
-                              onChange={(e) => setDeployName(e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="deployEnv">Environment</Label>
-                            <Select 
-                              value={deployEnv} 
-                              onValueChange={setDeployEnv}
-                              disabled={deploymentInProgress}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select an environment" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {environments.map((env) => (
-                                  <SelectItem key={env.id} value={env.id}>
-                                    {env.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          {/* Parameters section */}
-                          {Object.keys(parameters).length > 0 && (
-                            <div className="space-y-2">
-                              <h3 className="text-sm font-medium">Parameters</h3>
-                              <div className="space-y-2">
-                                {Object.entries(parameters).map(([key, param]) => (
-                                  <div key={key} className="grid grid-cols-12 gap-2 items-start">
-                                    <div className="col-span-3">
-                                      <Label>Name</Label>
-                                      <Input 
-                                        value={key}
-                                        onChange={(e) => renameParameter(key, e.target.value)}
-                                      />
-                                    </div>
-                                    <div className="col-span-3">
-                                      <Label>Type</Label>
-                                      <Select 
-                                        value={param.type} 
-                                        onValueChange={(value) => updateParameter(key, "type", value)}
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="string">String</SelectItem>
-                                          <SelectItem value="int">Integer</SelectItem>
-                                          <SelectItem value="password">Password</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div className="col-span-4">
-                                      <Label>Value</Label>
-                                      {param.type === "password" ? (
-                                        <div className="relative">
-                                          <Input 
-                                            type={showPasswordValues[key] ? "text" : "password"}
-                                            value={param.value}
-                                            onChange={(e) => updateParameter(key, "value", e.target.value)}
-                                            className="pr-8"
-                                          />
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="absolute right-0 top-0 h-full"
-                                            onClick={() => togglePasswordVisibility(key)}
-                                          >
-                                            {showPasswordValues[key] ? (
-                                              <EyeOff className="h-4 w-4" />
-                                            ) : (
-                                              <Eye className="h-4 w-4" />
-                                            )}
-                                          </Button>
-                                        </div>
-                                      ) : (
-                                        <Input 
-                                          type={param.type === "int" ? "number" : "text"}
-                                          value={param.value}
-                                          onChange={(e) => updateParameter(key, "value", e.target.value)}
-                                        />
-                                      )}
-                                    </div>
-                                    <div className="col-span-1 pt-6">
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => removeParameter(key)}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Variables section */}
-                          {Object.keys(variables).length > 0 && (
-                            <div className="space-y-2">
-                              <h3 className="text-sm font-medium">Variables</h3>
-                              <div className="space-y-2">
-                                {Object.entries(variables).map(([key, variable]) => (
-                                  <div key={key} className="grid grid-cols-12 gap-2 items-start">
-                                    <div className="col-span-3">
-                                      <Label>Name</Label>
-                                      <Input 
-                                        value={key}
-                                        onChange={(e) => renameVariable(key, e.target.value)}
-                                      />
-                                    </div>
-                                    <div className="col-span-3">
-                                      <Label>Type</Label>
-                                      <Select 
-                                        value={variable.type} 
-                                        onValueChange={(value) => updateVariable(key, "type", value)}
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="string">String</SelectItem>
-                                          <SelectItem value="int">Integer</SelectItem>
-                                          <SelectItem value="password">Password</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div className="col-span-4">
-                                      <Label>Value</Label>
-                                      {variable.type === "password" ? (
-                                        <div className="relative">
-                                          <Input 
-                                            type={showPasswordValues[key] ? "text" : "password"}
-                                            value={variable.value}
-                                            onChange={(e) => updateVariable(key, "value", e.target.value)}
-                                            className="pr-8"
-                                          />
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="absolute right-0 top-0 h-full"
-                                            onClick={() => togglePasswordVisibility(key)}
-                                          >
-                                            {showPasswordValues[key] ? (
-                                              <EyeOff className="h-4 w-4" />
-                                            ) : (
-                                              <Eye className="h-4 w-4" />
-                                            )}
-                                          </Button>
-                                        </div>
-                                      ) : (
-                                        <Input 
-                                          type={variable.type === "int" ? "number" : "text"}
-                                          value={variable.value}
-                                          onChange={(e) => updateVariable(key, "value", e.target.value)}
-                                        />
-                                      )}
-                                    </div>
-                                    <div className="col-span-1 pt-6">
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => removeVariable(key)}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setDeployDialogOpen(false)}>
-                            Cancel
-                          </Button>
-                          <Button onClick={handleDeployTemplate}>
-                            {deploymentInProgress ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Deploying...
-                              </>
-                            ) : (
-                              <>
-                                <Play className="mr-2 h-4 w-4" />
-                                Deploy
-                              </>
-                            )}
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        {codeExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </Button>
-                    </CollapsibleTrigger>
-                    
-                  </div>
+                  </CollapsibleTrigger>
                 </div>
-                <CardDescription>
-                  Edit the template code below. Click Save to update changes.
-                </CardDescription>
               </CardHeader>
               <CollapsibleContent>
                 <CardContent>
-                  <Textarea
-                    className="font-mono h-[500px] overflow-auto"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                  />
+                  <div className="space-y-4">
+                    <div className="relative">
+                      <Textarea
+                        value={code}
+                        onChange={(e) => setCode(e.target.value)}
+                        className="font-mono h-[400px] resize-none"
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button onClick={handleSaveCodeWithNewVersion}>
+                        <Save className="mr-2 h-4 w-4" />
+                        Create New Version
+                      </Button>
+                    </div>
+                  </div>
                 </CardContent>
               </CollapsibleContent>
             </Card>
           </Collapsible>
           
-          <Collapsible
-            open={paramsExpanded}
-            onOpenChange={setParamsExpanded}
-            className="w-full"
-          > 
+          <Collapsible open={paramsExpanded} onOpenChange={setParamsExpanded}>
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Parameters and Variables</CardTitle>
-                  <div className="flex space-x-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={handleSaveTemplate}
-                    >
-                      <Save className="mr-2 h-4 w-4" />
-                      Save
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="flex items-center">
+                    <FileEdit className="mr-2 h-5 w-5" />
+                    Parameters & Variables
+                  </CardTitle>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      {paramsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        {paramsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </Button>
-                    </CollapsibleTrigger>
-                  </div>
+                  </CollapsibleTrigger>
                 </div>
-                <CardDescription>
-                  Define parameters and variables for this template.
-                </CardDescription>
               </CardHeader>
               <CollapsibleContent>
-                <CardContent className="space-y-6">
-                  {/* Parameters section */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium">Parameters</h3>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={addParameter}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Parameter
-                      </Button>
-                    </div>
-                    
-                    {Object.keys(parameters).length === 0 ? (
-                      <div className="text-sm text-muted-foreground">
-                        No parameters defined. Click "Add Parameter" to create one.
+                <CardContent>
+                  <div className="space-y-6">
+                    {/* Parameters section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-medium">Parameters</h3>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={addParameter}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Parameter
+                        </Button>
                       </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {Object.entries(parameters).map(([key, param]) => (
-                          <div key={key} className="grid grid-cols-12 gap-2 items-start">
-                            <div className="col-span-3">
-                              <Label>Name</Label>
-                              <Input 
-                                value={key}
-                                onChange={(e) => renameParameter(key, e.target.value)}
-                              />
-                            </div>
-                            <div className="col-span-3">
-                              <Label>Type</Label>
-                              <Select 
-                                value={param.type} 
-                                onValueChange={(value) => updateParameter(key, "type", value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="string">String</SelectItem>
-                                  <SelectItem value="int">Integer</SelectItem>
-                                  <SelectItem value="password">Password</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="col-span-4">
-                              <Label>Value</Label>
-                              {param.type === "password" ? (
-                                <div className="relative">
+                      
+                      {Object.keys(parameters).length === 0 ? (
+                        <div className="text-sm text-muted-foreground">
+                          No parameters defined. Click "Add Parameter" to create one.
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {Object.entries(parameters).map(([key, param]) => (
+                            <div key={key} className="grid grid-cols-12 gap-2 items-start">
+                              <div className="col-span-3">
+                                <Label>Name</Label>
+                                <Input 
+                                  value={key}
+                                  onChange={(e) => renameParameter(key, e.target.value)}
+                                />
+                              </div>
+                              <div className="col-span-3">
+                                <Label>Type</Label>
+                                <Select 
+                                  value={param.type} 
+                                  onValueChange={(value) => updateParameter(key, "type", value)}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="string">String</SelectItem>
+                                    <SelectItem value="int">Integer</SelectItem>
+                                    <SelectItem value="password">Password</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="col-span-4">
+                                <Label>Value</Label>
+                                {param.type === "password" ? (
+                                  <div className="relative">
+                                    <Input 
+                                      type={showPasswordValues[key] ? "text" : "password"}
+                                      value={param.value}
+                                      onChange={(e) => updateParameter(key, "value", e.target.value)}
+                                      className="pr-8"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="absolute right-0 top-0 h-full"
+                                      onClick={() => togglePasswordVisibility(key)}
+                                    >
+                                      {showPasswordValues[key] ? (
+                                        <EyeOff className="h-4 w-4" />
+                                      ) : (
+                                        <Eye className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </div>
+                                ) : (
                                   <Input 
-                                    type={showPasswordValues[key] ? "text" : "password"}
+                                    type={param.type === "int" ? "number" : "text"}
                                     value={param.value}
                                     onChange={(e) => updateParameter(key, "value", e.target.value)}
-                                    className="pr-8"
                                   />
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="absolute right-0 top-0 h-full"
-                                    onClick={() => togglePasswordVisibility(key)}
-                                  >
-                                    {showPasswordValues[key] ? (
-                                      <EyeOff className="h-4 w-4" />
-                                    ) : (
-                                      <Eye className="h-4 w-4" />
-                                    )}
-                                  </Button>
-                                </div>
-                              ) : (
-                                <Input 
-                                  type={param.type === "int" ? "number" : "text"}
-                                  value={param.value}
-                                  onChange={(e) => updateParameter(key, "value", e.target.value)}
-                                />
-                              )}
+                                )}
+                              </div>
+                              <div className="col-span-1 pt-6">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeParameter(key)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
-                            <div className="col-span-1 pt-6">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeParameter(key)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Variables section */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium">Variables</h3>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={addVariable}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Variable
-                      </Button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     
-                    {Object.keys(variables).length === 0 ? (
-                      <div className="text-sm text-muted-foreground">
-                        No variables defined. Click "Add Variable" to create one.
+                    {/* Variables section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-medium">Variables</h3>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={addVariable}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Variable
+                        </Button>
                       </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {Object.entries(variables).map(([key, variable]) => (
-                          <div key={key} className="grid grid-cols-12 gap-2 items-start">
-                            <div className="col-span-3">
-                              <Label>Name</Label>
-                              <Input 
-                                value={key}
-                                onChange={(e) => renameVariable(key, e.target.value)}
-                              />
-                            </div>
-                            <div className="col-span-3">
-                              <Label>Type</Label>
-                              <Select 
-                                value={variable.type} 
-                                onValueChange={(value) => updateVariable(key, "type", value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="string">String</SelectItem>
-                                  <SelectItem value="int">Integer</SelectItem>
-                                  <SelectItem value="password">Password</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="col-span-4">
-                              <Label>Value</Label>
-                              {variable.type === "password" ? (
-                                <div className="relative">
+                      
+                      {Object.keys(variables).length === 0 ? (
+                        <div className="text-sm text-muted-foreground">
+                          No variables defined. Click "Add Variable" to create one.
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {Object.entries(variables).map(([key, variable]) => (
+                            <div key={key} className="grid grid-cols-12 gap-2 items-start">
+                              <div className="col-span-3">
+                                <Label>Name</Label>
+                                <Input 
+                                  value={key}
+                                  onChange={(e) => renameVariable(key, e.target.value)}
+                                />
+                              </div>
+                              <div className="col-span-3">
+                                <Label>Type</Label>
+                                <Select 
+                                  value={variable.type} 
+                                  onValueChange={(value) => updateVariable(key, "type", value)}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="string">String</SelectItem>
+                                    <SelectItem value="int">Integer</SelectItem>
+                                    <SelectItem value="password">Password</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="col-span-4">
+                                <Label>Value</Label>
+                                {variable.type === "password" ? (
+                                  <div className="relative">
+                                    <Input 
+                                      type={showPasswordValues[key] ? "text" : "password"}
+                                      value={variable.value}
+                                      onChange={(e) => updateVariable(key, "value", e.target.value)}
+                                      className="pr-8"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="absolute right-0 top-0 h-full"
+                                      onClick={() => togglePasswordVisibility(key)}
+                                    >
+                                      {showPasswordValues[key] ? (
+                                        <EyeOff className="h-4 w-4" />
+                                      ) : (
+                                        <Eye className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </div>
+                                ) : (
                                   <Input 
-                                    type={showPasswordValues[key] ? "text" : "password"}
+                                    type={variable.type === "int" ? "number" : "text"}
                                     value={variable.value}
                                     onChange={(e) => updateVariable(key, "value", e.target.value)}
-                                    className="pr-8"
                                   />
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="absolute right-0 top-0 h-full"
-                                    onClick={() => togglePasswordVisibility(key)}
-                                  >
-                                    {showPasswordValues[key] ? (
-                                      <EyeOff className="h-4 w-4" />
-                                    ) : (
-                                      <Eye className="h-4 w-4" />
-                                    )}
-                                  </Button>
-                                </div>
-                              ) : (
-                                <Input 
-                                  type={variable.type === "int" ? "number" : "text"}
-                                  value={variable.value}
-                                  onChange={(e) => updateVariable(key, "value", e.target.value)}
-                                />
-                              )}
+                                )}
+                              </div>
+                              <div className="col-span-1 pt-6">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeVariable(key)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
-                            <div className="col-span-1 pt-6">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeVariable(key)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* At the end of the parameters and variables section, add a save button */}
+                    <div className="flex justify-end">
+                      <Button onClick={handleSaveParamsAndVariables}>
+                        <Save className="mr-2 h-4 w-4" />
+                        Save Parameters & Variables
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </CollapsibleContent>

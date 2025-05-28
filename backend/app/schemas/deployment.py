@@ -180,6 +180,7 @@ class DeploymentCreate(DeploymentBase):
     template_code: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
     project_id: Optional[str] = None  # For GCP
+    template_version: Optional[str] = None  # Add template_version field
 
     @validator('template_source')
     def validate_template_source(cls, v, values):
