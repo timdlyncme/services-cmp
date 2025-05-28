@@ -502,9 +502,9 @@ const TemplateDetails = () => {
           Back to Templates
         </Button>
         <div className="space-x-2">
-          <Button onClick={() => setDeployDialogOpen(true)}>
+          <Button style={{ backgroundColor: "darkorange" }} onClick={() => setDeployDialogOpen(true)}>
             <Play className="mr-2 h-4 w-4" />
-            Deploy
+            Deploy Template
           </Button>
         </div>
       </div>
