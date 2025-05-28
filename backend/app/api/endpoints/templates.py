@@ -480,35 +480,37 @@ def update_template(
         if template_update.code is not None:
             template.code = template_update.code
             
-            # Determine the new version number
-            current_version = template.current_version or "1.0.0"
-            
-            # Split version into major, minor, patch
-            try:
-                major, minor, patch = map(int, current_version.split('.'))
-                # Increment patch version
-                patch += 1
-                new_version_number = f"{major}.{minor}.{patch}"
-            except ValueError:
-                # If current version is not in the expected format, default to incrementing
-                new_version_number = f"{current_version}.1"
-            
-            print(f"Creating new version in update: {new_version_number} (previous: {current_version})")
-            
-            # Create new version
-            new_version = TemplateVersion(
-                template_id=template.id,
-                version=new_version_number,
-                code=template_update.code,
-                changes="Updated template code",
-                created_at=datetime.utcnow(),
-                created_by_id=current_user.id
-            )
-            
-            db.add(new_version)
-            
-            # Update template with new version number
-            template.current_version = new_version_number
+            # Only create a new version if create_new_version flag is True
+            if template_update.create_new_version:
+                # Determine the new version number
+                current_version = template.current_version or "1.0.0"
+                
+                # Split version into major, minor, patch
+                try:
+                    major, minor, patch = map(int, current_version.split('.'))
+                    # Increment patch version
+                    patch += 1
+                    new_version_number = f"{major}.{minor}.{patch}"
+                except ValueError:
+                    # If current version is not in the expected format, default to incrementing
+                    new_version_number = f"{current_version}.1"
+                
+                print(f"Creating new version in update: {new_version_number} (previous: {current_version})")
+                
+                # Create new version
+                new_version = TemplateVersion(
+                    template_id=template.id,
+                    version=new_version_number,
+                    code=template_update.code,
+                    changes="Updated template code",
+                    created_at=datetime.utcnow(),
+                    created_by_id=current_user.id
+                )
+                
+                db.add(new_version)
+                
+                # Update template with new version number
+                template.current_version = new_version_number
         
         template.updated_at = datetime.utcnow()
         
