@@ -140,6 +140,7 @@ class Deployment(Base):
     region = Column(String, nullable=True)  # Store deployment region
     cloud_deployment_id = Column(String, nullable=True)  # ID from the cloud provider
     deployment_type = Column(String, default="arm")  # arm, terraform, etc.
+    template_version = Column(String, nullable=True)  # Store the template version used for deployment
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
