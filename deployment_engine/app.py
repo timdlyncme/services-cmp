@@ -40,6 +40,9 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
     logger.info(f"Starting status polling for deployment {deployment_id}")
     logger.info(f"Resource group: {resource_group}, Azure deployment ID: {azure_deployment_id}")
     
+    # Get service account token, falling back to user token if needed
+    service_token = get_service_token(access_token)
+    
     try:
         # Continue polling until deployment is complete or failed
         while True:
@@ -72,12 +75,14 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
             # Send update to backend API
             try:
                 logger.info(f"Sending status update to backend API for deployment {deployment_id}")
-                headers = {"Authorization": f"Bearer {access_token}"}
+                headers = {"Authorization": f"Bearer {service_token}"}
                 update_data = {
                     "status": status,
                     "resources": resources,
                     "outputs": outputs,
-                    "logs": logs
+                    "logs": logs,
+                    "resource_group": resource_group,
+                    "location": deployments[deployment_id].get("location") if deployment_id in deployments else None
                 }
                 
                 # Add deployment_result if available
@@ -95,20 +100,13 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
                     json=update_data
                 )
                 
-                logger.info(f"Response status code: {response.status_code}")
-                
-                if response.status_code != 200:
-                    logger.error(f"Failed to update deployment status: {response.text}")
-                    # Try to parse the response for more details
-                    try:
-                        error_details = response.json()
-                        logger.error(f"Error details: {json.dumps(error_details, default=str)}")
-                    except:
-                        logger.error("Could not parse error response as JSON")
+                if response.status_code == 200:
+                    logger.info(f"Status update sent successfully")
                 else:
-                    logger.info(f"Successfully updated deployment status in backend")
+                    logger.error(f"Failed to send status update: {response.status_code} - {response.text}")
             except Exception as e:
-                logger.error(f"Error updating deployment status: {str(e)}", exc_info=True)
+                logger.error(f"Error sending status update: {str(e)}")
+                break
             
             # If deployment is complete or failed, stop polling
             if status in ["succeeded", "failed", "canceled"]:
@@ -213,6 +211,48 @@ def check_permission(required_permission: str):
         raise HTTPException(status_code=403, detail=f"Insufficient permissions. Required: {required_permission}")
     return check
 
+def get_service_token(user_token=None):
+    """
+    Get a service account token for backend API access
+    Falls back to user token if service account credentials are not available
+    """
+    # Get service account credentials from environment variables
+    service_username = os.getenv("SERVICE_USERNAME")
+    service_password = os.getenv("SERVICE_PASSWORD")
+    
+    if not service_username or not service_password:
+        logger.warning("SERVICE_USERNAME or SERVICE_PASSWORD not set, trying SERVICE_TOKEN")
+        service_token = os.getenv("SERVICE_TOKEN")
+        if not service_token:
+            logger.warning("SERVICE_TOKEN not set, using user token")
+            service_token = user_token
+        return service_token
+    else:
+        # Get token from login endpoint
+        logger.info(f"Getting service account token from {API_URL}/api/auth/token")
+        try:
+            response = requests.post(
+                f"{API_URL}/api/auth/token",
+                data={
+                    "username": service_username,
+                    "password": service_password
+                }
+            )
+            
+            if response.status_code == 200:
+                token_data = response.json()
+                service_token = token_data.get("access_token")
+                if not service_token:
+                    logger.error("Failed to get service token: No access_token in response")
+                    service_token = user_token
+                return service_token
+            else:
+                logger.error(f"Failed to get service token: {response.status_code} - {response.text}")
+                return user_token
+        except Exception as e:
+            logger.error(f"Error getting service token: {str(e)}")
+            return user_token
+
 # Initialize deployments from backend database
 def initialize_deployments():
     """
@@ -221,16 +261,16 @@ def initialize_deployments():
     """
     logger.info("Initializing deployments from backend database")
     try:
-        # Create a service account token for backend API access
-        # This is a simplified approach - in production, you would use a proper service account
-        service_token = os.getenv("SERVICE_TOKEN")
+        # Get service account token
+        service_token = get_service_token()
         if not service_token:
-            logger.warning("SERVICE_TOKEN not set, skipping deployment initialization")
+            logger.warning("No service token available, skipping deployment initialization")
             return
         
         headers = {"Authorization": f"Bearer {service_token}"}
         
         # Fetch all deployments from backend
+        logger.info(f"Fetching deployments from {API_URL}/api/deployments")
         response = requests.get(
             f"{API_URL}/api/deployments",
             headers=headers
@@ -546,10 +586,12 @@ def get_deployment(
             # Fetch deployment from backend API
             logger.info(f"Deployment {deployment_id} not found in memory, fetching from backend")
             try:
-                # Create headers with user token
-                headers = {"Authorization": f"Bearer {user.get('token')}"}
+                # Get service account token, falling back to user token if needed
+                service_token = get_service_token(user.get('token'))
+                headers = {"Authorization": f"Bearer {service_token}"}
                 
                 # Fetch deployment details from backend
+                logger.info(f"Fetching deployment {deployment_id} from backend")
                 response = requests.get(
                     f"{API_URL}/api/deployments/{deployment_id}",
                     headers=headers
@@ -597,6 +639,10 @@ def get_deployment(
         # Always get deployment status from Azure
         if deployment.get("azure_deployment_id") and deployment.get("resource_group"):
             try:
+                logger.info(f"Getting deployment status from Azure for {deployment_id}")
+                logger.info(f"Resource group: {deployment.get('resource_group')}")
+                logger.info(f"Azure deployment ID: {deployment.get('azure_deployment_id')}")
+                
                 azure_status = azure_deployer.get_deployment_status(
                     resource_group=deployment["resource_group"],
                     deployment_name=deployment["azure_deployment_id"]
@@ -612,6 +658,10 @@ def get_deployment(
                 logger.error(f"Error getting deployment status from Azure: {str(e)}")
                 # Don't fail the request if Azure status check fails
                 # Just return the cached data
+        else:
+            logger.warning(f"Skipping Azure status check for {deployment_id} - missing azure_deployment_id or resource_group")
+            logger.warning(f"azure_deployment_id: {deployment.get('azure_deployment_id')}")
+            logger.warning(f"resource_group: {deployment.get('resource_group')}")
         
         return deployment
     except Exception as e:
@@ -680,10 +730,12 @@ def delete_deployment(
             # Fetch deployment from backend API
             logger.info(f"Deployment {deployment_id} not found in memory, fetching from backend")
             try:
-                # Create headers with user token
-                headers = {"Authorization": f"Bearer {user.get('token')}"}
+                # Get service account token, falling back to user token if needed
+                service_token = get_service_token(user.get('token'))
+                headers = {"Authorization": f"Bearer {service_token}"}
                 
                 # Fetch deployment details from backend
+                logger.info(f"Fetching deployment {deployment_id} from backend")
                 response = requests.get(
                     f"{API_URL}/api/deployments/{deployment_id}",
                     headers=headers

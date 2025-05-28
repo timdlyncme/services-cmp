@@ -36,6 +36,7 @@ class Role(Base):
     # Relationships
     permissions = relationship("Permission", secondary=role_permission, back_populates="roles")
     users = relationship("User", back_populates="role")
+    service_accounts = relationship("ServiceAccount", back_populates="role")
 
 
 class Tenant(Base):
@@ -49,6 +50,7 @@ class Tenant(Base):
     
     # Relationships
     users = relationship("User", back_populates="tenant")
+    service_accounts = relationship("ServiceAccount", back_populates="tenant")
     
     # These relationships will be added by the respective models
     # cloud_accounts = relationship("CloudAccount", back_populates="tenant")
@@ -73,8 +75,9 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
+    is_service_account = Column(Boolean, default=False)  # Flag to indicate if this is a service account
     
-    # Relationships
+    # Relationship with Role
     role_id = Column(Integer, ForeignKey("roles.id"))
     role = relationship("Role", back_populates="users")
     

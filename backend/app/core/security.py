@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.user import User
+from app.models.service_account import ServiceAccount
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -49,10 +50,31 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     """
     Authenticate a user
     """
+    # First try to authenticate as a regular user
     user = db.query(User).filter(User.email == email).first()
-    if not user:
-        return None
-    if not verify_password(password, user.hashed_password):
-        return None
-    return user
-
+    if user and verify_password(password, user.hashed_password):
+        return user
+    
+    # If not found or password doesn't match, try as a service account
+    from app.models.service_account import ServiceAccount
+    
+    # Try to authenticate as a service account using username
+    service_account = db.query(ServiceAccount).filter(ServiceAccount.username == email).first()
+    if service_account and verify_password(password, service_account.hashed_password):
+        # Create a User-like object for the service account
+        # This is a simplified approach - in a production system, you might want to
+        # create a proper abstraction for this
+        user = User()
+        user.id = service_account.id
+        user.user_id = service_account.service_account_id
+        user.username = service_account.username
+        user.email = service_account.username  # Use username as email for service accounts
+        user.full_name = service_account.name
+        user.is_active = service_account.is_active
+        user.tenant_id = service_account.tenant_id
+        user.role_id = service_account.role_id
+        user.is_service_account = True  # Add a flag to indicate this is a service account
+        
+        return user
+    
+    return None

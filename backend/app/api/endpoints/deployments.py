@@ -1334,10 +1334,18 @@ def update_deployment_status(
                 provider="azure",
                 deployment_type=deployment.deployment_type if hasattr(deployment, 'deployment_type') else "arm",
                 cloud_deployment_id=deployment.cloud_deployment_id if hasattr(deployment, 'cloud_deployment_id') else None,
-                cloud_region=location,  # Store the location in cloud_region
-                resource_group=engine_deployment.get("resource_group"),  # Store the resource group
                 status="in_progress"
             )
+            
+            # Set cloud_region and resource_group if provided in update_data
+            location = update_data.get("location")
+            if location:
+                deployment_details.cloud_region = location
+                
+            resource_group = update_data.get("resource_group")
+            if resource_group:
+                deployment_details.resource_group = resource_group
+                
             db.add(deployment_details)
             logger.debug(f"Added new deployment details to session")
         else:
@@ -1354,6 +1362,18 @@ def update_deployment_status(
             if status_value in ["succeeded", "failed", "canceled"]:
                 logger.debug(f"Deployment is complete with status: {status_value}, updating completed_at")
                 deployment_details.completed_at = datetime.utcnow()
+        
+        # Update location (cloud_region)
+        location = update_data.get("location")
+        if location:
+            logger.debug(f"Updating cloud_region to: {location}")
+            deployment_details.cloud_region = location
+        
+        # Update resource_group
+        resource_group = update_data.get("resource_group")
+        if resource_group:
+            logger.debug(f"Updating resource_group to: {resource_group}")
+            deployment_details.resource_group = resource_group
         
         # Update resources
         resources = update_data.get("resources")
