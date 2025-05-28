@@ -28,6 +28,7 @@ export interface CloudTemplate {
   lastUpdatedBy?: string;
   parameters?: Record<string, TemplateParameter>;
   variables?: Record<string, TemplateVariable>;
+  version?: string; // Add version field
 }
 
 export interface TemplateParameter {
@@ -47,6 +48,7 @@ export interface CloudDeployment {
   name: string;
   templateId: string;
   templateName: string;
+  templateVersion?: string; // Add template version field
   provider: CloudProvider;
   status: DeploymentStatus;
   environment: string;
@@ -56,6 +58,14 @@ export interface CloudDeployment {
   resources: CloudResource[];
   tenantId: string;
   logs?: DeploymentLog[];
+  details?: DeploymentDetails; // Add details field
+}
+
+export interface DeploymentDetails {
+  outputs?: Record<string, any>;
+  resources?: CloudResource[];
+  logs?: any[];
+  error_details?: any;
 }
 
 export interface CloudResource {
