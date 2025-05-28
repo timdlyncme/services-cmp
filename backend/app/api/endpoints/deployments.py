@@ -633,6 +633,7 @@ def get_deployments(
                 name=deployment.name,
                 templateId=template.template_id,
                 templateName=template.name,
+                templateVersion=getattr(deployment, 'template_version', None),  # Safely get template_version if it exists
                 provider=provider,
                 status=deployment.status,
                 environment=environment.name,
@@ -641,7 +642,10 @@ def get_deployments(
                 parameters=deployment.parameters or {},
                 resources=resources,  # Use resources from deployment_details
                 tenantId=tenant.tenant_id,
-                region=region
+                region=region,
+                details={
+                    "outputs": deployment_details.outputs if deployment_details else {}
+                } if deployment_details else None
             ))
         
         return deployments
@@ -718,6 +722,7 @@ def get_deployment(
             name=deployment.name,
             templateId=template.template_id,
             templateName=template.name,
+            templateVersion=getattr(deployment, 'template_version', None),  # Safely get template_version if it exists
             provider=deployment.deployment_type,
             status=deployment.status,
             environment=environment.name,
@@ -726,7 +731,10 @@ def get_deployment(
             parameters=deployment.parameters or {},
             resources=resources,
             tenantId=tenant.tenant_id,
-            region=deployment.region
+            region=deployment.region,
+            details={
+                "outputs": deployment_details.outputs if deployment_details else {}
+            } if deployment_details else None
         )
     
     except HTTPException:
@@ -827,7 +835,8 @@ def create_deployment(
             tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
             created_by_id=current_user.id,
             parameters=deployment.parameters,
-            deployment_type=template.type.lower()  # Set deployment_type based on template type
+            deployment_type=template.type.lower(),  # Set deployment_type based on template type
+            template_version=template.current_version  # Store the template version
         )
         
         db.add(new_deployment)
@@ -968,6 +977,7 @@ def create_deployment(
             name=new_deployment.name,
             templateId=template.template_id,
             templateName=template.name,
+            templateVersion=deployment.template_version,  # Add template version
             provider=template.provider,
             status=new_deployment.status,
             environment=environment.name,
@@ -976,7 +986,10 @@ def create_deployment(
             parameters=new_deployment.parameters or {},
             resources=[],  # Default empty list for new deployments
             tenantId=tenant.tenant_id,
-            region=region
+            region=region,
+            details={
+                "outputs": deployment_details.outputs if deployment_details else {}
+            } if deployment_details else None
         )
     
     except HTTPException:
@@ -1055,6 +1068,7 @@ def update_deployment(
             name=deployment.name,
             templateId=template.template_id,
             templateName=template.name,
+            templateVersion=deployment.template_version,  # Add template version
             provider=template.provider,
             status=deployment.status,
             environment=environment.name,
@@ -1063,7 +1077,10 @@ def update_deployment(
             parameters=deployment.parameters or {},
             resources=[],  # Default empty list if not available
             tenantId=tenant.tenant_id,
-            region=deployment.region
+            region=deployment.region,
+            details={
+                "outputs": deployment_details.outputs if deployment_details else {}
+            } if deployment_details else None
         )
     
     except HTTPException:
@@ -1346,7 +1363,8 @@ def update_deployment_status(
             details={
                 "resources": resources,
                 "outputs": outputs,
-                "logs": logs
+                "logs": logs,
+                "deployment_result": update_data.get("deployment_result", {})  # Store the deployment result
             },
             user_id=current_user.id
         )
