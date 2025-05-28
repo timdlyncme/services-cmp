@@ -21,6 +21,7 @@ class DeploymentDetails(Base):
     # Cloud-specific details
     cloud_deployment_id = Column(String, nullable=True)  # ID from the cloud provider
     cloud_region = Column(String, nullable=True)
+    resource_group = Column(String, nullable=True)  # Resource group name
     cloud_resources = Column(JSON, nullable=True)  # List of resources created
     
     # Deployment logs and outputs
@@ -40,4 +41,3 @@ class DeploymentDetails(Base):
 # Add relationship to Deployment model
 from app.models.deployment import Deployment
 Deployment.details = relationship("DeploymentDetails", back_populates="deployment", uselist=False)
-
