@@ -37,9 +37,9 @@ interface Environment {
 
 const TemplateDetails = () => {
   const { templateId } = useParams<{ templateId: string }>();
-  const { currentTenant } = useTenant();
+  const { currentTenant } = useAuth();
   const navigate = useNavigate();
-  const [template, setTemplate] = useState<Template | null>(null);
+  const [template, setTemplate] = useState<CloudTemplate | null>(null);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingVersions, setLoadingVersions] = useState(false);
