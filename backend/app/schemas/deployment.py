@@ -128,6 +128,10 @@ class CloudTemplateResponse(BaseModel):
     tenantId: str
     lastUpdatedBy: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
+    currentVersion: Optional[str] = None
+    template_id: Optional[str] = None
+    isPublic: Optional[bool] = False
 
     class Config:
         orm_mode = True
