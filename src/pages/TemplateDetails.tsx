@@ -36,22 +36,20 @@ interface Environment {
 }
 
 const TemplateDetails = () => {
-  const { templateId } = useParams();
-  const { currentTenant } = useAuth();
+  const { templateId } = useParams<{ templateId: string }>();
+  const { currentTenant } = useTenant();
   const navigate = useNavigate();
-  const [template, setTemplate] = useState<CloudTemplate | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [loadingVersions, setLoadingVersions] = useState<boolean>(false);
-  const [loadingEnvironments, setLoadingEnvironments] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const [template, setTemplate] = useState<Template | null>(null);
   const [code, setCode] = useState("");
-  const [aiMessage, setAiMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadingVersions, setLoadingVersions] = useState(false);
   const [deployDialogOpen, setDeployDialogOpen] = useState(false);
   const [deployName, setDeployName] = useState("");
   const [deployEnv, setDeployEnv] = useState("");
   const [versions, setVersions] = useState<TemplateVersion[]>([]);
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [parameters, setParameters] = useState<Record<string, TemplateParameter>>({});
+  const [deployParameters, setDeployParameters] = useState<Record<string, TemplateParameter>>({});
   const [variables, setVariables] = useState<Record<string, TemplateVariable>>({});
   const [codeExpanded, setCodeExpanded] = useState(true);
   const [paramsExpanded, setParamsExpanded] = useState(true);
@@ -284,7 +282,7 @@ const TemplateDetails = () => {
         deployment_type: backendDeploymentType,
         template_source: "code",
         template_code: templateCode,
-        parameters: parameters || {},
+        parameters: deployParameters || {}, // Use deployParameters instead of parameters
         template_version: template.currentVersion // Add the template version to the deployment data
       };
       
@@ -302,21 +300,18 @@ const TemplateDetails = () => {
         duration: 5000
       });
       
-      // Keep the dialog open for a moment to show the success state
-      setTimeout(() => {
-        setDeployDialogOpen(false);
-        setDeploymentInProgress(false);
-        navigate("/deployments");
-      }, 2000);
-    } catch (error) {
-      console.error("Error deploying template:", error);
+      // Close the dialog and reset deployment form
+      setDeployDialogOpen(false);
+      setDeployName("");
+      setDeployEnv("");
       setDeploymentInProgress(false);
       
-      if (error instanceof Error) {
-        toast.error(`Deployment failed: ${error.message}`);
-      } else {
-        toast.error("Failed to deploy template");
-      }
+      // Navigate to the deployments page
+      navigate("/deployments");
+    } catch (error) {
+      console.error("Error creating deployment:", error);
+      toast.error("Failed to create deployment. Please try again.");
+      setDeploymentInProgress(false);
     }
   };
   
@@ -465,6 +460,28 @@ const TemplateDetails = () => {
     }
   };
   
+  const updateDeployParameter = (key: string, field: keyof TemplateParameter, value: string) => {
+    setDeployParameters({
+      ...deployParameters,
+      [key]: {
+        ...deployParameters[key],
+        [field]: value
+      }
+    });
+  };
+  
+  // Function to open the deployment dialog
+  const openDeployDialog = () => {
+    // Initialize deployment parameters with a copy of the template parameters
+    const deployParamsCopy = {};
+    Object.entries(parameters).forEach(([key, param]) => {
+      deployParamsCopy[key] = { ...param };
+    });
+    setDeployParameters(deployParamsCopy);
+    
+    setDeployDialogOpen(true);
+  };
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[50vh]">
@@ -502,7 +519,7 @@ const TemplateDetails = () => {
           Back to Templates
         </Button>
         <div className="space-x-2">
-          <Button onClick={() => setDeployDialogOpen(true)}>
+          <Button onClick={() => openDeployDialog()}>
             <Play className="mr-2 h-4 w-4" />
             Deploy
           </Button>
@@ -548,11 +565,11 @@ const TemplateDetails = () => {
             </div>
             
             {/* Parameters section */}
-            {Object.keys(parameters).length > 0 && (
+            {Object.keys(deployParameters).length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-medium">Parameters</h3>
                 <div className="space-y-2">
-                  {Object.entries(parameters).map(([key, param]) => (
+                  {Object.entries(deployParameters).map(([key, param]) => (
                     <div key={key} className="grid grid-cols-12 gap-2 items-start">
                       <div className="col-span-3">
                         <Label>Name</Label>
@@ -575,7 +592,7 @@ const TemplateDetails = () => {
                             <Input 
                               type={showPasswordValues[key] ? "text" : "password"}
                               value={param.value}
-                              onChange={(e) => updateParameter(key, "value", e.target.value)}
+                              onChange={(e) => updateDeployParameter(key, "value", e.target.value)}
                               className="pr-8"
                             />
                             <Button
@@ -596,7 +613,7 @@ const TemplateDetails = () => {
                           <Input 
                             type={param.type === "int" ? "number" : "text"}
                             value={param.value}
-                            onChange={(e) => updateParameter(key, "value", e.target.value)}
+                            onChange={(e) => updateDeployParameter(key, "value", e.target.value)}
                           />
                         )}
                       </div>
