@@ -23,6 +23,7 @@ const Tenants = () => {
   const [isNewTenantDialogOpen, setIsNewTenantDialogOpen] = useState(false);
   const [newTenantName, setNewTenantName] = useState("");
   const [newTenantDescription, setNewTenantDescription] = useState("");
+  const [isCreatingTenant, setIsCreatingTenant] = useState(false);
   
   // Check if user is MSP or admin
   const canManageTenants = user?.role === "msp" || user?.role === "admin";
@@ -70,6 +71,38 @@ const Tenants = () => {
   const handleRefresh = () => {
     fetchTenants();
     toast.success("Refreshing tenants...");
+  };
+  
+  const handleCreateTenant = async () => {
+    if (!newTenantName.trim()) {
+      toast.error("Tenant name is required");
+      return;
+    }
+    
+    setIsCreatingTenant(true);
+    
+    try {
+      const newTenant = await cmpService.createTenant({
+        name: newTenantName.trim(),
+        description: newTenantDescription.trim() || undefined
+      });
+      
+      setTenants([...tenants, newTenant]);
+      setFilteredTenants([...filteredTenants, newTenant]);
+      setNewTenantName("");
+      setNewTenantDescription("");
+      setIsNewTenantDialogOpen(false);
+      toast.success(`Tenant "${newTenant.name}" created successfully`);
+    } catch (error) {
+      console.error("Error creating tenant:", error);
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to create tenant");
+      }
+    } finally {
+      setIsCreatingTenant(false);
+    }
   };
   
   return (
@@ -126,11 +159,17 @@ const Tenants = () => {
                 </div>
                 
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsNewTenantDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={() => {
-                    toast.success("This functionality would create a new tenant in a real implementation");
-                    setIsNewTenantDialogOpen(false);
-                  }}>Create Tenant</Button>
+                  <Button variant="outline" onClick={() => setIsNewTenantDialogOpen(false)} disabled={isCreatingTenant}>Cancel</Button>
+                  <Button onClick={handleCreateTenant} disabled={isCreatingTenant}>
+                    {isCreatingTenant ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Create Tenant"
+                    )}
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -179,7 +218,7 @@ const Tenants = () => {
                   <TableRow key={tenant.tenant_id}>
                     <TableCell className="font-medium">{tenant.name}</TableCell>
                     <TableCell>{tenant.description || "No description"}</TableCell>
-                    <TableCell>{new Date(tenant.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell>{tenant.date_created ? new Date(tenant.date_created).toLocaleDateString() : "N/A"}</TableCell>
                     {canManageTenants && (
                       <TableCell className="text-right">
                         <Button variant="ghost" size="icon" onClick={() => toast.info("Delete tenant functionality would be implemented here")}>
