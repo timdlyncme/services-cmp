@@ -24,3 +24,6 @@ from app.schemas.deployment import (
 )
 
 router = APIRouter()
+
+# Deployment engine API URL
+DEPLOYMENT_ENGINE_URL = os.getenv("DEPLOYMENT_ENGINE_URL", "http://deployment-engine:5000")
