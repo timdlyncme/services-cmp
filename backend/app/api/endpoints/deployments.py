@@ -982,7 +982,8 @@ def create_deployment(
                 provider=template.provider,
                 deployment_type=new_deployment.deployment_type,
                 cloud_deployment_id=new_deployment.cloud_deployment_id,
-                cloud_region=region,
+                cloud_region=location,  # Store the location in cloud_region
+                resource_group=engine_deployment.get("resource_group"),  # Store the resource group
                 status=new_deployment.status
             )
             db.add(deployment_details)
@@ -1333,7 +1334,8 @@ def update_deployment_status(
                 provider="azure",
                 deployment_type=deployment.deployment_type if hasattr(deployment, 'deployment_type') else "arm",
                 cloud_deployment_id=deployment.cloud_deployment_id if hasattr(deployment, 'cloud_deployment_id') else None,
-                cloud_region=deployment.region,
+                cloud_region=location,  # Store the location in cloud_region
+                resource_group=engine_deployment.get("resource_group"),  # Store the resource group
                 status="in_progress"
             )
             db.add(deployment_details)
