@@ -15,25 +15,14 @@ from deploy.azure import AzureDeployer
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Deployment Engine API")
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# In-memory storage for deployments (would be replaced with a database in production)
+deployments = {}
 
 # Initialize Azure deployer
 azure_deployer = AzureDeployer()
 
 # API settings
 API_URL = os.getenv("API_URL", "http://api:8000")
-
-# In-memory storage for deployments (would be replaced with a database in production)
-deployments = {}
 
 # Active polling threads
 polling_threads = {}
@@ -223,6 +212,78 @@ def check_permission(required_permission: str):
         
         raise HTTPException(status_code=403, detail=f"Insufficient permissions. Required: {required_permission}")
     return check
+
+# Initialize deployments from backend database
+def initialize_deployments():
+    """
+    Initialize deployments from backend database
+    This is called when the application starts
+    """
+    logger.info("Initializing deployments from backend database")
+    try:
+        # Create a service account token for backend API access
+        # This is a simplified approach - in production, you would use a proper service account
+        service_token = os.getenv("SERVICE_TOKEN")
+        if not service_token:
+            logger.warning("SERVICE_TOKEN not set, skipping deployment initialization")
+            return
+        
+        headers = {"Authorization": f"Bearer {service_token}"}
+        
+        # Fetch all deployments from backend
+        response = requests.get(
+            f"{API_URL}/api/deployments",
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            backend_deployments = response.json()
+            
+            # Process each deployment
+            for backend_deployment in backend_deployments:
+                deployment_id = backend_deployment.get("deployment_id")
+                if not deployment_id:
+                    continue
+                
+                # Create deployment object from backend data
+                deployment_data = {
+                    "deployment_id": deployment_id,
+                    "name": backend_deployment.get("name"),
+                    "description": backend_deployment.get("description"),
+                    "resource_group": backend_deployment.get("details", {}).get("resource_group"),
+                    "location": backend_deployment.get("details", {}).get("cloud_region"),
+                    "deployment_type": backend_deployment.get("details", {}).get("deployment_type", "arm"),
+                    "status": backend_deployment.get("details", {}).get("status"),
+                    "azure_deployment_id": backend_deployment.get("details", {}).get("cloud_deployment_id"),
+                    "tenant_id": backend_deployment.get("tenant_id"),
+                    "created_by": backend_deployment.get("created_by"),
+                    "created_at": backend_deployment.get("created_at"),
+                    "updated_at": backend_deployment.get("updated_at"),
+                    "resources": backend_deployment.get("details", {}).get("cloud_resources", []),
+                    "outputs": {},
+                    "logs": []
+                }
+                
+                # Store in memory
+                deployments[deployment_id] = deployment_data
+            
+            logger.info(f"Initialized {len(deployments)} deployments from backend")
+        else:
+            logger.error(f"Failed to fetch deployments from backend: {response.status_code} - {response.text}")
+    except Exception as e:
+        logger.error(f"Error initializing deployments: {str(e)}")
+
+# Create FastAPI app
+app = FastAPI(title="Deployment Engine API")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Routes
 @app.get("/")
@@ -480,12 +541,56 @@ def get_deployment(
     user: dict = Depends(check_permission("deployment:read"))
 ):
     try:
-        # Check if deployment exists
+        # Check if deployment exists in memory
         if deployment_id not in deployments:
-            raise HTTPException(status_code=404, detail="Deployment not found")
+            # Fetch deployment from backend API
+            logger.info(f"Deployment {deployment_id} not found in memory, fetching from backend")
+            try:
+                # Create headers with user token
+                headers = {"Authorization": f"Bearer {user.get('token')}"}
+                
+                # Fetch deployment details from backend
+                response = requests.get(
+                    f"{API_URL}/api/deployments/{deployment_id}",
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    backend_deployment = response.json()
+                    
+                    # Create deployment object from backend data
+                    deployment_data = {
+                        "deployment_id": deployment_id,
+                        "name": backend_deployment.get("name"),
+                        "description": backend_deployment.get("description"),
+                        "resource_group": backend_deployment.get("details", {}).get("resource_group"),
+                        "location": backend_deployment.get("details", {}).get("cloud_region"),
+                        "deployment_type": backend_deployment.get("details", {}).get("deployment_type", "arm"),
+                        "status": backend_deployment.get("details", {}).get("status"),
+                        "azure_deployment_id": backend_deployment.get("details", {}).get("cloud_deployment_id"),
+                        "tenant_id": backend_deployment.get("tenant_id"),
+                        "created_by": backend_deployment.get("created_by"),
+                        "created_at": backend_deployment.get("created_at"),
+                        "updated_at": backend_deployment.get("updated_at"),
+                        "resources": backend_deployment.get("details", {}).get("cloud_resources", []),
+                        "outputs": {},
+                        "logs": []
+                    }
+                    
+                    # Store in memory for future use
+                    deployments[deployment_id] = deployment_data
+                    logger.info(f"Deployment {deployment_id} fetched from backend and stored in memory")
+                else:
+                    logger.error(f"Failed to fetch deployment from backend: {response.status_code} - {response.text}")
+                    raise HTTPException(status_code=404, detail="Deployment not found")
+            except Exception as e:
+                logger.error(f"Error fetching deployment from backend: {str(e)}")
+                raise HTTPException(status_code=404, detail="Deployment not found")
+        
+        # Get deployment from memory
+        deployment = deployments[deployment_id]
         
         # Check if user has access to this deployment
-        deployment = deployments[deployment_id]
         if deployment["tenant_id"] != user["tenant_id"]:
             raise HTTPException(status_code=403, detail="Access denied")
         
@@ -570,12 +675,56 @@ def delete_deployment(
     user: dict = Depends(check_permission("deployment:delete"))
 ):
     try:
-        # Check if deployment exists
+        # Check if deployment exists in memory
         if deployment_id not in deployments:
-            raise HTTPException(status_code=404, detail="Deployment not found")
+            # Fetch deployment from backend API
+            logger.info(f"Deployment {deployment_id} not found in memory, fetching from backend")
+            try:
+                # Create headers with user token
+                headers = {"Authorization": f"Bearer {user.get('token')}"}
+                
+                # Fetch deployment details from backend
+                response = requests.get(
+                    f"{API_URL}/api/deployments/{deployment_id}",
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    backend_deployment = response.json()
+                    
+                    # Create deployment object from backend data
+                    deployment_data = {
+                        "deployment_id": deployment_id,
+                        "name": backend_deployment.get("name"),
+                        "description": backend_deployment.get("description"),
+                        "resource_group": backend_deployment.get("details", {}).get("resource_group"),
+                        "location": backend_deployment.get("details", {}).get("cloud_region"),
+                        "deployment_type": backend_deployment.get("details", {}).get("deployment_type", "arm"),
+                        "status": backend_deployment.get("details", {}).get("status"),
+                        "azure_deployment_id": backend_deployment.get("details", {}).get("cloud_deployment_id"),
+                        "tenant_id": backend_deployment.get("tenant_id"),
+                        "created_by": backend_deployment.get("created_by"),
+                        "created_at": backend_deployment.get("created_at"),
+                        "updated_at": backend_deployment.get("updated_at"),
+                        "resources": backend_deployment.get("details", {}).get("cloud_resources", []),
+                        "outputs": {},
+                        "logs": []
+                    }
+                    
+                    # Store in memory for future use
+                    deployments[deployment_id] = deployment_data
+                    logger.info(f"Deployment {deployment_id} fetched from backend and stored in memory")
+                else:
+                    logger.error(f"Failed to fetch deployment from backend: {response.status_code} - {response.text}")
+                    raise HTTPException(status_code=404, detail="Deployment not found")
+            except Exception as e:
+                logger.error(f"Error fetching deployment from backend: {str(e)}")
+                raise HTTPException(status_code=404, detail="Deployment not found")
+        
+        # Get deployment from memory
+        deployment = deployments[deployment_id]
         
         # Check if user has access to this deployment
-        deployment = deployments[deployment_id]
         if deployment["tenant_id"] != user["tenant_id"]:
             raise HTTPException(status_code=403, detail="Access denied")
         
@@ -628,4 +777,9 @@ def delete_deployment(
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Initialize deployments from backend
+    initialize_deployments()
+    
+    # Start the server
     uvicorn.run(app, host="0.0.0.0", port=5000)
