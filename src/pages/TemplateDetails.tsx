@@ -43,6 +43,7 @@ const TemplateDetails = () => {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingVersions, setLoadingVersions] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [deployDialogOpen, setDeployDialogOpen] = useState(false);
   const [deployName, setDeployName] = useState("");
   const [deployEnv, setDeployEnv] = useState("");
