@@ -278,42 +278,6 @@ const DeploymentDetails = () => {
     }
   };
   
-  const handleExportOutputs = () => {
-    if (!deployment?.details?.outputs) {
-      toast.error("No outputs available to export");
-      return;
-    }
-    
-    try {
-      // Create a JSON string from the outputs
-      const outputsJson = JSON.stringify(deployment.details.outputs, null, 2);
-      
-      // Create a blob from the JSON string
-      const blob = new Blob([outputsJson], { type: 'application/json' });
-      
-      // Create a URL for the blob
-      const url = URL.createObjectURL(blob);
-      
-      // Create a temporary anchor element to trigger the download
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${deployment.name}-outputs.json`;
-      
-      // Append the anchor to the body, click it, and then remove it
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      
-      // Release the blob URL
-      URL.revokeObjectURL(url);
-      
-      toast.success("Outputs exported successfully");
-    } catch (error) {
-      console.error("Error exporting outputs:", error);
-      toast.error("Failed to export outputs");
-    }
-  };
-  
   if (loading) {
     return <div className="flex items-center justify-center h-64">Loading deployment details...</div>;
   }
@@ -334,7 +298,7 @@ const DeploymentDetails = () => {
   }
   
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" asChild>
           <Link to="/deployments">
@@ -381,281 +345,252 @@ const DeploymentDetails = () => {
       </div>
       
       {/* Main tabs */}
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid grid-cols-7 w-full">
+      <Tabs defaultValue="overview" className="mt-6">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="resources">Resources</TabsTrigger>
           <TabsTrigger value="outputs">Outputs</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
           <TabsTrigger value="template">Template</TabsTrigger>
           <TabsTrigger value="parameters">Parameters</TabsTrigger>
-          <TabsTrigger value="diagram">Diagram</TabsTrigger>
-          <TabsTrigger value="chat">AI Assistant</TabsTrigger>
         </TabsList>
         
         {/* Overview tab */}
-        <TabsContent value="overview" className="space-y-6 pt-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 space-y-6">
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Collapsible className="w-full">
               <Card>
-                <CardHeader>
-                  <CardTitle>Deployment Status</CardTitle>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle>Deployment Details</CardTitle>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="w-9 p-0">
+                      <Maximize className="h-4 w-4" />
+                      <span className="sr-only">Toggle</span>
+                    </Button>
+                  </CollapsibleTrigger>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      {deployment.status === "running" || deployment.status === "deploying" ? (
-                        <Badge className="bg-blue-500">
-                          <Activity className="h-3 w-3 mr-1" />
-                          In Progress
-                        </Badge>
-                      ) : deployment.status === "failed" ? (
-                        <Badge variant="destructive">
-                          <XCircle className="h-3 w-3 mr-1" />
-                          Failed
-                        </Badge>
-                      ) : deployment.status === "stopped" ? (
-                        <Badge variant="outline">
-                          <Clock className="h-3 w-3 mr-1" />
-                          Stopped
-                        </Badge>
-                      ) : (
-                        <Badge variant="success">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Succeeded
-                        </Badge>
-                      )}
-                      
-                      <span className="text-sm text-muted-foreground">
-                        Last updated: {new Date(deployment.updatedAt).toLocaleString()}
-                      </span>
-                    </div>
-                    
-                    <div className="text-sm">
-                      {statusMessage}
-                    </div>
-                    
-                    {deployment.status === "failed" && (
-                      <div className="bg-destructive/10 border border-destructive/20 rounded-md p-4 text-sm">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-                          <div>
-                            <h4 className="font-medium text-destructive">Deployment Failed</h4>
-                            <p className="mt-1">
-                              The deployment process encountered an error. Check the logs for more details.
-                            </p>
-                          </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Status</p>
+                        <div className="flex items-center">
+                          {getStatusBadge(deployment.status)}
                         </div>
                       </div>
-                    )}
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Status Message</p>
+                        <p className="text-sm font-medium">{statusMessage || "No status message available"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Deployment ID</p>
+                        <p className="text-sm font-medium">{deployment.id}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Created</p>
+                        <p className="text-sm font-medium">{new Date(deployment.createdAt).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Last Updated</p>
+                        <p className="text-sm font-medium">{new Date(deployment.updatedAt || deployment.createdAt).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Template</p>
+                        <p className="text-sm font-medium">{template?.name || "Unknown"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Template Version</p>
+                        <p className="text-sm font-medium">{template?.version || "Unknown"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Environment</p>
+                        <p className="text-sm font-medium">{deployment.environment || "Default"}</p>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-              
+            </Collapsible>
+            
+            <Collapsible className="w-full">
               <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle>Resources</CardTitle>
-                  <CardDescription>
-                    Cloud resources created by this deployment
-                  </CardDescription>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="w-9 p-0">
+                      <Maximize className="h-4 w-4" />
+                      <span className="sr-only">Toggle</span>
+                    </Button>
+                  </CollapsibleTrigger>
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[300px]">
-                    <div className="space-y-4">
-                      {deployment.resources && deployment.resources.length > 0 ? (
-                        deployment.resources.map((resource, index) => (
-                          <Collapsible key={index}>
-                            <div className="flex items-center justify-between rounded-lg border p-4">
-                              <div className="flex items-center gap-4">
-                                {resource.type.includes("virtualMachine") ? (
-                                  <Server className="h-8 w-8 text-primary" />
-                                ) : resource.type.includes("storage") ? (
-                                  <Database className="h-8 w-8 text-primary" />
-                                ) : resource.type.includes("network") ? (
-                                  <Network className="h-8 w-8 text-primary" />
-                                ) : (
-                                  <CloudCog className="h-8 w-8 text-primary" />
-                                )}
-                                
-                                <div>
-                                  <h4 className="text-sm font-semibold">{resource.name}</h4>
-                                  <p className="text-xs text-muted-foreground">{resource.type}</p>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {deployment.resources && deployment.resources.length > 0 ? (
+                          deployment.resources.map((resource, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium">{resource.name}</TableCell>
+                              <TableCell>{resource.type}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  {resource.status === 'Succeeded' ? (
+                                    <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+                                  ) : resource.status === 'Failed' ? (
+                                    <XCircle className="h-4 w-4 text-red-500 mr-1" />
+                                  ) : (
+                                    <Clock className="h-4 w-4 text-yellow-500 mr-1" />
+                                  )}
+                                  <span>{resource.status || 'Unknown'}</span>
                                 </div>
-                              </div>
-                              
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs">
-                                  {resource.location}
-                                </Badge>
-                                
-                                <CollapsibleTrigger asChild>
-                                  <Button variant="ghost" size="sm">
+                              </TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="sm" asChild>
+                                  <Link to={`/deployments/${deploymentId}/resources/${resource.id}`}>
                                     <ChevronRight className="h-4 w-4" />
-                                  </Button>
-                                </CollapsibleTrigger>
-                              </div>
-                            </div>
-                            
-                            <CollapsibleContent>
-                              <div className="rounded-b-lg border border-t-0 p-4 text-sm">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <h5 className="font-medium">Properties</h5>
-                                    <ul className="mt-2 space-y-1">
-                                      {resource.properties.vmSize && (
-                                        <li>Size: {resource.properties.vmSize}</li>
-                                      )}
-                                      {resource.properties.osType && (
-                                        <li>OS: {resource.properties.osType}</li>
-                                      )}
-                                      {resource.properties.adminUsername && (
-                                        <li>Admin: {resource.properties.adminUsername}</li>
-                                      )}
-                                    </ul>
-                                  </div>
-                                  
-                                  <div>
-                                    <h5 className="font-medium">Tags</h5>
-                                    <div className="mt-2 flex flex-wrap gap-1">
-                                      {resource.tags && Object.entries(resource.tags).map(([key, value], i) => (
-                                        <Badge key={i} variant="secondary" className="text-xs">
-                                          {key}: {value}
-                                        </Badge>
-                                      ))}
-                                      {(!resource.tags || Object.keys(resource.tags).length === 0) && (
-                                        <span className="text-xs text-muted-foreground">No tags</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                <div className="mt-4">
-                                  <h5 className="font-medium">Resource ID</h5>
-                                  <code className="mt-1 block rounded bg-muted p-2 text-xs">
-                                    {resource.id}
-                                  </code>
-                                </div>
-                              </div>
-                            </CollapsibleContent>
-                          </Collapsible>
-                        ))
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <CloudCog className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <h3 className="text-lg font-medium mb-2">No resources available</h3>
-                          <p className="max-w-md mx-auto">
-                            This deployment doesn't have any resources defined or they haven't been generated yet.
-                          </p>
+                                  </Link>
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-muted-foreground">
+                              No resources found
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </Collapsible>
+          </div>
+          
+          <Collapsible className="w-full">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle>Deployment AI Chat</CardTitle>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-9 p-0">
+                    <Maximize className="h-4 w-4" />
+                    <span className="sr-only">Toggle</span>
+                  </Button>
+                </CollapsibleTrigger>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="space-y-4">
+                  <ScrollArea className="h-[300px] rounded-md border p-4">
+                    <div className="space-y-4">
+                      {chatHistory.filter(msg => msg.role !== "system").map((message, index) => (
+                        <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                          <div className={`max-w-[80%] rounded-lg p-3 ${
+                            message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
+                          }`}>
+                            {message.content}
+                          </div>
+                        </div>
+                      ))}
+                      {chatHistory.length === 1 && (
+                        <div className="text-center text-muted-foreground">
+                          Start chatting with the Deployment AI to get help and insights
                         </div>
                       )}
                     </div>
                   </ScrollArea>
+                  
+                  <div className="flex gap-2">
+                    <Textarea 
+                      placeholder="Ask a question about your deployment..." 
+                      value={chatMessage}
+                      onChange={(e) => setChatMessage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendChatMessage();
+                        }
+                      }}
+                      className="min-h-[60px]"
+                    />
+                    <Button onClick={handleSendChatMessage} className="self-end">
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Send
+                    </Button>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline" className="cursor-pointer hover:bg-accent" onClick={() => setChatMessage("What resources are in this deployment?")}>
+                      Show resources
+                    </Badge>
+                    <Badge variant="outline" className="cursor-pointer hover:bg-accent" onClick={() => setChatMessage("What's the status of this deployment?")}>
+                      Check status
+                    </Badge>
+                    <Badge variant="outline" className="cursor-pointer hover:bg-accent" onClick={() => setChatMessage("Tell me about the template used")}>
+                      Template info
+                    </Badge>
+                  </div>
                 </CardContent>
-              </Card>
-            </div>
-            
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Deployment Information</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-sm font-medium">Name</h3>
-                      <p>{deployment.name}</p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium">Environment</h3>
-                      <p>{deployment.environment}</p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium">Provider</h3>
-                      <p>{deployment.provider.toUpperCase()}</p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium">Region</h3>
-                      <p>{deployment.region || "Not specified"}</p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium">Created</h3>
-                      <p>{new Date(deployment.createdAt).toLocaleString()}</p>
-                    </div>
-                    
-                    <Separator />
-                    
-                    <div>
-                      <h3 className="text-sm font-medium">Template</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Link to={`/catalog/${deployment.templateId}`} className="text-primary hover:underline">
-                          {deployment.templateName}
-                        </Link>
-                        {deployment.templateVersion && (
-                          <Badge variant="outline" className="text-xs">
-                            v{deployment.templateVersion}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {newTemplateVersionAvailable && (
-                      <div className="bg-primary/10 border border-primary/20 rounded-md p-3 text-sm">
-                        <div className="flex items-start gap-2">
-                          <GitCompare className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                          <div>
-                            <h4 className="font-medium text-primary">New version available</h4>
-                            <p className="mt-1 text-xs">
-                              A newer version of this template is available. Consider upgrading to get the latest features and fixes.
-                            </p>
-                            <Button variant="outline" size="sm" className="mt-2" onClick={() => handleAction("upgrade")}>
-                              <GitBranch className="h-3 w-3 mr-1" />
-                              Upgrade Template
-                            </Button>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+        </TabsContent>
+        
+        {/* Resources tab */}
+        <TabsContent value="resources" className="space-y-6 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Resources</CardTitle>
+              <CardDescription>
+                Overview of all resources deployed by this deployment
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[400px] rounded-md border bg-muted">
+                <div className="space-y-4">
+                  {deployment.resources && deployment.resources.length > 0 ? (
+                    deployment.resources.map((resource, index) => (
+                      <div key={index} className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">{resource.name}</p>
+                          <p className="text-sm text-muted-foreground">{resource.type}</p>
+                        </div>
+                        <div>
+                          <div className="flex items-center">
+                            {resource.status === 'Succeeded' ? (
+                              <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+                            ) : resource.status === 'Failed' ? (
+                              <XCircle className="h-4 w-4 text-red-500 mr-1" />
+                            ) : (
+                              <Clock className="h-4 w-4 text-yellow-500 mr-1" />
+                            )}
+                            <span>{resource.status || 'Unknown'}</span>
                           </div>
                         </div>
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Quick Actions</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" className="justify-start" onClick={() => handleAction("restart")}>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Restart
-                    </Button>
-                    
-                    <Button variant="outline" className="justify-start" onClick={() => handleAction("stop")}>
-                      <Play className="h-4 w-4 mr-2" />
-                      Stop
-                    </Button>
-                    
-                    <Button variant="outline" className="justify-start" asChild>
-                      <Link to={`/catalog/${deployment.templateId}`}>
-                        <FileText className="h-4 w-4 mr-2" />
-                        View Template
-                      </Link>
-                    </Button>
-                    
-                    <Button variant="outline" className="justify-start" onClick={() => setIsDeleteDialogOpen(true)}>
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Code className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <h3 className="text-lg font-medium mb-2">No resources available</h3>
+                      <p className="max-w-md mx-auto">
+                        This deployment doesn't have any resources defined or they haven't been generated yet.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
         </TabsContent>
-        
         
         {/* Outputs tab */}
         <TabsContent value="outputs" className="space-y-6 pt-4">
@@ -697,7 +632,7 @@ const DeploymentDetails = () => {
                   </Table>
                   
                   <div className="flex justify-end">
-                    <Button variant="outline" size="sm" onClick={handleExportOutputs}>
+                    <Button variant="outline" size="sm">
                       <Download className="h-4 w-4 mr-2" />
                       Export Outputs
                     </Button>
@@ -849,71 +784,6 @@ const DeploymentDetails = () => {
                   This diagram shows the deployed resources and their connections.
                   In a production environment, this would be an interactive diagram of your architecture.
                 </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        {/* AI Assistant tab */}
-        <TabsContent value="chat" className="space-y-6 pt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Deployment AI Chat</CardTitle>
-              <CardDescription>
-                Chat with the Deployment AI for help and insights
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[400px] rounded-md border bg-black text-white font-mono">
-                <div className="p-4">
-                  <div className="space-y-4">
-                    {chatHistory.filter(msg => msg.role !== "system").map((message, index) => (
-                      <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[80%] rounded-lg p-3 ${
-                          message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
-                        }`}>
-                          {message.content}
-                        </div>
-                      </div>
-                    ))}
-                    {chatHistory.length === 1 && (
-                      <div className="text-center text-muted-foreground">
-                        Start chatting with the Deployment AI to get help and insights
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </ScrollArea>
-              
-              <div className="flex gap-2">
-                <Textarea 
-                  placeholder="Ask a question about your deployment..." 
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendChatMessage();
-                    }
-                  }}
-                  className="min-h-[60px]"
-                />
-                <Button onClick={handleSendChatMessage} className="self-end">
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Send
-                </Button>
-              </div>
-              
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline" className="cursor-pointer hover:bg-accent" onClick={() => setChatMessage("What resources are in this deployment?")}>
-                  Show resources
-                </Badge>
-                <Badge variant="outline" className="cursor-pointer hover:bg-accent" onClick={() => setChatMessage("What's the status of this deployment?")}>
-                  Check status
-                </Badge>
-                <Badge variant="outline" className="cursor-pointer hover:bg-accent" onClick={() => setChatMessage("Tell me about the template used")}>
-                  Template info
-                </Badge>
               </div>
             </CardContent>
           </Card>
