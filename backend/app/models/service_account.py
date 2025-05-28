@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 
 from app.models.base_models import Base, generate_uuid
+from app.models.user import Tenant, Role
 
 class ServiceAccount(Base):
     __tablename__ = "service_accounts"
@@ -28,11 +29,16 @@ class ServiceAccount(Base):
     role_id = Column(Integer, ForeignKey("roles.id"))
     role = relationship("Role", back_populates="service_accounts")
 
-# Add relationship to Tenant model
-from app.models.tenant import Tenant
-Tenant.service_accounts = relationship("ServiceAccount", back_populates="tenant")
+# Add relationships to models
+# These will be added at the module level after the ServiceAccount class is defined
+def setup_relationships():
+    # Add relationship to Tenant model
+    if not hasattr(Tenant, 'service_accounts'):
+        Tenant.service_accounts = relationship("ServiceAccount", back_populates="tenant")
+    
+    # Add relationship to Role model
+    if not hasattr(Role, 'service_accounts'):
+        Role.service_accounts = relationship("ServiceAccount", back_populates="role")
 
-# Add relationship to Role model
-from app.models.role import Role
-Role.service_accounts = relationship("ServiceAccount", back_populates="role")
-
+# Call the function to set up relationships
+setup_relationships()

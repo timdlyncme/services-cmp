@@ -213,45 +213,38 @@ def check_permission(required_permission: str):
 
 def get_service_token(user_token=None):
     """
-    Get a service account token for backend API access
-    Falls back to user token if service account credentials are not available
+    Get a service account token for backend API calls.
+    Falls back to the provided user token if service account is not configured.
     """
-    # Get service account credentials from environment variables
-    service_username = os.getenv("SERVICE_USERNAME")
-    service_password = os.getenv("SERVICE_PASSWORD")
+    # Check if service account credentials are configured
+    service_username = os.getenv("SERVICE_ACCOUNT_USERNAME")
+    service_password = os.getenv("SERVICE_ACCOUNT_PASSWORD")
     
     if not service_username or not service_password:
-        logger.warning("SERVICE_USERNAME or SERVICE_PASSWORD not set, trying SERVICE_TOKEN")
-        service_token = os.getenv("SERVICE_TOKEN")
-        if not service_token:
-            logger.warning("SERVICE_TOKEN not set, using user token")
-            service_token = user_token
-        return service_token
-    else:
-        # Get token from login endpoint
-        logger.info(f"Getting service account token from {API_URL}/api/auth/token")
-        try:
-            response = requests.post(
-                f"{API_URL}/api/auth/token",
-                data={
-                    "username": service_username,
-                    "password": service_password
-                }
-            )
-            
-            if response.status_code == 200:
-                token_data = response.json()
-                service_token = token_data.get("access_token")
-                if not service_token:
-                    logger.error("Failed to get service token: No access_token in response")
-                    service_token = user_token
-                return service_token
-            else:
-                logger.error(f"Failed to get service token: {response.status_code} - {response.text}")
-                return user_token
-        except Exception as e:
-            logger.error(f"Error getting service token: {str(e)}")
+        logger.warning("Service account credentials not configured, using user token")
+        return user_token
+    
+    try:
+        # Get token from backend API
+        response = requests.post(
+            f"{API_URL}/api/auth/token",
+            data={
+                "username": service_username,
+                "password": service_password
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"}
+        )
+        
+        if response.status_code == 200:
+            token_data = response.json()
+            logger.info("Successfully obtained service account token")
+            return token_data["access_token"]
+        else:
+            logger.error(f"Failed to get service account token: {response.status_code} - {response.text}")
             return user_token
+    except Exception as e:
+        logger.error(f"Error getting service account token: {str(e)}")
+        return user_token
 
 # Initialize deployments from backend database
 def initialize_deployments():
