@@ -284,7 +284,7 @@ const TemplateDetails = () => {
         template_source: "code",
         template_code: templateCode,
         parameters: deployParameters || {}, // Use deployParameters instead of parameters
-        template_version: template.currentVersion // Add the template version to the deployment data
+        template_version: template.version // Use version instead of currentVersion
       };
       
       console.log("Deployment data:", JSON.stringify(deploymentData));
