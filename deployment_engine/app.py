@@ -566,6 +566,7 @@ def update_deployment(
 @app.delete("/deployments/{deployment_id}")
 def delete_deployment(
     deployment_id: str,
+    delete_resources: bool = True,  # Default to deleting all resources
     user: dict = Depends(check_permission("deployment:delete"))
 ):
     try:
@@ -578,21 +579,49 @@ def delete_deployment(
         if deployment["tenant_id"] != user["tenant_id"]:
             raise HTTPException(status_code=403, detail="Access denied")
         
-        # Delete deployment from Azure
-        result = azure_deployer.delete_deployment(
-            resource_group=deployment["resource_group"],
-            deployment_name=deployment["azure_deployment_id"]
+        # Get the resource group name
+        resource_group = deployment.get("resource_group")
+        if not resource_group:
+            raise HTTPException(status_code=400, detail="Resource group not found for this deployment")
+        
+        # Get the Azure deployment ID
+        azure_deployment_id = deployment.get("azure_deployment_id")
+        if not azure_deployment_id:
+            raise HTTPException(status_code=400, detail="Azure deployment ID not found for this deployment")
+        
+        # First, delete the deployment from Azure
+        delete_result = azure_deployer.delete_deployment(
+            resource_group=resource_group,
+            deployment_name=azure_deployment_id
         )
+        
+        # If requested, delete all resources by deleting the resource group
+        resource_deletion_result = None
+        if delete_resources:
+            logger.info(f"Deleting all resources in resource group {resource_group}")
+            resource_deletion_result = azure_deployer.delete_resource_group(
+                resource_group=resource_group
+            )
         
         # Update deployment status
         deployment["status"] = "deleting"
         deployment["updated_at"] = datetime.utcnow().isoformat()
         
-        return {
+        # Prepare response
+        response = {
             "deployment_id": deployment_id,
             "status": "deleting",
-            "message": result.get("message", "Deployment deletion initiated")
+            "message": delete_result.get("message", "Deployment deletion initiated")
         }
+        
+        # Add resource deletion info if applicable
+        if resource_deletion_result:
+            response["resource_deletion"] = {
+                "status": resource_deletion_result.get("status"),
+                "message": resource_deletion_result.get("message")
+            }
+        
+        return response
     except Exception as e:
         logger.error(f"Error deleting deployment: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

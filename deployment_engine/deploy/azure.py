@@ -625,6 +625,50 @@ class AzureDeployer:
                 "error_details": str(e)
             }
     
+    def delete_resource_group(self, resource_group):
+        """
+        Delete an Azure resource group and all resources within it
+        
+        Args:
+            resource_group (str): The resource group name
+            
+        Returns:
+            dict: Deletion result with status
+        """
+        if not self.resource_client:
+            raise ValueError("Azure credentials not configured")
+        
+        try:
+            # Check if resource group exists
+            if not self.resource_client.resource_groups.check_existence(resource_group):
+                return {
+                    "status": "completed",
+                    "message": f"Resource group {resource_group} does not exist"
+                }
+            
+            # Delete resource group and all resources within it
+            logger = logging.getLogger(__name__)
+            logger.info(f"Deleting resource group {resource_group} and all its resources")
+            
+            # Begin the deletion operation
+            delete_operation = self.resource_client.resource_groups.begin_delete(
+                resource_group_name=resource_group
+            )
+            
+            # The operation is asynchronous, but we can return immediately
+            return {
+                "status": "in_progress",
+                "message": f"Resource group {resource_group} deletion initiated"
+            }
+            
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error deleting resource group {resource_group}: {str(e)}")
+            return {
+                "status": "failed",
+                "error_details": str(e)
+            }
+    
     def _map_status(self, azure_status):
         """Map Azure deployment status to our standard status"""
         if azure_status == "Running":
