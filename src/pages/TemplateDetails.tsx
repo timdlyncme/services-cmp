@@ -509,6 +509,124 @@ const TemplateDetails = () => {
         </div>
       </div>
       
+      {/* Add back the Dialog component for deployment */}
+      <Dialog open={deployDialogOpen} onOpenChange={setDeployDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Deploy Template</DialogTitle>
+            <DialogDescription>
+              Configure deployment settings for this template.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="deployName">Deployment Name</Label>
+              <Input 
+                id="deployName" 
+                value={deployName} 
+                onChange={(e) => setDeployName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="deployEnv">Environment</Label>
+              <Select 
+                value={deployEnv} 
+                onValueChange={setDeployEnv}
+                disabled={deploymentInProgress}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an environment" />
+                </SelectTrigger>
+                <SelectContent>
+                  {environments.map((env) => (
+                    <SelectItem key={env.id} value={env.id}>
+                      {env.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Parameters section */}
+            {Object.keys(parameters).length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Parameters</h3>
+                <div className="space-y-2">
+                  {Object.entries(parameters).map(([key, param]) => (
+                    <div key={key} className="grid grid-cols-12 gap-2 items-start">
+                      <div className="col-span-3">
+                        <Label>Name</Label>
+                        <Input 
+                          value={key}
+                          disabled={true}
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <Label>Type</Label>
+                        <Input
+                          value={param.type}
+                          disabled={true}
+                        />
+                      </div>
+                      <div className="col-span-6">
+                        <Label>Value</Label>
+                        {param.type === "password" ? (
+                          <div className="relative">
+                            <Input 
+                              type={showPasswordValues[key] ? "text" : "password"}
+                              value={param.value}
+                              onChange={(e) => updateParameter(key, "value", e.target.value)}
+                              className="pr-8"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-0 top-0 h-full"
+                              onClick={() => togglePasswordVisibility(key)}
+                            >
+                              {showPasswordValues[key] ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        ) : (
+                          <Input 
+                            type={param.type === "int" ? "number" : "text"}
+                            value={param.value}
+                            onChange={(e) => updateParameter(key, "value", e.target.value)}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeployDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleDeployTemplate}>
+              {deploymentInProgress ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deploying...
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-4 w-4" />
+                  Deploy
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
           <Collapsible open={codeExpanded} onOpenChange={setCodeExpanded}>
