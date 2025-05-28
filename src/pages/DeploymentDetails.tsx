@@ -297,6 +297,43 @@ const DeploymentDetails = () => {
     );
   }
   
+  // Add a function to handle exporting outputs as JSON
+  const handleExportOutputs = () => {
+    if (!deployment?.details?.outputs) {
+      toast.error("No outputs available to export");
+      return;
+    }
+    
+    try {
+      // Create a JSON string from the outputs
+      const outputsJson = JSON.stringify(deployment.details.outputs, null, 2);
+      
+      // Create a blob from the JSON string
+      const blob = new Blob([outputsJson], { type: 'application/json' });
+      
+      // Create a URL for the blob
+      const url = URL.createObjectURL(blob);
+      
+      // Create a temporary anchor element to trigger the download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${deployment.name}-outputs.json`;
+      
+      // Append the anchor to the body, click it, and then remove it
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      // Release the blob URL
+      URL.revokeObjectURL(url);
+      
+      toast.success("Outputs exported successfully");
+    } catch (error) {
+      console.error("Error exporting outputs:", error);
+      toast.error("Failed to export outputs");
+    }
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -632,7 +669,7 @@ const DeploymentDetails = () => {
                   </Table>
                   
                   <div className="flex justify-end">
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={handleExportOutputs}>
                       <Download className="h-4 w-4 mr-2" />
                       Export Outputs
                     </Button>

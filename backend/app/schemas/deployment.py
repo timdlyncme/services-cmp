@@ -128,6 +128,10 @@ class CloudTemplateResponse(BaseModel):
     tenantId: str
     lastUpdatedBy: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
+    currentVersion: Optional[str] = None
+    template_id: Optional[str] = None
+    isPublic: Optional[bool] = False
 
     class Config:
         orm_mode = True
@@ -180,6 +184,7 @@ class DeploymentCreate(DeploymentBase):
     template_code: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
     project_id: Optional[str] = None  # For GCP
+    template_version: Optional[str] = None  # Add template_version field
 
     @validator('template_source')
     def validate_template_source(cls, v, values):

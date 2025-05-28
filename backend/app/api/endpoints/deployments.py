@@ -722,7 +722,7 @@ def get_deployment(
             name=deployment.name,
             templateId=template.template_id,
             templateName=template.name,
-            templateVersion=getattr(deployment, 'template_version', None),  # Safely get template_version if it exists
+            templateVersion=deployment.template_version,  # Add template version
             provider=deployment.deployment_type,
             status=deployment.status,
             environment=environment.name,
@@ -970,6 +970,23 @@ def create_deployment(
                 region = new_deployment.parameters["region"]
             elif "location" in new_deployment.parameters:
                 region = new_deployment.parameters["location"]
+        
+        # Create deployment details record
+        deployment_details = db.query(DeploymentDetails).filter(
+            DeploymentDetails.deployment_id == new_deployment.id
+        ).first()
+        
+        if not deployment_details:
+            deployment_details = DeploymentDetails(
+                deployment_id=new_deployment.id,
+                provider=template.provider,
+                deployment_type=new_deployment.deployment_type,
+                cloud_deployment_id=new_deployment.cloud_deployment_id,
+                cloud_region=region,
+                status=new_deployment.status
+            )
+            db.add(deployment_details)
+            db.commit()
         
         # Return frontend-compatible response
         return CloudDeploymentResponse(
