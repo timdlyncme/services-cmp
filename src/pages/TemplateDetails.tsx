@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { CloudTemplate, TemplateParameter, TemplateVariable } from "@/types/cloud";
-import { ChevronLeft, Save, Play, MessagesSquare, History, FileEdit, Plus, Trash2, ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
+import { ChevronLeft, Save, Play, MessagesSquare, History, FileEdit, Plus, Trash2, ChevronDown, ChevronUp, Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cmpService } from "@/services/cmp-service";
 import { deploymentService } from "@/services/deployment-service";
@@ -56,6 +56,7 @@ const TemplateDetails = () => {
   const [codeExpanded, setCodeExpanded] = useState(true);
   const [paramsExpanded, setParamsExpanded] = useState(true);
   const [showPasswordValues, setShowPasswordValues] = useState<Record<string, boolean>>({});
+  const [deploymentInProgress, setDeploymentInProgress] = useState(false);
   
   const fetchVersions = async (templateId: string) => {
     try {
@@ -169,19 +170,29 @@ const TemplateDetails = () => {
     if (!template) return;
     
     try {
+      // Check if the code has changed - only create a new version if code has changed
+      const codeHasChanged = code !== template.code;
+      
       const updatedTemplate = await cmpService.updateTemplate(template.id, {
         ...template,
         code: code,
         parameters: parameters,
-        variables: variables
+        variables: variables,
+        // Add a flag to indicate if this should create a new version
+        create_new_version: codeHasChanged
       });
       
       if (updatedTemplate) {
         setTemplate(updatedTemplate);
-        toast.success("Template saved successfully");
         
-        // Refresh versions after save
-        if (templateId) {
+        if (codeHasChanged) {
+          toast.success("Template saved successfully and new version created");
+        } else {
+          toast.success("Template parameters and variables saved successfully");
+        }
+        
+        // Refresh versions after save if code has changed
+        if (templateId && codeHasChanged) {
           await fetchVersions(templateId);
         }
       }
@@ -198,10 +209,13 @@ const TemplateDetails = () => {
     }
     
     try {
+      setDeploymentInProgress(true);
+      
       // Find the selected environment to get its name and environment_id
       const selectedEnvironment = environments.find(env => env.id === deployEnv);
       if (!selectedEnvironment) {
         toast.error("Selected environment not found");
+        setDeploymentInProgress(false);
         return;
       }
       
@@ -228,13 +242,26 @@ const TemplateDetails = () => {
       console.log("Deployment data:", JSON.stringify(deploymentData));
       
       // Use the deployment service to create the deployment
-      await deploymentService.createDeployment(deploymentData, currentTenant?.tenant_id || "");
+      const deploymentResponse = await deploymentService.createDeployment(deploymentData, currentTenant?.tenant_id || "");
       
-      toast.success(`Deploying ${deployName} to selected environment`);
-      setDeployDialogOpen(false);
-      navigate("/deployments");
+      toast.success(`Deployment "${deployName}" has been submitted successfully`, {
+        description: "You will be redirected to the deployments page to monitor progress.",
+        action: {
+          label: "View Deployments",
+          onClick: () => navigate("/deployments")
+        },
+        duration: 5000
+      });
+      
+      // Keep the dialog open for a moment to show the success state
+      setTimeout(() => {
+        setDeployDialogOpen(false);
+        setDeploymentInProgress(false);
+        navigate("/deployments");
+      }, 2000);
     } catch (error) {
       console.error("Error deploying template:", error);
+      setDeploymentInProgress(false);
       
       if (error instanceof Error) {
         toast.error(`Deployment failed: ${error.message}`);
@@ -484,7 +511,7 @@ const TemplateDetails = () => {
                           Deploy
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="max-w-md">
+                      <DialogContent>
                         <DialogHeader>
                           <DialogTitle>Deploy Template</DialogTitle>
                           <DialogDescription>
@@ -493,33 +520,31 @@ const TemplateDetails = () => {
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
                           <div className="space-y-2">
-                            <Label htmlFor="name">Deployment Name</Label>
+                            <Label htmlFor="deployName">Deployment Name</Label>
                             <Input 
-                              id="name" 
+                              id="deployName" 
                               value={deployName} 
                               onChange={(e) => setDeployName(e.target.value)}
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label>Environment</Label>
-                            {loadingEnvironments ? (
-                              <div className="text-sm text-muted-foreground">Loading environments...</div>
-                            ) : environments.length === 0 ? (
-                              <div className="text-sm text-muted-foreground">No environments available</div>
-                            ) : (
-                              <Select value={deployEnv} onValueChange={setDeployEnv}>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select environment" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {environments.map(env => (
-                                    <SelectItem key={env.id} value={env.id}>
-                                      {env.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
+                            <Label htmlFor="deployEnv">Environment</Label>
+                            <Select 
+                              value={deployEnv} 
+                              onValueChange={setDeployEnv}
+                              disabled={deploymentInProgress}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select an environment" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {environments.map((env) => (
+                                  <SelectItem key={env.id} value={env.id}>
+                                    {env.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                           
                           {/* Parameters section */}
@@ -681,7 +706,17 @@ const TemplateDetails = () => {
                             Cancel
                           </Button>
                           <Button onClick={handleDeployTemplate}>
-                            Deploy
+                            {deploymentInProgress ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Deploying...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="mr-2 h-4 w-4" />
+                                Deploy
+                              </>
+                            )}
                           </Button>
                         </DialogFooter>
                       </DialogContent>
