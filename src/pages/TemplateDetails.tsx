@@ -53,6 +53,8 @@ const TemplateDetails = () => {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [parameters, setParameters] = useState<Record<string, TemplateParameter>>({});
   const [variables, setVariables] = useState<Record<string, TemplateVariable>>({});
+  const [deploymentParameters, setDeploymentParameters] = useState<Record<string, TemplateParameter>>({});
+  const [deploymentVariables, setDeploymentVariables] = useState<Record<string, TemplateVariable>>({});
   const [codeExpanded, setCodeExpanded] = useState(true);
   const [paramsExpanded, setParamsExpanded] = useState(true);
   const [showPasswordValues, setShowPasswordValues] = useState<Record<string, boolean>>({});
@@ -250,6 +252,13 @@ const TemplateDetails = () => {
     }
   };
   
+  const handleOpenDeployDialog = () => {
+    // Initialize deployment parameters and variables with current values
+    setDeploymentParameters(JSON.parse(JSON.stringify(parameters)));
+    setDeploymentVariables(JSON.parse(JSON.stringify(variables)));
+    setDeployDialogOpen(true);
+  };
+  
   const handleDeployTemplate = async () => {
     if (!template || !deployEnv || !deployName) {
       toast.error("Please provide all required deployment information");
@@ -273,19 +282,20 @@ const TemplateDetails = () => {
       // Ensure template code is a string, not undefined or null
       const templateCode = template.code || "";
       
-      // Prepare the deployment data
+      // Prepare the deployment data - use deploymentParameters and deploymentVariables instead
       const deploymentData = {
         name: deployName,
         description: `Deployment of ${template.name}`,
-        template_id: template.id, // Use the GUID template_id instead of the numeric id
-        environment_id: selectedEnvironment.internal_id, // Use the internal_id from the environment
+        template_id: template.id,
+        environment_id: selectedEnvironment.internal_id,
         environment_name: selectedEnvironment.name,
         provider: template.provider,
         deployment_type: backendDeploymentType,
         template_source: "code",
         template_code: templateCode,
-        parameters: parameters || {},
-        template_version: template.currentVersion // Add the template version to the deployment data
+        parameters: deploymentParameters || {}, // Use deployment-specific parameters
+        variables: deploymentVariables || {}, // Add variables to deployment data
+        template_version: template.currentVersion
       };
       
       console.log("Deployment data:", JSON.stringify(deploymentData));
@@ -302,21 +312,14 @@ const TemplateDetails = () => {
         duration: 5000
       });
       
-      // Keep the dialog open for a moment to show the success state
-      setTimeout(() => {
-        setDeployDialogOpen(false);
-        setDeploymentInProgress(false);
-        navigate("/deployments");
-      }, 2000);
-    } catch (error) {
-      console.error("Error deploying template:", error);
+      // Close the dialog and navigate to deployments page
+      setDeployDialogOpen(false);
+      navigate("/deployments");
+    } catch (err) {
+      console.error("Error creating deployment:", err);
+      toast.error("Failed to create deployment");
+    } finally {
       setDeploymentInProgress(false);
-      
-      if (error instanceof Error) {
-        toast.error(`Deployment failed: ${error.message}`);
-      } else {
-        toast.error("Failed to deploy template");
-      }
     }
   };
   
@@ -495,14 +498,14 @@ const TemplateDetails = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
         <Button variant="outline" onClick={() => navigate(-1)}>
           <ChevronLeft className="mr-2 h-4 w-4" />
           Back to Templates
         </Button>
         <div className="space-x-2">
-          <Button style={{ backgroundColor: "darkorange" }} onClick={() => setDeployDialogOpen(true)}>
+          <Button style={{ backgroundColor: "darkorange" }} onClick={handleOpenDeployDialog}>
             <Play className="mr-2 h-4 w-4" />
             Deploy Template
           </Button>
@@ -511,7 +514,7 @@ const TemplateDetails = () => {
       
       {/* Add back the Dialog component for deployment */}
       <Dialog open={deployDialogOpen} onOpenChange={setDeployDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[700px]"> {/* Increased width from default */}
           <DialogHeader>
             <DialogTitle>Deploy Template</DialogTitle>
             <DialogDescription>
@@ -547,12 +550,12 @@ const TemplateDetails = () => {
               </Select>
             </div>
             
-            {/* Parameters section */}
-            {Object.keys(parameters).length > 0 && (
+            {/* Parameters section - updated to use deploymentParameters */}
+            {Object.keys(deploymentParameters).length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-medium">Parameters</h3>
                 <div className="space-y-2">
-                  {Object.entries(parameters).map(([key, param]) => (
+                  {Object.entries(deploymentParameters).map(([key, param]) => (
                     <div key={key} className="grid grid-cols-12 gap-2 items-start">
                       <div className="col-span-3">
                         <Label>Name</Label>
@@ -575,7 +578,7 @@ const TemplateDetails = () => {
                             <Input 
                               type={showPasswordValues[key] ? "text" : "password"}
                               value={param.value}
-                              onChange={(e) => updateParameter(key, "value", e.target.value)}
+                              onChange={(e) => updateDeploymentParameter(key, "value", e.target.value)}
                               className="pr-8"
                             />
                             <Button
@@ -596,7 +599,66 @@ const TemplateDetails = () => {
                           <Input 
                             type={param.type === "int" ? "number" : "text"}
                             value={param.value}
-                            onChange={(e) => updateParameter(key, "value", e.target.value)}
+                            onChange={(e) => updateDeploymentParameter(key, "value", e.target.value)}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Variables section - updated to use deploymentVariables */}
+            {Object.keys(deploymentVariables).length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Variables</h3>
+                <div className="space-y-2">
+                  {Object.entries(deploymentVariables).map(([key, variable]) => (
+                    <div key={key} className="grid grid-cols-12 gap-2 items-start">
+                      <div className="col-span-3">
+                        <Label>Name</Label>
+                        <Input 
+                          value={key}
+                          disabled={true}
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <Label>Type</Label>
+                        <Input
+                          value={variable.type}
+                          disabled={true}
+                        />
+                      </div>
+                      <div className="col-span-6">
+                        <Label>Value</Label>
+                        {variable.type === "password" ? (
+                          <div className="relative">
+                            <Input 
+                              type={showPasswordValues[key] ? "text" : "password"}
+                              value={variable.value}
+                              onChange={(e) => updateDeploymentVariable(key, "value", e.target.value)}
+                              className="pr-8"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-0 top-0 h-full"
+                              onClick={() => togglePasswordVisibility(key)}
+                            >
+                              {showPasswordValues[key] ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        ) : (
+                          <Input 
+                            type={variable.type === "int" ? "number" : "text"}
+                            value={variable.value}
+                            onChange={(e) => updateDeploymentVariable(key, "value", e.target.value)}
                           />
                         )}
                       </div>
