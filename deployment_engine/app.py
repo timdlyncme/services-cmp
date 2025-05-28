@@ -91,6 +91,10 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
                     "logs": logs
                 }
                 
+                # Add deployment_result if available
+                if deployment_id in deployments and "deployment_result" in deployments[deployment_id]:
+                    update_data["deployment_result"] = deployments[deployment_id]["deployment_result"]
+                
                 # Log the request details
                 logger.info(f"Request URL: {API_URL}/api/deployments/engine/{deployment_id}/status")
                 logger.info(f"Request headers: Authorization: Bearer [REDACTED]")
@@ -412,7 +416,8 @@ def create_deployment(
             "updated_at": datetime.utcnow().isoformat(),
             "resources": [],
             "outputs": {},
-            "logs": []
+            "logs": [],
+            "deployment_result": result  # Store the full deployment result
         }
         
         logger.info(f"Stored deployment details in memory: {deployment_id}")
