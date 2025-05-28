@@ -452,6 +452,26 @@ const TemplateDetails = () => {
     setVariables(newVars);
   };
   
+  const updateDeploymentParameter = (key: string, field: keyof TemplateParameter, value: string) => {
+    setDeploymentParameters({
+      ...deploymentParameters,
+      [key]: {
+        ...deploymentParameters[key],
+        [field]: value
+      }
+    });
+  };
+  
+  const updateDeploymentVariable = (key: string, field: keyof TemplateVariable, value: string) => {
+    setDeploymentVariables({
+      ...deploymentVariables,
+      [key]: {
+        ...deploymentVariables[key],
+        [field]: value
+      }
+    });
+  };
+  
   const togglePasswordVisibility = (key: string) => {
     setShowPasswordValues({
       ...showPasswordValues,
