@@ -573,7 +573,19 @@ def list_azure_subscriptions(
         
         if response.status_code != 200:
             logger.error(f"Error listing subscriptions from deployment engine: {response.text}")
-            raise Exception(f"Error listing subscriptions: {response.text}")
+            
+            # Try to parse the error response
+            try:
+                error_data = response.json()
+                error_message = error_data.get("detail", response.text)
+            except:
+                error_message = response.text
+            
+            # Return a more user-friendly error response
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Failed to list Azure subscriptions: {error_message}"
+            )
         
         return response.json()
     

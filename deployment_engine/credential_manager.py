@@ -209,7 +209,7 @@ class MultiTenantCredentialManager:
             logger.error(f"Error getting credential status for tenant {tenant_id}: {str(e)}")
             return {"configured": False, "message": f"Error: {str(e)}"}
     
-    def list_tenant_subscriptions(self, tenant_id: str, settings_id: Optional[str] = None) -> list:
+    def list_tenant_subscriptions(self, tenant_id: str, settings_id: Optional[str] = None) -> dict:
         """
         List Azure subscriptions for a specific tenant.
         
@@ -218,19 +218,40 @@ class MultiTenantCredentialManager:
             settings_id (str, optional): Specific settings ID to use
             
         Returns:
-            list: List of subscriptions
+            dict: Response with subscriptions list or error information
         """
         try:
             deployer = self.create_azure_deployer_for_tenant(tenant_id, settings_id)
             if not deployer:
-                return []
+                return {
+                    "success": False,
+                    "error": "Failed to create Azure deployer - credentials may be missing or invalid",
+                    "subscriptions": []
+                }
             
             subscriptions = deployer.list_subscriptions()
-            return subscriptions
+            return {
+                "success": True,
+                "subscriptions": subscriptions
+            }
             
         except Exception as e:
-            logger.error(f"Error listing subscriptions for tenant {tenant_id}: {str(e)}")
-            return []
+            error_message = str(e)
+            logger.error(f"Error listing subscriptions for tenant {tenant_id}: {error_message}")
+            
+            # Check for specific authentication errors
+            if "Authentication failed" in error_message or "ClientSecretCredential" in error_message:
+                error_message = "Azure authentication failed. Please check your credentials (client_id, client_secret, tenant_id)."
+            elif "credentials not configured" in error_message.lower():
+                error_message = "Azure credentials are not properly configured."
+            elif "subscription" in error_message.lower() and "not found" in error_message.lower():
+                error_message = "No Azure subscriptions found or access denied."
+            
+            return {
+                "success": False,
+                "error": error_message,
+                "subscriptions": []
+            }
 
 
 # Global instance

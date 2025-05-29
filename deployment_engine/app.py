@@ -344,11 +344,18 @@ def list_subscriptions(
         logger.debug(f"Listing subscriptions for tenant: {tenant_id}, settings_id: {settings_id}")
         
         # Get subscriptions using tenant-specific credentials
-        subscriptions = credential_manager.list_tenant_subscriptions(
+        result = credential_manager.list_tenant_subscriptions(
             tenant_id, 
             settings_id=settings_id
         )
-        return subscriptions
+        
+        # Check if the operation was successful
+        if not result.get("success", False):
+            error_message = result.get("error", "Unknown error occurred")
+            logger.error(f"Failed to list subscriptions for tenant {tenant_id}: {error_message}")
+            raise HTTPException(status_code=400, detail=error_message)
+        
+        return result.get("subscriptions", [])
         
     except HTTPException:
         raise
