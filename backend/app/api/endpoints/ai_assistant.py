@@ -274,8 +274,11 @@ async def stream_chat_endpoint(
             detail="Not enough permissions"
         )
     
+    # The issue is here - we need to await the coroutine
+    generator = stream_chat(request, current_user, db)
+    
     return StreamingResponse(
-        stream_chat(request, current_user, db),
+        generator,
         media_type="text/event-stream"
     )
 
@@ -288,116 +291,119 @@ async def stream_chat(
     """
     Stream chat responses from Azure OpenAI
     """
-    async def generate():
-        try:
-            # Get the configuration from the database
-            config = get_config(db)
+    # Get the configuration from the database
+    config = get_config(db)
+    
+    # Check if Azure OpenAI is configured
+    if not config.api_key or not config.endpoint or not config.deployment_name:
+        add_log("Azure OpenAI is not configured for streaming", "error")
+        yield f"data: {json.dumps({'error': 'Azure OpenAI is not configured'})}\n\n"
+        return
+    
+    try:
+        add_log(f"Sending streaming request to Azure OpenAI: {len(request.messages)} messages")
+        
+        # Prepare the request to Azure OpenAI
+        azure_url = f"{config.endpoint}/openai/deployments/{config.deployment_name}/chat/completions?api-version={config.api_version}"
+        
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": config.api_key
+        }
+        
+        # Prepare messages with template data if available
+        messages = [{
+            "role": msg.role,
+            "content": msg.content
+        } for msg in request.messages]
+        
+        # Log system message if it exists
+        system_message_index = next((i for i, msg in enumerate(messages) if msg["role"] == "system"), None)
+        if system_message_index is not None:
+            add_log(f"System message found in streaming: {messages[system_message_index]['content'][:100]}...", "info")
+        else:
+            add_log("No system message found in streaming request", "info")
+        
+        # If template data is provided, add it to the system message
+        if request.template_data:
+            # Find the system message or create one if it doesn't exist
+            system_message_index = next((i for i, msg in enumerate(messages) if msg["role"] == "system"), None)
             
-            # Check if Azure OpenAI is configured
-            if not config.api_key or not config.endpoint or not config.deployment_name:
-                error_msg = "Azure OpenAI is not configured"
+            if system_message_index is not None:
+                # Append template data to existing system message
+                template_data_str = json.dumps(request.template_data, indent=2)
+                messages[system_message_index]["content"] += f"\n\nHere is the current template data to help you provide accurate responses:\n```json\n{template_data_str}\n```\n\nWhen answering questions about the template, always use this data to provide accurate information."
+                add_log(f"Added template data to existing system message in streaming", "info")
+            else:
+                # Create a new system message with template data
+                template_data_str = json.dumps(request.template_data, indent=2)
+                system_message = {
+                    "role": "system",
+                    "content": f"You are an AI assistant that helps with understanding and modifying cloud templates. You have knowledge about Azure, AWS, and GCP resources and infrastructure as code.\n\nHere is the current template data to help you provide accurate responses:\n```json\n{template_data_str}\n```\n\nWhen answering questions about the template, always use this data to provide accurate information."
+                }
+                messages.insert(0, system_message)
+                add_log(f"Created new system message with template data in streaming", "info")
+        
+        payload = {
+            "messages": messages,
+            "max_tokens": request.max_completion_tokens,
+            "temperature": request.temperature,
+            "stream": True
+        }
+        
+        # Send the request to Azure OpenAI with streaming
+        with requests.post(azure_url, headers=headers, json=payload, stream=True) as response:
+            if response.status_code != 200:
+                error_msg = f"Error from Azure OpenAI: {response.status_code} {response.text}"
                 add_log(error_msg, "error")
+                
+                # Update connection status in the database
+                config.last_status = "error"
+                config.last_checked = datetime.utcnow()
+                config.last_error = error_msg
+                db.commit()
+                
                 yield f"data: {json.dumps({'error': error_msg})}\n\n"
                 return
             
-            add_log(f"Sending streaming request to Azure OpenAI: {len(request.messages)} messages")
-            
-            # Prepare the request to Azure OpenAI
-            azure_url = f"{config.endpoint}/openai/deployments/{config.deployment_name}/chat/completions?api-version={config.api_version}"
-            
-            headers = {
-                "Content-Type": "application/json",
-                "api-key": config.api_key
-            }
-            
-            # Prepare messages with template data if available
-            messages = [{
-                "role": msg.role,
-                "content": msg.content
-            } for msg in request.messages]
-            
-            # If template data is provided, add it to the system message
-            if request.template_data:
-                # Find the system message or create one if it doesn't exist
-                system_message_index = next((i for i, msg in enumerate(messages) if msg["role"] == "system"), None)
-                
-                if system_message_index is not None:
-                    # Append template data to existing system message
-                    template_data_str = json.dumps(request.template_data, indent=2)
-                    messages[system_message_index]["content"] += f"\n\nHere is the current template data to help you provide accurate responses:\n```json\n{template_data_str}\n```\n\nWhen answering questions about the template, always use this data to provide accurate information."
-                    add_log(f"Added template data to existing system message in streaming", "info")
-                else:
-                    # Create a new system message with template data
-                    template_data_str = json.dumps(request.template_data, indent=2)
-                    system_message = {
-                        "role": "system",
-                        "content": f"You are an AI assistant that helps with understanding and modifying cloud templates. You have knowledge about Azure, AWS, and GCP resources and infrastructure as code.\n\nHere is the current template data to help you provide accurate responses:\n```json\n{template_data_str}\n```\n\nWhen answering questions about the template, always use this data to provide accurate information."
-                    }
-                    messages.insert(0, system_message)
-                    add_log(f"Created new system message with template data in streaming", "info")
-            
-            payload = {
-                "messages": messages,
-                "max_tokens": request.max_completion_tokens,
-                "temperature": request.temperature,
-                "stream": True
-            }
-            
-            # Send the request to Azure OpenAI with streaming
-            with requests.post(azure_url, headers=headers, json=payload, stream=True) as response:
-                if response.status_code != 200:
-                    error_msg = f"Error from Azure OpenAI: {response.status_code} {response.text}"
-                    add_log(error_msg, "error")
-                    
-                    # Update connection status in the database
-                    config.last_status = "error"
-                    config.last_checked = datetime.utcnow()
-                    config.last_error = error_msg
-                    db.commit()
-                    
-                    yield f"data: {json.dumps({'error': error_msg})}\n\n"
-                    return
-                
-                # Update connection status in the database
-                config.last_status = "connected"
-                config.last_checked = datetime.utcnow()
-                config.last_error = None
-                db.commit()
-                
-                # Process the streaming response
-                for line in response.iter_lines():
-                    if line:
-                        line = line.decode('utf-8')
-                        if line.startswith('data: '):
-                            if line.startswith('data: [DONE]'):
-                                break
-                            
-                            data = line[6:]  # Remove 'data: ' prefix
-                            try:
-                                chunk = json.loads(data)
-                                if 'choices' in chunk and len(chunk['choices']) > 0:
-                                    delta = chunk['choices'][0].get('delta', {})
-                                    if 'content' in delta and delta['content']:
-                                        yield f"data: {json.dumps({'content': delta['content']})}\n\n"
-                            except json.JSONDecodeError:
-                                add_log(f"Error parsing JSON: {data}", "error")
-                
-                add_log("Successfully completed streaming response")
-                yield f"data: [DONE]\n\n"
-        
-        except Exception as e:
             # Update connection status in the database
-            config = get_config(db)
-            config.last_status = "error"
+            config.last_status = "connected"
             config.last_checked = datetime.utcnow()
-            config.last_error = str(e)
+            config.last_error = None
             db.commit()
             
-            error_msg = f"Error in streaming chat: {str(e)}"
-            add_log(error_msg, "error")
-            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+            # Process the streaming response
+            for line in response.iter_lines():
+                if line:
+                    line = line.decode('utf-8')
+                    if line.startswith('data: '):
+                        if line.startswith('data: [DONE]'):
+                            break
+                        
+                        data = line[6:]  # Remove 'data: ' prefix
+                        try:
+                            chunk = json.loads(data)
+                            if 'choices' in chunk and len(chunk['choices']) > 0:
+                                delta = chunk['choices'][0].get('delta', {})
+                                if 'content' in delta and delta['content']:
+                                    yield f"data: {json.dumps({'content': delta['content']})}\n\n"
+                        except json.JSONDecodeError:
+                            add_log(f"Error parsing JSON: {data}", "error")
+            
+            add_log("Successfully completed streaming response")
+            yield f"data: [DONE]\n\n"
     
-    return generate()
+    except Exception as e:
+        # Update connection status in the database
+        config = get_config(db)
+        config.last_status = "error"
+        config.last_checked = datetime.utcnow()
+        config.last_error = str(e)
+        db.commit()
+        
+        error_msg = f"Error in streaming chat: {str(e)}"
+        add_log(error_msg, "error")
+        yield f"data: {json.dumps({'error': error_msg})}\n\n"
 
 
 @router.get("/config", response_model=ConfigResponse)
