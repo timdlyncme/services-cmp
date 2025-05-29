@@ -121,6 +121,14 @@ async def chat(
     """
     Chat with Azure OpenAI
     """
+    # Check if user has permission to use AI Assistant
+    has_permission = any(p.name == "use:ai_assistant" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
     # Get the configuration from the database
     config = get_config(db)
     
@@ -258,6 +266,14 @@ async def stream_chat_endpoint(
     """
     Stream chat responses from Azure OpenAI
     """
+    # Check if user has permission to use AI Assistant
+    has_permission = any(p.name == "use:ai_assistant" for p in current_user.role.permissions)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
     return StreamingResponse(
         stream_chat(request, current_user, db),
         media_type="text/event-stream"
@@ -583,4 +599,3 @@ async def get_logs(
     return {
         "logs": log_entries
     }
-
