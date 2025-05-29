@@ -137,6 +137,7 @@ export class AIAssistantService {
             const { done, value } = await reader.read();
             
             if (done) {
+              // Make sure to call onComplete when done
               onComplete();
               break;
             }
@@ -146,14 +147,18 @@ export class AIAssistantService {
             buffer += chunk;
             
             // Process any complete SSE messages in the buffer
+            // Split by double newlines which is the SSE message separator
             const lines = buffer.split('\n\n');
-            buffer = lines.pop() || ''; // Keep the last incomplete chunk in the buffer
+            
+            // Keep the last potentially incomplete chunk in the buffer
+            buffer = lines.pop() || '';
             
             for (const line of lines) {
               if (line.trim() === '') continue;
               
+              // Check if the line starts with 'data: '
               if (line.startsWith('data: ')) {
-                const data = line.substring(6); // Remove 'data: ' prefix
+                const data = line.substring(6).trim(); // Remove 'data: ' prefix and trim
                 
                 if (data === '[DONE]') {
                   onComplete();
@@ -172,6 +177,9 @@ export class AIAssistantService {
                 } catch (e) {
                   console.error('Error parsing SSE data:', e, data);
                 }
+              } else {
+                // Handle non-data lines if needed
+                console.log('Received non-data line:', line);
               }
             }
           }
@@ -182,6 +190,9 @@ export class AIAssistantService {
             console.error('Error reading stream:', error);
             onError(error instanceof Error ? error.message : 'Error reading stream');
           }
+        } finally {
+          // Always call onComplete in finally block to ensure it's called
+          onComplete();
         }
       };
       
@@ -190,6 +201,8 @@ export class AIAssistantService {
     .catch(error => {
       console.error('Fetch error:', error);
       onError(error instanceof Error ? error.message : 'Failed to start streaming');
+      // Make sure to call onComplete even on error
+      onComplete();
     });
 
     // Return a function to abort the fetch
@@ -290,4 +303,3 @@ export class AIAssistantService {
     }
   }
 }
-

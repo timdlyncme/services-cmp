@@ -1083,107 +1083,82 @@ const TemplateDetails = () => {
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <MessagesSquare className="mr-2 h-5 w-5" />
-                AI Assistant
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <div className="space-y-4">
-                <div className="h-[200px] overflow-auto border rounded-md p-4">
-                  {/* AI chat messages would go here */}
-                  <p className="text-muted-foreground">Ask questions about this template or request changes</p>
+            <Card className={`${aiExpanded ? "fixed inset-4 z-50 overflow-hidden flex flex-col" : ""}`}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center">
+                    <MessagesSquare className="mr-2 h-5 w-5" />
+                    AI Assistant
+                  </CardTitle>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => setAiExpanded(!aiExpanded)}
+                  >
+                    {aiExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                  </Button>
                 </div>
+                <CardDescription>
+                  Ask questions about this template, request explanations, or suggest modifications.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className={`space-y-4 ${aiExpanded ? "flex-grow overflow-hidden flex flex-col" : ""}`}>
+                <ScrollArea className={`rounded-md ${aiExpanded ? "flex-grow" : "h-[300px]"}`}>
+                  <div className="space-y-4 p-1">
+                    {aiChatMessages.filter(msg => msg.role !== "system").map((message, index) => (
+                      <div 
+                        key={index} 
+                        className={`${
+                          message.role === "assistant" 
+                            ? "bg-primary/10 p-3 rounded-lg rounded-tl-none max-w-[80%]" 
+                            : "flex justify-end"
+                        }`}
+                      >
+                        {message.role === "assistant" ? (
+                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        ) : (
+                          <div className="bg-primary text-primary-foreground p-3 rounded-lg rounded-tr-none max-w-[80%]">
+                            <p className="text-sm">{message.content}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {isAiLoading && (
+                      <div className="bg-primary/10 p-3 rounded-lg rounded-tl-none max-w-[80%]">
+                        <div className="flex items-center space-x-2">
+                          <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce"></div>
+                          <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce delay-100"></div>
+                          <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce delay-200"></div>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+                </ScrollArea>
+                
                 <div className="flex space-x-2">
                   <Input 
                     placeholder="Ask a question about this template..."
                     value={aiMessage}
                     onChange={(e) => setAiMessage(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleAiSend()}
+                    disabled={isAiLoading}
                   />
-                  <Button onClick={handleAiSend}>Send</Button>
+                  <Button 
+                    onClick={handleAiSend}
+                    disabled={isAiLoading || !aiMessage.trim()}
+                  >
+                    {isAiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
+                  </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className={`${aiExpanded ? "fixed inset-4 z-50 overflow-hidden flex flex-col" : ""}`}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center">
-                  <MessagesSquare className="mr-2 h-5 w-5" />
-                  AI Assistant
-                </CardTitle>
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={() => setAiExpanded(!aiExpanded)}
-                >
-                  {aiExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                </Button>
-              </div>
-              <CardDescription>
-                Ask questions about this template or request changes
-              </CardDescription>
-            </CardHeader>
-            <CardContent className={`space-y-4 ${aiExpanded ? "flex-grow overflow-hidden flex flex-col" : ""}`}>
-              <ScrollArea className={`rounded-md ${aiExpanded ? "flex-grow" : "h-[300px]"}`}>
-                <div className="space-y-4 p-1">
-                  {aiChatMessages.filter(msg => msg.role !== "system").map((message, index) => (
-                    <div 
-                      key={index} 
-                      className={`${
-                        message.role === "assistant" 
-                          ? "bg-primary/10 p-3 rounded-lg rounded-tl-none max-w-[80%]" 
-                          : "flex justify-end"
-                      }`}
-                    >
-                      {message.role === "assistant" ? (
-                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                      ) : (
-                        <div className="bg-primary text-primary-foreground p-3 rounded-lg rounded-tr-none max-w-[80%]">
-                          <p className="text-sm">{message.content}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  {isAiLoading && !aiChatMessages[aiChatMessages.length - 1]?.content && (
-                    <div className="bg-primary/10 p-3 rounded-lg rounded-tl-none max-w-[80%]">
-                      <div className="flex items-center space-x-2">
-                        <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce"></div>
-                        <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce delay-100"></div>
-                        <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce delay-200"></div>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-              </ScrollArea>
-              
-              <div className="flex space-x-2">
-                <Input 
-                  placeholder="Ask a question about this template..."
-                  value={aiMessage}
-                  onChange={(e) => setAiMessage(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAiSend()}
-                  disabled={isAiLoading}
-                />
-                <Button 
-                  onClick={handleAiSend}
-                  disabled={isAiLoading || !aiMessage.trim()}
-                >
-                  {isAiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
-                </Button>
-              </div>
-              
-              <p className="text-xs text-muted-foreground">
-                {!isConfigured ? 
-                  "Note: Azure OpenAI is not configured. Configure it in Settings for enhanced AI capabilities." :
-                  "Ask questions about this template, request explanations, or suggest modifications."}
-              </p>
-            </CardContent>
+                
+                <p className="text-xs text-muted-foreground">
+                  {!isConfigured ? 
+                    "Note: Azure OpenAI is not configured. Configure it in Settings for enhanced AI capabilities." :
+                    "Ask questions about this template, request explanations, or suggest modifications."}
+                </p>
+              </CardContent>
+            </Card>
           </Card>
         </div>
       </div>
