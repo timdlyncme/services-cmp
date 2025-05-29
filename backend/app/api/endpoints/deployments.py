@@ -40,79 +40,14 @@ class AzureCredentialsResponse(BaseModel):
     configured: bool = False
     message: str = ""
 
-@router.post("/azure_credentials", response_model=Dict[str, str])
-def set_azure_credentials(
-    *,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    credentials: AzureCredentialsCreate,
-    tenant_id: Optional[str] = None
-):
-    """
-    Set Azure credentials for deployments
-    """
-    # Check if user has permission to manage credentials
-    if not current_user.role or "deployment:manage" not in [p.name for p in current_user.role.permissions]:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    try:
-        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
-        
-        # Check if tenant exists
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
-        if not tenant:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tenant with ID {creds_tenant_id} not found"
-            )
-        
-        # Check if user has permission to create for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can create for other tenants
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to create credentials for other tenants"
-                )
-        
-        # Create new credentials with connection_details as JSON
-        new_creds = CloudSettings(
-            provider="azure",
-            name=credentials.name,
-            connection_details={
-                "client_id": credentials.client_id,
-                "client_secret": credentials.client_secret,
-                "tenant_id": credentials.tenant_id
-            },
-            tenant_id=creds_tenant_id
-        )
-        db.add(new_creds)
-        db.commit()
-        db.refresh(new_creds)
-        
-        # Forward credentials to deployment engine
-        headers = {"Authorization": f"Bearer {current_user.access_token}"}
-        response = requests.post(
-            f"{DEPLOYMENT_ENGINE_URL}/credentials",
-            headers=headers,
-            json={
-                "client_id": credentials.client_id,
-                "client_secret": credentials.client_secret,
-                "tenant_id": credentials.tenant_id
-            }
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Deployment engine error: {response.text}")
-        
-        return {"message": "Azure credentials added successfully", "id": str(new_creds.settings_id)}
-    
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+# Azure Subscription Schemas
+class AzureSubscriptionResponse(BaseModel):
+    id: str
+    name: str
+    state: str
+    tenant_id: str
 
-@router.get("/azure_credentials", response_model=List[AzureCredentialsResponse])
+@router.get("/azure_credentials", tags=["azure-credentials"], response_model=List[AzureCredentialsResponse])
 def get_azure_credentials(
     *,
     db: Session = Depends(get_db),
@@ -191,7 +126,79 @@ def get_azure_credentials(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/azure_credentials/{settings_id}", response_model=AzureCredentialsResponse)
+@router.post("/azure_credentials", tags=["azure-credentials"], response_model=Dict[str, str])
+def set_azure_credentials(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    credentials: AzureCredentialsCreate,
+    tenant_id: Optional[str] = None
+):
+    """
+    Set Azure credentials for deployments
+    """
+    # Check if user has permission to manage credentials
+    if not current_user.role or "deployment:manage" not in [p.name for p in current_user.role.permissions]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    try:
+        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        
+        # Check if tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {creds_tenant_id} not found"
+            )
+        
+        # Check if user has permission to create for this tenant
+        if creds_tenant_id != current_user.tenant.tenant_id:
+            # Only admin or MSP users can create for other tenants
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to create credentials for other tenants"
+                )
+        
+        # Create new credentials with connection_details as JSON
+        new_creds = CloudSettings(
+            provider="azure",
+            name=credentials.name,
+            connection_details={
+                "client_id": credentials.client_id,
+                "client_secret": credentials.client_secret,
+                "tenant_id": credentials.tenant_id
+            },
+            tenant_id=creds_tenant_id
+        )
+        db.add(new_creds)
+        db.commit()
+        db.refresh(new_creds)
+        
+        # Forward credentials to deployment engine
+        headers = {"Authorization": f"Bearer {current_user.access_token}"}
+        response = requests.post(
+            f"{DEPLOYMENT_ENGINE_URL}/credentials",
+            headers=headers,
+            json={
+                "client_id": credentials.client_id,
+                "client_secret": credentials.client_secret,
+                "tenant_id": credentials.tenant_id
+            }
+        )
+        
+        if response.status_code != 200:
+            raise Exception(f"Deployment engine error: {response.text}")
+        
+        return {"message": "Azure credentials added successfully", "id": str(new_creds.settings_id)}
+    
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/azure_credentials/{settings_id}", tags=["azure-credentials"], response_model=AzureCredentialsResponse)
 def get_azure_credential(
     *,
     db: Session = Depends(get_db),
@@ -260,7 +267,7 @@ def get_azure_credential(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/azure_credentials/{settings_id}", response_model=Dict[str, str])
+@router.delete("/azure_credentials/{settings_id}", tags=["azure-credentials"], response_model=Dict[str, str])
 def delete_azure_credential(
     *,
     db: Session = Depends(get_db),
@@ -329,13 +336,7 @@ def delete_azure_credential(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Template Deployment Schemas
-class TemplateData(BaseModel):
-    source: str  # url or code
-    url: Optional[str] = None
-    code: Optional[str] = None
-
-@router.put("/engine/{deployment_id}/status", response_model=Dict[str, Any])
+@router.put("/engine/{deployment_id}/status", tags=["deployment-engine"], response_model=Dict[str, Any])
 def update_deployment_status(
     deployment_id: str,
     update_data: Dict[str, Any],
@@ -472,7 +473,89 @@ def update_deployment_status(
             detail=f"Error updating deployment status: {str(e)}"
         )
 
-@router.get("/", response_model=List[CloudDeploymentResponse])
+@router.get("/azure_credentials/{settings_id}/subscriptions", tags=["azure-credentials"], response_model=List[AzureSubscriptionResponse])
+def list_azure_subscriptions(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    settings_id: str,
+    tenant_id: Optional[str] = None
+):
+    """
+    List available Azure subscriptions for a specific credential
+    
+    If tenant_id is provided, it will be used to filter the credentials.
+    Otherwise, the current user's tenant ID will be used.
+    """
+    # Check if user has permission to view credentials
+    if not current_user.role or "deployment:read" not in [p.name for p in current_user.role.permissions]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    try:
+        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+        account_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        
+        # Check if tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == account_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Tenant with ID {account_tenant_id} not found"
+            )
+        
+        # Check if user has permission to access this tenant
+        if account_tenant_id != current_user.tenant.tenant_id:
+            # Only admin or MSP users can access other tenants
+            if current_user.role.name != "admin" and current_user.role.name != "msp":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Not authorized to access credentials for other tenants"
+                )
+        
+        # Get credential from database
+        creds = db.query(CloudSettings).filter(
+            CloudSettings.tenant_id == account_tenant_id,
+            CloudSettings.provider == "azure",
+            CloudSettings.settings_id == settings_id
+        ).first()
+        
+        if not creds:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        
+        # Forward request to deployment engine
+        headers = {"Authorization": f"Bearer {current_user.access_token}"}
+        
+        # First set the credentials
+        set_response = requests.post(
+            f"{DEPLOYMENT_ENGINE_URL}/credentials",
+            headers=headers,
+            json={
+                "client_id": creds.connection_details.get("client_id", "") if creds.connection_details else "",
+                "client_secret": creds.connection_details.get("client_secret", "") if creds.connection_details else "",
+                "tenant_id": creds.connection_details.get("tenant_id", "") if creds.connection_details else ""
+            }
+        )
+        
+        if set_response.status_code != 200:
+            raise Exception(f"Error setting credentials: {set_response.text}")
+        
+        # Then list subscriptions
+        response = requests.get(
+            f"{DEPLOYMENT_ENGINE_URL}/credentials/subscriptions",
+            headers=headers
+        )
+        
+        if response.status_code != 200:
+            raise Exception(f"Error listing subscriptions: {response.text}")
+        
+        return response.json()
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/", tags=["deployments"], response_model=List[CloudDeploymentResponse])
 def get_deployments(
     tenant_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
@@ -601,8 +684,7 @@ def get_deployments(
             detail=f"Error retrieving deployments: {str(e)}"
         )
 
-
-@router.get("/{deployment_id}", response_model=CloudDeploymentResponse)
+@router.get("/{deployment_id}", tags=["deployments"], response_model=CloudDeploymentResponse)
 def get_deployment(
     deployment_id: str,
     current_user: User = Depends(get_current_user),
@@ -688,8 +770,7 @@ def get_deployment(
             detail=f"Error retrieving deployment: {str(e)}"
         )
 
-
-@router.post("/", response_model=CloudDeploymentResponse)
+@router.post("/", tags=["deployments"], response_model=CloudDeploymentResponse)
 def create_deployment(
     deployment: DeploymentCreate,
     tenant_id: Optional[str] = None,
@@ -962,8 +1043,7 @@ def create_deployment(
             detail=f"Error creating deployment: {str(e)}"
         )
 
-
-@router.put("/{deployment_id}", response_model=CloudDeploymentResponse)
+@router.put("/{deployment_id}", tags=["deployments"], response_model=CloudDeploymentResponse)
 def update_deployment(
     deployment_id: str,
     deployment_update: DeploymentUpdate,
@@ -1053,8 +1133,7 @@ def update_deployment(
             detail=f"Error updating deployment: {str(e)}"
         )
 
-
-@router.delete("/{deployment_id}")
+@router.delete("/{deployment_id}", tags=["deployments"])
 def delete_deployment(
     deployment_id: str,
     current_user: User = Depends(get_current_user),
@@ -1106,8 +1185,7 @@ def delete_deployment(
             detail=f"Error deleting deployment: {str(e)}"
         )
 
-
-@router.options("/")
+@router.options("/", tags=["deployments"])
 def options_deployments():
     """
     Handle preflight requests for deployments
@@ -1118,8 +1196,7 @@ def options_deployments():
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
 
-
-@router.options("/{deployment_id}")
+@router.options("/{deployment_id}", tags=["deployments"])
 def options_deployment_by_id():
     """
     Handle preflight requests for specific deployment
@@ -1130,96 +1207,7 @@ def options_deployment_by_id():
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
 
-# Azure Subscription Schemas
-class AzureSubscriptionResponse(BaseModel):
-    id: str
-    name: str
-    state: str
-    tenant_id: str
-
-@router.get("/azure_credentials/{settings_id}/subscriptions", response_model=List[AzureSubscriptionResponse])
-def list_azure_subscriptions(
-    *,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    settings_id: str,
-    tenant_id: Optional[str] = None
-):
-    """
-    List available Azure subscriptions for a specific credential
-    
-    If tenant_id is provided, it will be used to filter the credentials.
-    Otherwise, the current user's tenant ID will be used.
-    """
-    # Check if user has permission to view credentials
-    if not current_user.role or "deployment:read" not in [p.name for p in current_user.role.permissions]:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    try:
-        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        account_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
-        
-        # Check if tenant exists
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == account_tenant_id).first()
-        if not tenant:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Tenant with ID {account_tenant_id} not found"
-            )
-        
-        # Check if user has permission to access this tenant
-        if account_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can access other tenants
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=403,
-                    detail="Not authorized to access credentials for other tenants"
-                )
-        
-        # Get credential from database
-        creds = db.query(CloudSettings).filter(
-            CloudSettings.tenant_id == account_tenant_id,
-            CloudSettings.provider == "azure",
-            CloudSettings.settings_id == settings_id
-        ).first()
-        
-        if not creds:
-            raise HTTPException(status_code=404, detail="Credential not found")
-        
-        # Forward request to deployment engine
-        headers = {"Authorization": f"Bearer {current_user.access_token}"}
-        
-        # First set the credentials
-        set_response = requests.post(
-            f"{DEPLOYMENT_ENGINE_URL}/credentials",
-            headers=headers,
-            json={
-                "client_id": creds.connection_details.get("client_id", "") if creds.connection_details else "",
-                "client_secret": creds.connection_details.get("client_secret", "") if creds.connection_details else "",
-                "tenant_id": creds.connection_details.get("tenant_id", "") if creds.connection_details else ""
-            }
-        )
-        
-        if set_response.status_code != 200:
-            raise Exception(f"Error setting credentials: {set_response.text}")
-        
-        # Then list subscriptions
-        response = requests.get(
-            f"{DEPLOYMENT_ENGINE_URL}/credentials/subscriptions",
-            headers=headers
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Error listing subscriptions: {response.text}")
-        
-        return response.json()
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/{deployment_id}/logs", response_model=List[Dict[str, Any]])
+@router.get("/{deployment_id}/logs", tags=["deployments"], response_model=List[Dict[str, Any]])
 def get_deployment_logs(
     deployment_id: str,
     current_user: User = Depends(get_current_user),
