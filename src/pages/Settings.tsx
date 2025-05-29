@@ -9,13 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { IntegrationConfig, IntegrationStatus } from "@/types/cloud";
-import { Settings as SettingsIcon, Key, Terminal, CloudCog, Github, Plus, Trash2, RefreshCw } from "lucide-react";
+import { Settings as SettingsIcon, Key, Terminal, CloudCog, Github, Plus, Trash2, RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cmpService } from "@/services/cmp-service";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { AIAssistantService } from "@/services/ai-assistant-service";
 
 // Interface for Azure credentials
 interface AzureCredential {
@@ -67,6 +68,19 @@ const Settings = () => {
     autoDeployEnabled: false,
   });
   
+  // Azure OpenAI settings
+  const [azureOpenAISettings, setAzureOpenAISettings] = useState({
+    enabled: false,
+    endpoint: "",
+    apiKey: "",
+    deploymentName: "",
+    model: "gpt-4",
+    apiVersion: "2023-05-15"
+  });
+  const [isTestingAIConnection, setIsTestingAIConnection] = useState(false);
+  const [isSavingAISettings, setIsSavingAISettings] = useState(false);
+  const aiAssistantService = new AIAssistantService();
+  
   // Add log with timestamp
   const addLog = (message: string, type: "info" | "success" | "warning" | "error" = "info") => {
     const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
@@ -100,6 +114,30 @@ const Settings = () => {
       addLog(`Failed to load Azure credentials: ${error instanceof Error ? error.message : String(error)}`, "error");
     } finally {
       setIsLoadingCredentials(false);
+    }
+  };
+  
+  // Load Azure OpenAI settings
+  const loadAzureOpenAISettings = async () => {
+    addLog("Loading Azure OpenAI settings...");
+    
+    try {
+      const config = await aiAssistantService.getConfig();
+      
+      setAzureOpenAISettings({
+        enabled: Boolean(config.api_key && config.endpoint && config.deployment_name),
+        endpoint: config.endpoint || "",
+        apiKey: config.api_key === "********" ? "" : (config.api_key || ""),
+        deploymentName: config.deployment_name || "",
+        model: config.model || "gpt-4",
+        apiVersion: config.api_version || "2023-05-15"
+      });
+      
+      addLog("Azure OpenAI settings loaded successfully", "success");
+    } catch (error) {
+      console.error("Error loading Azure OpenAI settings:", error);
+      addLog(`Failed to load Azure OpenAI settings: ${error instanceof Error ? error.message : String(error)}`, "error");
+      // Don't show a toast error here, as this might be the first time the user is setting up Azure OpenAI
     }
   };
   
@@ -206,9 +244,90 @@ const Settings = () => {
     addLog("Completed testing all connections", "info");
   };
   
+  // Handle Azure OpenAI settings change
+  const handleAzureOpenAISettingChange = (field: string, value: string | boolean) => {
+    setAzureOpenAISettings(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+  
+  // Test Azure OpenAI connection
+  const handleTestAIConnection = async () => {
+    setIsTestingAIConnection(true);
+    addLog("Testing Azure OpenAI connection...");
+    
+    try {
+      // First, save the current settings
+      await handleSaveAISettings(false);
+      
+      // Then test the connection
+      const status = await aiAssistantService.checkStatus();
+      
+      if (status.status === "connected") {
+        addLog("Azure OpenAI connection successful", "success");
+        toast.success("Azure OpenAI connection test successful");
+      } else {
+        addLog(`Azure OpenAI connection test failed: ${status.message}`, "error");
+        toast.error(`Connection test failed: ${status.message}`);
+      }
+    } catch (error) {
+      console.error("Error testing Azure OpenAI connection:", error);
+      addLog(`Azure OpenAI connection test failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+      toast.error("Azure OpenAI connection test failed");
+    } finally {
+      setIsTestingAIConnection(false);
+    }
+  };
+  
+  // Save Azure OpenAI settings
+  const handleSaveAISettings = async (showToast = true) => {
+    if (isSavingAISettings) return;
+    
+    setIsSavingAISettings(true);
+    addLog("Saving Azure OpenAI settings...");
+    
+    try {
+      // Only send the settings to the API if enabled
+      if (azureOpenAISettings.enabled) {
+        await aiAssistantService.updateConfig({
+          api_key: azureOpenAISettings.apiKey,
+          endpoint: azureOpenAISettings.endpoint,
+          deployment_name: azureOpenAISettings.deploymentName,
+          model: azureOpenAISettings.model,
+          api_version: azureOpenAISettings.apiVersion
+        });
+      } else {
+        // If disabled, clear the settings
+        await aiAssistantService.updateConfig({
+          api_key: "",
+          endpoint: "",
+          deployment_name: "",
+          model: "gpt-4",
+          api_version: "2023-05-15"
+        });
+      }
+      
+      addLog("Azure OpenAI settings saved successfully", "success");
+      if (showToast) {
+        toast.success("Azure OpenAI settings saved successfully");
+      }
+    } catch (error) {
+      console.error("Error saving Azure OpenAI settings:", error);
+      addLog(`Failed to save Azure OpenAI settings: ${error instanceof Error ? error.message : String(error)}`, "error");
+      if (showToast) {
+        toast.error("Failed to save Azure OpenAI settings");
+      }
+      throw error; // Re-throw the error so the caller can handle it
+    } finally {
+      setIsSavingAISettings(false);
+    }
+  };
+  
   useEffect(() => {
     if (currentTenant) {
       loadAzureCredentials();
+      loadAzureOpenAISettings();
       addLog("Settings page initialized", "info");
     }
   }, [currentTenant]);
@@ -538,54 +657,100 @@ const Settings = () => {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <CloudCog className="h-5 w-5 mr-2" />
-                Azure OpenAI Configuration
+                Azure OpenAI Service
               </CardTitle>
               <CardDescription>
-                Connect to Azure OpenAI services
+                Configure Azure OpenAI for AI-powered assistance and insights
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="openai-endpoint">API Endpoint</Label>
-                  <Input
-                    id="openai-endpoint"
-                    placeholder="https://your-resource.openai.azure.com"
-                    defaultValue="https://openai.azure.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="openai-key">API Key</Label>
-                  <Input
-                    id="openai-key"
-                    type="password"
-                    placeholder="Enter API Key"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="openai-deployment">Deployment Name</Label>
-                  <Input
-                    id="openai-deployment"
-                    placeholder="Enter deployment name"
-                    defaultValue="gpt4"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="openai-model">Model</Label>
-                  <Input
-                    id="openai-model"
-                    placeholder="Enter model name"
-                    defaultValue="gpt-4"
-                  />
-                </div>
+            <CardContent className="space-y-6">
+              <div className="flex items-center space-x-4">
+                <Switch
+                  id="openai-enable"
+                  checked={azureOpenAISettings.enabled}
+                  onCheckedChange={(checked) => handleAzureOpenAISettingChange("enabled", checked)}
+                />
+                <Label htmlFor="openai-enable">Enable Azure OpenAI Integration</Label>
               </div>
+              
+              {azureOpenAISettings.enabled && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="openai-endpoint">API Endpoint</Label>
+                    <Input
+                      id="openai-endpoint"
+                      placeholder="https://your-resource.openai.azure.com"
+                      value={azureOpenAISettings.endpoint}
+                      onChange={(e) => handleAzureOpenAISettingChange("endpoint", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="openai-key">API Key</Label>
+                    <Input
+                      id="openai-key"
+                      type="password"
+                      placeholder="Enter API Key"
+                      value={azureOpenAISettings.apiKey}
+                      onChange={(e) => handleAzureOpenAISettingChange("apiKey", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="openai-deployment">Deployment Name</Label>
+                    <Input
+                      id="openai-deployment"
+                      placeholder="Enter deployment name"
+                      value={azureOpenAISettings.deploymentName}
+                      onChange={(e) => handleAzureOpenAISettingChange("deploymentName", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="openai-model">Model</Label>
+                    <Input
+                      id="openai-model"
+                      placeholder="Enter model name"
+                      value={azureOpenAISettings.model}
+                      onChange={(e) => handleAzureOpenAISettingChange("model", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="openai-api-version">API Version</Label>
+                    <Input
+                      id="openai-api-version"
+                      placeholder="Enter API version"
+                      value={azureOpenAISettings.apiVersion}
+                      onChange={(e) => handleAzureOpenAISettingChange("apiVersion", e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
             </CardContent>
             <CardFooter className="flex justify-between">
-              <Button variant="outline">
-                Test Connection
+              <Button 
+                variant="outline"
+                onClick={handleTestAIConnection}
+                disabled={!azureOpenAISettings.enabled || isTestingAIConnection || isSavingAISettings}
+              >
+                {isTestingAIConnection ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Testing...
+                  </>
+                ) : (
+                  <>Test Connection</>
+                )}
               </Button>
-              <Button>
-                Save Changes
+              <Button 
+                onClick={() => handleSaveAISettings(true)}
+                disabled={isSavingAISettings}
+              >
+                {isSavingAISettings ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>Save Changes</>
+                )}
               </Button>
             </CardFooter>
           </Card>

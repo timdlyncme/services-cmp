@@ -77,6 +77,10 @@ PERMISSIONS = [
     # NexusAI
     {"name": "use:nexus_ai", "description": "Use NexusAI"},
     {"name": "manage:nexus_ai", "description": "Manage NexusAI settings"},
+    
+    # AI Assistant
+    {"name": "use:ai_assistant", "description": "Use AI Assistant"},
+    {"name": "manage:settings", "description": "Manage application settings including AI services"},
 ]
 
 # Roles with their permissions
