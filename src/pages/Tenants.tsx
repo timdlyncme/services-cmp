@@ -25,6 +25,19 @@ const Tenants = () => {
   const [newTenantDescription, setNewTenantDescription] = useState("");
   const [isCreatingTenant, setIsCreatingTenant] = useState(false);
   
+  // State for the edit tenant dialog
+  const [isEditTenantDialogOpen, setIsEditTenantDialogOpen] = useState(false);
+  const [editTenantId, setEditTenantId] = useState("");
+  const [editTenantName, setEditTenantName] = useState("");
+  const [editTenantDescription, setEditTenantDescription] = useState("");
+  const [isUpdatingTenant, setIsUpdatingTenant] = useState(false);
+  
+  // State for the delete tenant dialog
+  const [isDeleteTenantDialogOpen, setIsDeleteTenantDialogOpen] = useState(false);
+  const [deleteTenantId, setDeleteTenantId] = useState("");
+  const [deleteTenantName, setDeleteTenantName] = useState("");
+  const [isDeletingTenant, setIsDeletingTenant] = useState(false);
+  
   // Check if user is MSP or admin
   const canManageTenants = user?.role === "msp" || user?.role === "admin";
   
@@ -105,6 +118,71 @@ const Tenants = () => {
     }
   };
   
+  const handleEditTenant = async () => {
+    if (!editTenantName.trim()) {
+      toast.error("Tenant name is required");
+      return;
+    }
+    
+    setIsUpdatingTenant(true);
+    
+    try {
+      const updatedTenant = await cmpService.updateTenant(editTenantId, {
+        name: editTenantName.trim(),
+        description: editTenantDescription.trim() || undefined
+      });
+      
+      setTenants(tenants.map(tenant => 
+        tenant.tenant_id === editTenantId ? updatedTenant : tenant
+      ));
+      setFilteredTenants(filteredTenants.map(tenant => 
+        tenant.tenant_id === editTenantId ? updatedTenant : tenant
+      ));
+      setEditTenantName("");
+      setEditTenantDescription("");
+      setIsEditTenantDialogOpen(false);
+      toast.success(`Tenant "${updatedTenant.name}" updated successfully`);
+    } catch (error) {
+      console.error("Error updating tenant:", error);
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to update tenant");
+      }
+    } finally {
+      setIsUpdatingTenant(false);
+    }
+  };
+  
+  const handleDeleteTenant = async () => {
+    if (!deleteTenantId) {
+      toast.error("No tenant selected for deletion");
+      return;
+    }
+    
+    setIsDeletingTenant(true);
+    
+    try {
+      await cmpService.deleteTenant(deleteTenantId);
+      
+      setTenants(tenants.filter(tenant => tenant.tenant_id !== deleteTenantId));
+      setFilteredTenants(filteredTenants.filter(tenant => tenant.tenant_id !== deleteTenantId));
+      setDeleteTenantId("");
+      setDeleteTenantName("");
+      setIsDeleteTenantDialogOpen(false);
+      toast.success(`Tenant "${deleteTenantName}" deleted successfully`);
+    } catch (error) {
+      console.error("Error deleting tenant:", error);
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to delete tenant");
+      }
+    } finally {
+      setIsDeletingTenant(false);
+    }
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -174,6 +252,104 @@ const Tenants = () => {
               </DialogContent>
             </Dialog>
           )}
+          
+          {canManageTenants && (
+            <Dialog open={isEditTenantDialogOpen} onOpenChange={setIsEditTenantDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Tenant</DialogTitle>
+                  <DialogDescription>
+                    Update the details of an existing tenant organization
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="grid gap-4 py-4">
+                  <div className="space-y-2">
+                    <label htmlFor="name" className="text-sm font-medium">Tenant Name</label>
+                    <Input
+                      id="name"
+                      value={editTenantName}
+                      onChange={(e) => setEditTenantName(e.target.value)}
+                      placeholder="e.g., Acme Corporation"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="description" className="text-sm font-medium">Description</label>
+                    <Input
+                      id="description"
+                      value={editTenantDescription}
+                      onChange={(e) => setEditTenantDescription(e.target.value)}
+                      placeholder="Describe this tenant"
+                    />
+                  </div>
+                </div>
+                
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsEditTenantDialogOpen(false)} disabled={isUpdatingTenant}>Cancel</Button>
+                  <Button onClick={handleEditTenant} disabled={isUpdatingTenant}>
+                    {isUpdatingTenant ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      "Update Tenant"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+          
+          {canManageTenants && (
+            <Dialog open={isDeleteTenantDialogOpen} onOpenChange={setIsDeleteTenantDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete Tenant</DialogTitle>
+                  <DialogDescription>
+                    Are you sure you want to delete this tenant organization?
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="grid gap-4 py-4">
+                  <div className="space-y-2">
+                    <label htmlFor="name" className="text-sm font-medium">Tenant Name</label>
+                    <Input
+                      id="name"
+                      value={deleteTenantName}
+                      readOnly
+                      className="bg-muted"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <p className="text-sm">
+                      Are you sure you want to delete the tenant <strong>"{deleteTenantName}"</strong>?
+                      This action cannot be undone.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Note: Tenants with associated users, cloud accounts, environments, templates, or deployments cannot be deleted.
+                    </p>
+                  </div>
+                </div>
+                
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsDeleteTenantDialogOpen(false)} disabled={isDeletingTenant}>Cancel</Button>
+                  <Button onClick={handleDeleteTenant} disabled={isDeletingTenant}>
+                    {isDeletingTenant ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      "Delete Tenant"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
       
@@ -221,10 +397,19 @@ const Tenants = () => {
                     <TableCell>{tenant.date_created ? new Date(tenant.date_created).toLocaleDateString() : "N/A"}</TableCell>
                     {canManageTenants && (
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => toast.info("Delete tenant functionality would be implemented here")}>
+                        <Button variant="ghost" size="icon" onClick={() => {
+                          setDeleteTenantId(tenant.tenant_id);
+                          setDeleteTenantName(tenant.name);
+                          setIsDeleteTenantDialogOpen(true);
+                        }}>
                           <Trash className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => toast.info("Edit tenant functionality would be implemented here")}>
+                        <Button variant="ghost" size="icon" onClick={() => {
+                          setEditTenantId(tenant.tenant_id);
+                          setEditTenantName(tenant.name);
+                          setEditTenantDescription(tenant.description || "");
+                          setIsEditTenantDialogOpen(true);
+                        }}>
                           <Edit className="h-4 w-4" />
                         </Button>
                       </TableCell>
