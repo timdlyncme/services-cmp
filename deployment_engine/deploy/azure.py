@@ -187,6 +187,36 @@ class AzureDeployer:
             dict: Deployment result with status and details
         """
         # Check if credentials are properly configured
+        if not self.credential:
+            logging.error(f"Azure credentials not configured. client_id={bool(self.client_id)}, client_secret={bool(self.client_secret)}, tenant_id={bool(self.tenant_id)}")
+            raise ValueError("Azure credentials not configured")
+        
+        # If no resource_client exists (no subscription_id), try to get the first available subscription
+        if not self.resource_client:
+            logging.info("No subscription_id provided, attempting to get first available subscription")
+            try:
+                subscriptions = self.list_subscriptions()
+                if not subscriptions:
+                    logging.error("No Azure subscriptions found or accessible")
+                    raise ValueError("No Azure subscriptions found or accessible")
+                
+                # Use the first available subscription
+                first_subscription = subscriptions[0]
+                self.subscription_id = first_subscription["id"]
+                logging.info(f"Using first available subscription: {self.subscription_id}")
+                
+                # Create resource client with the subscription
+                self.resource_client = ResourceManagementClient(
+                    credential=self.credential,
+                    subscription_id=self.subscription_id
+                )
+                logging.info("Successfully created ResourceManagementClient with auto-selected subscription")
+                
+            except Exception as e:
+                logging.error(f"Failed to auto-select subscription: {str(e)}")
+                raise ValueError(f"Azure credentials not configured properly: {str(e)}")
+        
+        # Final check - ensure we have a resource client
         if not self.resource_client:
             logging.error(f"Azure credentials not configured. client_id={bool(self.client_id)}, client_secret={bool(self.client_secret)}, tenant_id={bool(self.tenant_id)}, subscription_id={bool(self.subscription_id)}, credential={self.credential is not None}")
             raise ValueError("Azure credentials not configured")
