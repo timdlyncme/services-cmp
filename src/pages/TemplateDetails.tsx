@@ -43,30 +43,37 @@ const TemplateDetails = () => {
   const { templateId } = useParams();
   const { currentTenant } = useAuth();
   const navigate = useNavigate();
+  
+  // All state declarations grouped together
   const [template, setTemplate] = useState<CloudTemplate | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [loadingVersions, setLoadingVersions] = useState<boolean>(false);
-  const [loadingEnvironments, setLoadingEnvironments] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [code, setCode] = useState("");
-  const [aiMessage, setAiMessage] = useState("");
-  const [deployDialogOpen, setDeployDialogOpen] = useState(false);
-  const [deployName, setDeployName] = useState("");
-  const [deployEnv, setDeployEnv] = useState("");
   const [versions, setVersions] = useState<TemplateVersion[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
   const [environments, setEnvironments] = useState<Environment[]>([]);
-  const [parameters, setParameters] = useState<Record<string, TemplateParameter>>({});
-  const [variables, setVariables] = useState<Record<string, TemplateVariable>>({});
-  const [codeExpanded, setCodeExpanded] = useState(true);
-  const [paramsExpanded, setParamsExpanded] = useState(true);
-  const [showPasswordValues, setShowPasswordValues] = useState<Record<string, boolean>>({});
-  const [deploymentInProgress, setDeploymentInProgress] = useState(false);
+  const [loadingEnvironments, setLoadingEnvironments] = useState(false);
+  const [parameters, setParameters] = useState<TemplateParameter[]>([]);
+  const [variables, setVariables] = useState<TemplateVariable[]>([]);
+  const [code, setCode] = useState("");
+  const [activeTab, setActiveTab] = useState("code");
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCreatingVersion, setIsCreatingVersion] = useState(false);
+  const [versionNotes, setVersionNotes] = useState("");
+  const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false);
+  const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [deploymentName, setDeploymentName] = useState("");
+  const [isDeployDialogOpen, setIsDeployDialogOpen] = useState(false);
+  const [deploymentParameters, setDeploymentParameters] = useState<Record<string, string>>({});
+  const [deploymentVariables, setDeploymentVariables] = useState<Record<string, string>>({});
   
   // AI Assistant state
   const [aiChatMessages, setAiChatMessages] = useState<AIChatMessage[]>([
     { role: "system", content: "You are an AI assistant that helps with understanding and modifying cloud templates. You have knowledge about Azure, AWS, and GCP resources and infrastructure as code." },
     { role: "assistant", content: "Hello! I can help you understand and modify this template. What would you like to know?" }
   ]);
+  const [aiMessage, setAiMessage] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiExpanded, setAiExpanded] = useState(false);
   const [azureOpenAISettings, setAzureOpenAISettings] = useState({
@@ -77,10 +84,17 @@ const TemplateDetails = () => {
     model: "gpt-4",
     apiVersion: "2023-05-15"
   });
+  
+  // Refs
   const chatEndRef = useRef<HTMLDivElement>(null);
+  
+  // Hooks
   const { isConfigured, config } = useAzureOpenAI();
+  
+  // Services
   const aiAssistantService = new AIAssistantService();
   
+  // Functions
   const fetchVersions = async (templateId: string) => {
     try {
       setLoadingVersions(true);
@@ -118,7 +132,7 @@ const TemplateDetails = () => {
         
         // Set default environment if available
         if (data.length > 0) {
-          setDeployEnv(data[0].id);
+          setSelectedEnvironment(data[0]);
         }
       } else {
         console.error("Failed to fetch environments");
@@ -151,217 +165,7 @@ const TemplateDetails = () => {
     }
   };
   
-  useEffect(() => {
-    const fetchTemplate = async () => {
-      if (!templateId) {
-        setError("No template ID provided");
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        setLoading(true);
-        const templateData = await cmpService.getTemplate(templateId);
-        
-        if (templateData) {
-          setTemplate(templateData);
-          setCode(templateData.code || "");
-          
-          // Initialize parameters and variables from template data
-          if (templateData.parameters) {
-            console.log("Loading parameters from template:", templateData.parameters);
-            setParameters(templateData.parameters);
-          } else {
-            console.log("No parameters found in template data");
-            setParameters({});
-          }
-          
-          if (templateData.variables) {
-            console.log("Loading variables from template:", templateData.variables);
-            setVariables(templateData.variables);
-          } else {
-            console.log("No variables found in template data");
-            setVariables({});
-          }
-          
-          // Fetch template versions
-          await fetchVersions(templateId);
-          
-          // Fetch environments
-          await fetchEnvironments();
-          
-          // Set default deployment name
-          if (templateData.name) {
-            setDeployName(`${templateData.name}-deployment`);
-          }
-        } else {
-          setError("Template not found");
-        }
-      } catch (err) {
-        console.error("Error fetching template:", err);
-        setError("Failed to load template details");
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchTemplate();
-  }, [templateId]);
-  
-  const handleSaveTemplate = async () => {
-    if (!template) return;
-    
-    try {
-      // Check if the code has changed - only create a new version if code has changed
-      const codeHasChanged = code !== template.code;
-      
-      const updatedTemplate = await cmpService.updateTemplate(template.id, {
-        ...template,
-        code: code,
-        parameters: parameters,
-        variables: variables,
-        // Add a flag to indicate if this should create a new version
-        create_new_version: codeHasChanged
-      });
-      
-      if (updatedTemplate) {
-        setTemplate(updatedTemplate);
-        
-        if (codeHasChanged) {
-          toast.success("Template saved successfully and new version created");
-        } else {
-          toast.success("Template parameters and variables saved successfully");
-        }
-        
-        // Refresh versions after save if code has changed
-        if (templateId && codeHasChanged) {
-          await fetchVersions(templateId);
-        }
-      }
-    } catch (err) {
-      console.error("Error saving template:", err);
-      toast.error("Failed to save template");
-    }
-  };
-
-  const handleSaveCodeWithNewVersion = async () => {
-    if (!template) return;
-    
-    try {
-      const updatedTemplate = await cmpService.updateTemplate(template.id, {
-        ...template,
-        code: code,
-        // Always create a new version when using this function
-        create_new_version: true
-      });
-      
-      if (updatedTemplate) {
-        setTemplate(updatedTemplate);
-        toast.success("New template version created successfully");
-        
-        // Refresh versions
-        if (templateId) {
-          await fetchVersions(templateId);
-        }
-      }
-    } catch (err) {
-      console.error("Error creating new template version:", err);
-      toast.error("Failed to create new template version");
-    }
-  };
-
-  const handleSaveParamsAndVariables = async () => {
-    if (!template) return;
-    
-    try {
-      const updatedTemplate = await cmpService.updateTemplate(template.id, {
-        ...template,
-        parameters: parameters,
-        variables: variables,
-        // Never create a new version when using this function
-        create_new_version: false
-      });
-      
-      if (updatedTemplate) {
-        setTemplate(updatedTemplate);
-        toast.success("Template parameters and variables saved successfully");
-      }
-    } catch (err) {
-      console.error("Error saving template parameters and variables:", err);
-      toast.error("Failed to save template parameters and variables");
-    }
-  };
-  
-  const handleDeployTemplate = async () => {
-    if (!template || !deployEnv || !deployName) {
-      toast.error("Please provide all required deployment information");
-      return;
-    }
-    
-    try {
-      setDeploymentInProgress(true);
-      
-      // Find the selected environment to get its name and environment_id
-      const selectedEnvironment = environments.find(env => env.id === deployEnv);
-      if (!selectedEnvironment) {
-        toast.error("Selected environment not found");
-        setDeploymentInProgress(false);
-        return;
-      }
-      
-      // Map ARM template type to 'native' for the backend
-      const backendDeploymentType = template.type === 'arm' ? 'native' : template.type;
-      
-      // Ensure template code is a string, not undefined or null
-      const templateCode = template.code || "";
-      
-      // Prepare the deployment data
-      const deploymentData = {
-        name: deployName,
-        description: `Deployment of ${template.name}`,
-        template_id: template.id, // Use the GUID template_id instead of the numeric id
-        environment_id: selectedEnvironment.internal_id, // Use the internal_id from the environment
-        environment_name: selectedEnvironment.name,
-        provider: template.provider,
-        deployment_type: backendDeploymentType,
-        template_source: "code",
-        template_code: templateCode,
-        parameters: parameters || {},
-        template_version: template.currentVersion // Add the template version to the deployment data
-      };
-      
-      console.log("Deployment data:", JSON.stringify(deploymentData));
-      
-      // Use the deployment service to create the deployment
-      const deploymentResponse = await deploymentService.createDeployment(deploymentData, currentTenant?.tenant_id || "");
-      
-      toast.success(`Deployment "${deployName}" has been submitted successfully`, {
-        description: "You will be redirected to the deployments page to monitor progress.",
-        action: {
-          label: "View Deployments",
-          onClick: () => navigate("/deployments")
-        },
-        duration: 5000
-      });
-      
-      // Keep the dialog open for a moment to show the success state
-      setTimeout(() => {
-        setDeployDialogOpen(false);
-        setDeploymentInProgress(false);
-        navigate("/deployments");
-      }, 2000);
-    } catch (error) {
-      console.error("Error deploying template:", error);
-      setDeploymentInProgress(false);
-      
-      if (error instanceof Error) {
-        toast.error(`Deployment failed: ${error.message}`);
-      } else {
-        toast.error("Failed to deploy template");
-      }
-    }
-  };
-  
+  // Handle sending message to AI
   const handleAiSend = async () => {
     if (!aiMessage.trim()) return;
     
@@ -452,142 +256,75 @@ const TemplateDetails = () => {
     }
   };
   
-  const handleRestoreVersion = async (version: TemplateVersion) => {
-    if (!template || !templateId) return;
-    
-    try {
-      // Fetch the version's code
-      const response = await fetch(`http://localhost:8000/api/templates/${templateId}/versions/${version.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+  // Effect to fetch template data when ID changes
+  useEffect(() => {
+    const fetchTemplate = async () => {
+      if (!templateId) {
+        setError("No template ID provided");
+        setLoading(false);
+        return;
+      }
       
-      if (response.ok) {
-        const versionData = await response.json();
+      try {
+        setLoading(true);
+        const templateData = await cmpService.getTemplate(templateId);
         
-        // Update the template with this version's code
-        const updatedTemplate = await cmpService.updateTemplate(template.id, {
-          ...template,
-          code: versionData.code
-        });
-        
-        if (updatedTemplate) {
-          setTemplate(updatedTemplate);
-          setCode(updatedTemplate.code || "");
-          toast.success(`Restored to version ${version.version}`);
+        if (templateData) {
+          setTemplate(templateData);
+          setCode(templateData.code || "");
           
-          // Refresh versions
+          // Initialize parameters and variables from template data
+          if (templateData.parameters) {
+            console.log("Loading parameters from template:", templateData.parameters);
+            setParameters(templateData.parameters);
+          } else {
+            console.log("No parameters found in template data");
+            setParameters([]);
+          }
+          
+          if (templateData.variables) {
+            console.log("Loading variables from template:", templateData.variables);
+            setVariables(templateData.variables);
+          } else {
+            console.log("No variables found in template data");
+            setVariables([]);
+          }
+          
+          // Fetch template versions
           await fetchVersions(templateId);
+          
+          // Fetch environments
+          await fetchEnvironments();
+          
+          // Set default deployment name
+          if (templateData.name) {
+            setDeploymentName(`${templateData.name}-deployment`);
+          }
+        } else {
+          setError("Template not found");
         }
-      } else {
-        toast.error("Failed to restore version");
+      } catch (err) {
+        console.error("Error fetching template:", err);
+        setError("Failed to load template details");
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Error restoring version:", err);
-      toast.error("Failed to restore version");
-    }
-  };
-  
-  const addParameter = () => {
-    const newKey = `param${Object.keys(parameters).length + 1}`;
-    setParameters({
-      ...parameters,
-      [newKey]: {
-        value: "",
-        type: "string"
-      }
-    });
-  };
-  
-  const removeParameter = (key: string) => {
-    const newParams = { ...parameters };
-    delete newParams[key];
-    setParameters(newParams);
-  };
-  
-  const updateParameter = (key: string, field: keyof TemplateParameter, value: string) => {
-    setParameters({
-      ...parameters,
-      [key]: {
-        ...parameters[key],
-        [field]: value
-      }
-    });
-  };
-  
-  const renameParameter = (oldKey: string, newKey: string) => {
-    if (oldKey === newKey) return;
+    };
     
-    // Check if the new key already exists
-    if (parameters[newKey]) {
-      toast.error(`Parameter with name "${newKey}" already exists`);
-      return;
+    fetchTemplate();
+  }, [templateId]);
+  
+  // Load Azure OpenAI settings when component mounts
+  useEffect(() => {
+    loadAzureOpenAISettings();
+  }, []);
+  
+  // Scroll to bottom of chat when messages change
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-    
-    const newParams = { ...parameters };
-    newParams[newKey] = newParams[oldKey];
-    delete newParams[oldKey];
-    setParameters(newParams);
-  };
-  
-  const addVariable = () => {
-    const newKey = `var${Object.keys(variables).length + 1}`;
-    setVariables({
-      ...variables,
-      [newKey]: {
-        value: "",
-        type: "string"
-      }
-    });
-  };
-  
-  const removeVariable = (key: string) => {
-    const newVars = { ...variables };
-    delete newVars[key];
-    setVariables(newVars);
-  };
-  
-  const updateVariable = (key: string, field: keyof TemplateVariable, value: string) => {
-    setVariables({
-      ...variables,
-      [key]: {
-        ...variables[key],
-        [field]: value
-      }
-    });
-  };
-  
-  const renameVariable = (oldKey: string, newKey: string) => {
-    if (oldKey === newKey) return;
-    
-    // Check if the new key already exists
-    if (variables[newKey]) {
-      toast.error(`Variable with name "${newKey}" already exists`);
-      return;
-    }
-    
-    const newVars = { ...variables };
-    newVars[newKey] = newVars[oldKey];
-    delete newVars[oldKey];
-    setVariables(newVars);
-  };
-  
-  const togglePasswordVisibility = (key: string) => {
-    setShowPasswordValues({
-      ...showPasswordValues,
-      [key]: !showPasswordValues[key]
-    });
-  };
-  
-  const providerColor = (provider: string) => {
-    switch (provider) {
-      case "azure": return "bg-cloud-azure text-white";
-      case "aws": return "bg-cloud-aws text-black";
-      case "gcp": return "bg-cloud-gcp text-white";
-      default: return "bg-muted text-muted-foreground";
-    }
-  };
+  }, [aiChatMessages]);
   
   if (loading) {
     return (
@@ -618,18 +355,6 @@ const TemplateDetails = () => {
     );
   }
 
-  // Scroll to bottom of chat when messages change
-  useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [aiChatMessages]);
-  
-  // Load Azure OpenAI settings when component mounts
-  useEffect(() => {
-    loadAzureOpenAISettings();
-  }, []);
-  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -638,7 +363,7 @@ const TemplateDetails = () => {
           Back to Templates
         </Button>
         <div className="space-x-2">
-          <Button style={{ backgroundColor: "darkorange" }} onClick={() => setDeployDialogOpen(true)}>
+          <Button style={{ backgroundColor: "darkorange" }} onClick={() => setIsDeployDialogOpen(true)}>
             <Play className="mr-2 h-4 w-4" />
             Deploy Template
           </Button>
@@ -646,7 +371,7 @@ const TemplateDetails = () => {
       </div>
       
       {/* Add back the Dialog component for deployment */}
-      <Dialog open={deployDialogOpen} onOpenChange={setDeployDialogOpen}>
+      <Dialog open={isDeployDialogOpen} onOpenChange={setIsDeployDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Deploy Template</DialogTitle>
@@ -656,19 +381,19 @@ const TemplateDetails = () => {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="deployName">Deployment Name</Label>
+              <Label htmlFor="deploymentName">Deployment Name</Label>
               <Input 
-                id="deployName" 
-                value={deployName} 
-                onChange={(e) => setDeployName(e.target.value)}
+                id="deploymentName" 
+                value={deploymentName} 
+                onChange={(e) => setDeploymentName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="deployEnv">Environment</Label>
+              <Label htmlFor="environment">Environment</Label>
               <Select 
-                value={deployEnv} 
-                onValueChange={setDeployEnv}
-                disabled={deploymentInProgress}
+                value={selectedEnvironment?.id} 
+                onValueChange={(value) => setSelectedEnvironment(environments.find(env => env.id === value))}
+                disabled={isDeploying}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select an environment" />
@@ -743,11 +468,11 @@ const TemplateDetails = () => {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeployDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsDeployDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleDeployTemplate}>
-              {deploymentInProgress ? (
+              {isDeploying ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Deploying...
@@ -765,7 +490,7 @@ const TemplateDetails = () => {
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <Collapsible open={codeExpanded} onOpenChange={setCodeExpanded}>
+          <Collapsible open={activeTab === "code"} onOpenChange={setActiveTab}>
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
@@ -775,7 +500,7 @@ const TemplateDetails = () => {
                   </CardTitle>
                   <CollapsibleTrigger asChild>
                     <Button variant="ghost" size="sm">
-                      {codeExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      {activeTab === "code" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
                   </CollapsibleTrigger>
                 </div>
@@ -802,7 +527,7 @@ const TemplateDetails = () => {
             </Card>
           </Collapsible>
           
-          <Collapsible open={paramsExpanded} onOpenChange={setParamsExpanded}>
+          <Collapsible open={activeTab === "params"} onOpenChange={setActiveTab}>
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
@@ -812,7 +537,7 @@ const TemplateDetails = () => {
                   </CardTitle>
                   <CollapsibleTrigger asChild>
                     <Button variant="ghost" size="sm">
-                      {paramsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      {activeTab === "params" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
                   </CollapsibleTrigger>
                 </div>
