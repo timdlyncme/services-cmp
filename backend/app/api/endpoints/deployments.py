@@ -9,6 +9,12 @@ import json
 from datetime import datetime
 from pydantic import BaseModel, Field
 
+import logging
+
+# Set up logging for this endpoint
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
 from app.db.session import get_db
 from app.api.endpoints.auth import get_current_user
 from app.models.user import User, Tenant
@@ -372,9 +378,6 @@ def update_deployment_status(
     """
     Update deployment status from the deployment engine
     """
-    # Set up logging for this endpoint
-    import logging
-    logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
     
     logger.debug(f"Received status update for deployment {deployment_id}")
