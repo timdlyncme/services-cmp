@@ -51,6 +51,8 @@ const TemplateDetails = () => {
   const [deployDialogOpen, setDeployDialogOpen] = useState(false);
   const [deployName, setDeployName] = useState("");
   const [deployEnv, setDeployEnv] = useState("");
+  const [resourceGroup, setResourceGroup] = useState("");
+  const [location, setLocation] = useState("eastus");
   const [versions, setVersions] = useState<TemplateVersion[]>([]);
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [parameters, setParameters] = useState<Record<string, TemplateParameter>>({});
@@ -303,7 +305,9 @@ const TemplateDetails = () => {
         template_source: "code",
         template_code: templateCode,
         parameters: parameters || {},
-        template_version: template.currentVersion // Add the template version to the deployment data
+        template_version: template.currentVersion, // Add the template version to the deployment data
+        resource_group: resourceGroup || undefined, // Add resource group if provided
+        location: location || undefined // Add location if provided
       };
       
       console.log("Deployment data:", JSON.stringify(deploymentData));
@@ -645,6 +649,22 @@ const TemplateDetails = () => {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="resourceGroup">Resource Group</Label>
+              <Input 
+                id="resourceGroup" 
+                value={resourceGroup} 
+                onChange={(e) => setResourceGroup(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Location</Label>
+              <Input 
+                id="location" 
+                value={location} 
+                onChange={(e) => setLocation(e.target.value)}
+              />
             </div>
             
             {/* Parameters section */}

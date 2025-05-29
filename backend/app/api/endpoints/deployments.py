@@ -388,12 +388,18 @@ def update_deployment_status(
         
         if not deployment_details:
             logger.debug(f"Creating new deployment details for deployment ID: {deployment.id}")
+            
+            # Create cloud_properties object with available data
+            cloud_properties = {}
+            if hasattr(deployment, 'region') and deployment.region:
+                cloud_properties['location'] = deployment.region
+            
             deployment_details = DeploymentDetails(
                 deployment_id=deployment.id,
                 provider="azure",
                 deployment_type=deployment.deployment_type if hasattr(deployment, 'deployment_type') else "arm",
                 cloud_deployment_id=deployment.cloud_deployment_id if hasattr(deployment, 'cloud_deployment_id') else None,
-                cloud_region=deployment.region,
+                cloud_properties=cloud_properties if cloud_properties else None,
                 status="in_progress"
             )
             db.add(deployment_details)
@@ -890,6 +896,15 @@ def create_deployment(
                 elif "region" in deployment.parameters:
                     location = deployment.parameters["region"]
             
+            # Use location from deployment request if provided, otherwise use the determined location
+            if deployment.location:
+                location = deployment.location
+            
+            # Determine resource group - use provided value or generate default
+            resource_group = deployment.resource_group
+            if not resource_group:
+                resource_group = f"rg-{new_deployment.name.lower().replace(' ', '-')}"
+            
             # Ensure template_code is a string and not empty
             template_code = template.code if template.code else ""
             
@@ -899,7 +914,7 @@ def create_deployment(
                 "name": new_deployment.name,
                 "description": new_deployment.description,
                 "deployment_type": template.type.lower(),  # Use template type (terraform, arm, etc.)
-                "resource_group": f"rg-{new_deployment.name.lower().replace(' ', '-')}",
+                "resource_group": resource_group,
                 "location": location,
                 "template": {
                     "source": "code",
@@ -1001,12 +1016,19 @@ def create_deployment(
         ).first()
         
         if not deployment_details:
+            # Create cloud_properties object with location and resource_group
+            cloud_properties = {}
+            if location:
+                cloud_properties['location'] = location
+            if resource_group:
+                cloud_properties['resource_group'] = resource_group
+            
             deployment_details = DeploymentDetails(
                 deployment_id=new_deployment.id,
                 provider=template.provider,
                 deployment_type=new_deployment.deployment_type,
                 cloud_deployment_id=new_deployment.cloud_deployment_id,
-                cloud_region=region,
+                cloud_properties=cloud_properties if cloud_properties else None,
                 status=new_deployment.status
             )
             db.add(deployment_details)
