@@ -12,7 +12,7 @@ import { Tenant } from "@/types/auth";
 import { cmpService } from "@/services/cmp-service";
 
 const Tenants = () => {
-  const { user } = useAuth();
+  const { user, tenants: authTenants, currentTenant, switchTenant, updateTenants } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [filteredTenants, setFilteredTenants] = useState<Tenant[]>([]);
@@ -47,24 +47,37 @@ const Tenants = () => {
     setError(null);
     
     try {
-      const tenants = await cmpService.getTenants();
-      setTenants(tenants);
-      setFilteredTenants(tenants);
+      const fetchedTenants = await cmpService.getTenants();
+      setTenants(fetchedTenants);
+      setFilteredTenants(fetchedTenants);
+      
+      // Update tenant switcher
+      updateTenants(fetchedTenants);
     } catch (error) {
       console.error("Error fetching tenants:", error);
-      setError("Failed to load tenants. Please try again.");
-      
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error("Failed to load tenants");
-      }
+      setError("Failed to fetch tenants. Please try again.");
+      toast.error("Failed to fetch tenants");
     } finally {
       setIsLoading(false);
     }
   };
   
+  // Refresh tenants
+  const refreshTenants = () => {
+    fetchTenants();
+    toast.success("Refreshing tenants...");
+  };
+  
+  // Fetch tenants on component mount
   useEffect(() => {
+    // If we already have tenants in the auth context, use them initially
+    if (authTenants && authTenants.length > 0) {
+      setTenants(authTenants);
+      setFilteredTenants(authTenants);
+      setIsLoading(false);
+    }
+    
+    // Then fetch the latest tenants from the API
     fetchTenants();
   }, []);
   
@@ -100,8 +113,14 @@ const Tenants = () => {
         description: newTenantDescription.trim() || undefined
       });
       
-      setTenants([...tenants, newTenant]);
+      // Update local state
+      const updatedTenants = [...tenants, newTenant];
+      setTenants(updatedTenants);
       setFilteredTenants([...filteredTenants, newTenant]);
+      
+      // Update tenant switcher
+      updateTenants(updatedTenants);
+      
       setNewTenantName("");
       setNewTenantDescription("");
       setIsNewTenantDialogOpen(false);
@@ -132,12 +151,23 @@ const Tenants = () => {
         description: editTenantDescription.trim() || undefined
       });
       
-      setTenants(tenants.map(tenant => 
+      // Update local state
+      const updatedTenants = tenants.map(tenant => 
         tenant.tenant_id === editTenantId ? updatedTenant : tenant
-      ));
+      );
+      setTenants(updatedTenants);
       setFilteredTenants(filteredTenants.map(tenant => 
         tenant.tenant_id === editTenantId ? updatedTenant : tenant
       ));
+      
+      // Update tenant switcher
+      updateTenants(updatedTenants);
+      
+      // If the current tenant was updated, update the tenant switcher
+      if (currentTenant && currentTenant.tenant_id === editTenantId) {
+        switchTenant(editTenantId);
+      }
+      
       setEditTenantName("");
       setEditTenantDescription("");
       setIsEditTenantDialogOpen(false);
@@ -165,8 +195,22 @@ const Tenants = () => {
     try {
       await cmpService.deleteTenant(deleteTenantId);
       
-      setTenants(tenants.filter(tenant => tenant.tenant_id !== deleteTenantId));
+      // Update local state
+      const updatedTenants = tenants.filter(tenant => tenant.tenant_id !== deleteTenantId);
+      setTenants(updatedTenants);
       setFilteredTenants(filteredTenants.filter(tenant => tenant.tenant_id !== deleteTenantId));
+      
+      // Update tenant switcher
+      updateTenants(updatedTenants);
+      
+      // If the current tenant was deleted, switch to another tenant
+      if (currentTenant && currentTenant.tenant_id === deleteTenantId) {
+        if (updatedTenants.length > 0) {
+          switchTenant(updatedTenants[0].tenant_id);
+          toast.info(`Switched to tenant "${updatedTenants[0].name}"`);
+        }
+      }
+      
       setDeleteTenantId("");
       setDeleteTenantName("");
       setIsDeleteTenantDialogOpen(false);
