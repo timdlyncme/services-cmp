@@ -193,28 +193,7 @@ class AzureDeployer:
         
         # If no resource_client exists (no subscription_id), try to get the first available subscription
         if not self.resource_client:
-            logging.info("No subscription_id provided, attempting to get first available subscription")
-            try:
-                subscriptions = self.list_subscriptions()
-                if not subscriptions:
-                    logging.error("No Azure subscriptions found or accessible")
-                    raise ValueError("No Azure subscriptions found or accessible")
-                
-                # Use the first available subscription
-                first_subscription = subscriptions[0]
-                self.subscription_id = first_subscription["id"]
-                logging.info(f"Using first available subscription: {self.subscription_id}")
-                
-                # Create resource client with the subscription
-                self.resource_client = ResourceManagementClient(
-                    credential=self.credential,
-                    subscription_id=self.subscription_id
-                )
-                logging.info("Successfully created ResourceManagementClient with auto-selected subscription")
-                
-            except Exception as e:
-                logging.error(f"Failed to auto-select subscription: {str(e)}")
-                raise ValueError(f"Azure credentials not configured properly: {str(e)}")
+            self._ensure_resource_client()
         
         # Final check - ensure we have a resource client
         if not self.resource_client:
@@ -361,6 +340,48 @@ class AzureDeployer:
                 parameters={"location": location}
             )
     
+    def _ensure_resource_client(self):
+        """
+        Ensure resource_client is available, auto-selecting subscription if needed
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Check if credentials are properly configured
+        if not self.credential:
+            logger.error(f"Azure credentials not configured. client_id={bool(self.client_id)}, client_secret={bool(self.client_secret)}, tenant_id={bool(self.tenant_id)}")
+            raise ValueError("Azure credentials not configured")
+        
+        # If no resource_client exists (no subscription_id), try to get the first available subscription
+        if not self.resource_client:
+            logger.info("No subscription_id provided, attempting to get first available subscription")
+            try:
+                subscriptions = self.list_subscriptions()
+                if not subscriptions:
+                    logger.error("No Azure subscriptions found or accessible")
+                    raise ValueError("No Azure subscriptions found or accessible")
+                
+                # Use the first available subscription
+                first_subscription = subscriptions[0]
+                self.subscription_id = first_subscription["id"]
+                logger.info(f"Using first available subscription: {self.subscription_id}")
+                
+                # Create resource client with the subscription
+                self.resource_client = ResourceManagementClient(
+                    credential=self.credential,
+                    subscription_id=self.subscription_id
+                )
+                logger.info("Successfully created ResourceManagementClient")
+                
+            except Exception as e:
+                logger.error(f"Failed to auto-select subscription: {str(e)}")
+                raise ValueError(f"Azure credentials not configured properly: {str(e)}")
+        
+        # Final check - ensure we have a resource client
+        if not self.resource_client:
+            logger.error("Azure credentials not configured")
+            raise ValueError("Azure credentials not configured")
+
     def _convert_bicep_to_arm(self, bicep_content):
         """
         Convert Bicep template to ARM template
@@ -416,11 +437,9 @@ class AzureDeployer:
         """
         import logging
         logger = logging.getLogger(__name__)
-        
-        if not self.resource_client:
-            logger.error("Azure credentials not configured")
-            raise ValueError("Azure credentials not configured")
-        
+        # Ensure resource client is available
+        self._ensure_resource_client()
+
         try:
             logger.info(f"Getting deployment status for {deployment_name} in resource group {resource_group}")
             
@@ -541,7 +560,7 @@ class AzureDeployer:
             dict: Update result with status and details
         """
         if not self.resource_client:
-            raise ValueError("Azure credentials not configured")
+            self._ensure_resource_client()
         
         try:
             # Get existing deployment
@@ -635,7 +654,7 @@ class AzureDeployer:
             dict: Deletion result with status
         """
         if not self.resource_client:
-            raise ValueError("Azure credentials not configured")
+            self._ensure_resource_client()
         
         try:
             # Delete deployment
