@@ -382,14 +382,13 @@ const DeploymentDetails = () => {
       </div>
       
       {/* Main tabs */}
-      <Tabs defaultValue="overview" className="mt-6">
-        <TabsList className="grid w-full grid-cols-6">
+      <Tabs defaultValue="overview" className="mt-5">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="resources">Resources</TabsTrigger>
           <TabsTrigger value="outputs">Outputs</TabsTrigger>
-          <TabsTrigger value="logs">Logs</TabsTrigger>
           <TabsTrigger value="template">Template</TabsTrigger>
           <TabsTrigger value="parameters">Parameters</TabsTrigger>
+          <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
         
         {/* Overview tab */}
@@ -579,54 +578,6 @@ const DeploymentDetails = () => {
               </CollapsibleContent>
             </Card>
           </Collapsible>
-        </TabsContent>
-        
-        {/* Resources tab */}
-        <TabsContent value="resources" className="space-y-6 pt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Resources</CardTitle>
-              <CardDescription>
-                Overview of all resources deployed by this deployment
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[400px] rounded-md border bg-muted">
-                <div className="space-y-4">
-                  {deployment.resources && deployment.resources.length > 0 ? (
-                    deployment.resources.map((resource, index) => (
-                      <div key={index} className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium">{resource.name}</p>
-                          <p className="text-sm text-muted-foreground">{resource.type}</p>
-                        </div>
-                        <div>
-                          <div className="flex items-center">
-                            {resource.status === 'Succeeded' ? (
-                              <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
-                            ) : resource.status === 'Failed' ? (
-                              <XCircle className="h-4 w-4 text-red-500 mr-1" />
-                            ) : (
-                              <Clock className="h-4 w-4 text-yellow-500 mr-1" />
-                            )}
-                            <span>{resource.status || 'Unknown'}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Code className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <h3 className="text-lg font-medium mb-2">No resources available</h3>
-                      <p className="max-w-md mx-auto">
-                        This deployment doesn't have any resources defined or they haven't been generated yet.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
         </TabsContent>
         
         {/* Outputs tab */}
