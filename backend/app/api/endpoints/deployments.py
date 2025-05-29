@@ -335,199 +335,142 @@ class TemplateData(BaseModel):
     url: Optional[str] = None
     code: Optional[str] = None
 
-class DeploymentEngineCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    deployment_type: str  # arm or bicep
-    resource_group: str
-    location: str
-    template: TemplateData
-    parameters: Optional[Dict[str, Any]] = None
-
-@router.post("/engine", response_model=DeploymentResponse)
-def create_engine_deployment(
-    *,
-    db: Session = Depends(get_db),
+@router.put("/engine/{deployment_id}/status", response_model=Dict[str, Any])
+def update_deployment_status(
+    deployment_id: str,
+    update_data: Dict[str, Any],
     current_user: User = Depends(get_current_user),
-    deployment_in: DeploymentEngineCreate
-):
+    db: Session = Depends(get_db)
+) -> Any:
     """
-    Create a new deployment using the deployment engine
+    Update deployment status from the deployment engine
     """
-    # Check if user has permission to create deployments
-    if not current_user.role or "deployment:create" not in [p.name for p in current_user.role.permissions]:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
+    # Set up logging for this endpoint
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    
+    logger.debug(f"Received status update for deployment {deployment_id}")
+    logger.debug(f"Update data: {json.dumps(update_data, default=str)}")
+    logger.debug(f"User: {current_user.username} (ID: {current_user.id})")
+    
+    # Check if user has permission to update deployments
+    has_permission = any(p.name == "update:deployments" for p in current_user.role.permissions)
+    logger.debug(f"User has update:deployments permission: {has_permission}")
+    
+    if not has_permission:
+        logger.warning(f"User {current_user.username} does not have permission to update deployments")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
     
     try:
-        # Forward request to deployment engine
-        headers = {"Authorization": f"Bearer {current_user.access_token}"}
-        response = requests.post(
-            f"{DEPLOYMENT_ENGINE_URL}/deployments",
-            headers=headers,
-            json=deployment_in.dict()
+        # Find the deployment
+        logger.debug(f"Looking for deployment with ID: {deployment_id}")
+        deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
+        
+        if not deployment:
+            logger.warning(f"Deployment not found: {deployment_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Deployment not found"
+            )
+        
+        logger.debug(f"Found deployment: {deployment.name} (ID: {deployment.id}, DB ID: {deployment.deployment_id})")
+        
+        # Get or create deployment details
+        logger.debug(f"Looking for deployment details for deployment ID: {deployment.id}")
+        deployment_details = db.query(DeploymentDetails).filter(
+            DeploymentDetails.deployment_id == deployment.id
+        ).first()
+        
+        if not deployment_details:
+            logger.debug(f"Creating new deployment details for deployment ID: {deployment.id}")
+            deployment_details = DeploymentDetails(
+                deployment_id=deployment.id,
+                provider="azure",
+                deployment_type=deployment.deployment_type if hasattr(deployment, 'deployment_type') else "arm",
+                cloud_deployment_id=deployment.cloud_deployment_id if hasattr(deployment, 'cloud_deployment_id') else None,
+                cloud_region=deployment.region,
+                status="in_progress"
+            )
+            db.add(deployment_details)
+            logger.debug(f"Added new deployment details to session")
+        else:
+            logger.debug(f"Found existing deployment details: {deployment_details.id}")
+        
+        # Update deployment status
+        status_value = update_data.get("status")
+        if status_value:
+            logger.debug(f"Updating status to: {status_value}")
+            deployment.status = status_value
+            deployment_details.status = status_value
+            
+            # If deployment is complete, update completed_at
+            if status_value in ["succeeded", "failed", "canceled"]:
+                logger.debug(f"Deployment is complete with status: {status_value}, updating completed_at")
+                deployment_details.completed_at = datetime.utcnow()
+        
+        # Update resources
+        resources = update_data.get("resources")
+        if resources:
+            logger.debug(f"Updating resources: {len(resources)} resources")
+            deployment_details.cloud_resources = resources
+        
+        # Update outputs
+        outputs = update_data.get("outputs")
+        if outputs:
+            logger.debug(f"Updating outputs: {len(outputs)} outputs")
+            deployment_details.outputs = outputs
+        
+        # Update logs
+        logs = update_data.get("logs")
+        if logs:
+            logger.debug(f"Updating logs: {len(logs)} log entries")
+            deployment_details.logs = logs
+        
+        # Add to deployment history
+        logger.debug(f"Creating history entry for status: {status_value}")
+        history_entry = DeploymentHistory(
+            deployment_id=deployment.id,
+            status=status_value,
+            message=f"Deployment status updated to {status_value}",
+            details={
+                "resources": resources,
+                "outputs": outputs,
+                "logs": logs,
+                "deployment_result": update_data.get("deployment_result", {})  # Store the deployment result
+            },
+            user_id=current_user.id
         )
+        db.add(history_entry)
+        logger.debug(f"Added history entry to session")
         
-        if response.status_code != 200:
-            raise Exception(f"Deployment engine error: {response.text}")
+        # Commit changes
+        logger.debug("Committing changes to database")
+        try:
+            db.commit()
+            logger.debug("Successfully committed changes to database")
+        except Exception as commit_error:
+            logger.error(f"Error committing to database: {str(commit_error)}")
+            db.rollback()
+            raise commit_error
         
-        result = response.json()
-        
+        logger.debug(f"Status update for deployment {deployment_id} completed successfully")
         return {
-            "id": result["deployment_id"],
-            "name": deployment_in.name,
-            "status": result["status"],
-            "created_at": result["created_at"],
-            "cloud_deployment_id": result.get("azure_deployment_id")
+            "message": "Deployment status updated successfully",
+            "deployment_id": deployment_id,
+            "status": status_value
         }
     
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/engine", response_model=List[DeploymentResponse])
-def list_engine_deployments(
-    *,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    status: Optional[str] = None,
-    limit: int = Query(10, ge=1, le=100),
-    offset: int = Query(0, ge=0)
-):
-    """
-    List deployments with optional filtering
-    """
-    # Check if user has permission to view deployments
-    if not current_user.role or "deployment:read" not in [p.name for p in current_user.role.permissions]:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    try:
-        # Forward request to deployment engine
-        headers = {"Authorization": f"Bearer {current_user.access_token}"}
-        params = {"limit": limit, "offset": offset}
-        if status:
-            params["status"] = status
-        
-        response = requests.get(
-            f"{DEPLOYMENT_ENGINE_URL}/deployments",
-            headers=headers,
-            params=params
+        logger.error(f"Error updating deployment status: {str(e)}", exc_info=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating deployment status: {str(e)}"
         )
-        
-        if response.status_code != 200:
-            raise Exception(f"Deployment engine error: {response.text}")
-        
-        result = response.json()
-        
-        # Format response
-        deployments = []
-        for deployment in result:
-            deployments.append({
-                "id": deployment["deployment_id"],
-                "name": deployment.get("name", ""),
-                "status": deployment["status"],
-                "created_at": deployment["created_at"],
-                "cloud_deployment_id": deployment.get("azure_deployment_id")
-            })
-        
-        return deployments
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/engine/{deployment_id}", response_model=Dict[str, Any])
-def get_engine_deployment(
-    *,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    deployment_id: str = Path(..., title="The ID of the deployment to get")
-):
-    """
-    Get detailed information about a deployment
-    """
-    # Check if user has permission to view deployments
-    if not current_user.role or "deployment:read" not in [p.name for p in current_user.role.permissions]:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    try:
-        # Forward request to deployment engine
-        headers = {"Authorization": f"Bearer {current_user.access_token}"}
-        response = requests.get(
-            f"{DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}",
-            headers=headers
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Deployment engine error: {response.text}")
-        
-        return response.json()
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-class DeploymentEngineUpdate(BaseModel):
-    template: Optional[TemplateData] = None
-    parameters: Optional[Dict[str, Any]] = None
-
-@router.put("/engine/{deployment_id}", response_model=Dict[str, Any])
-def update_engine_deployment(
-    *,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    deployment_id: str = Path(..., title="The ID of the deployment to update"),
-    deployment_in: DeploymentEngineUpdate
-):
-    """
-    Update an existing deployment
-    """
-    # Check if user has permission to update deployments
-    if not current_user.role or "deployment:update" not in [p.name for p in current_user.role.permissions]:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    try:
-        # Forward request to deployment engine
-        headers = {"Authorization": f"Bearer {current_user.access_token}"}
-        response = requests.put(
-            f"{DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}",
-            headers=headers,
-            json=deployment_in.dict(exclude_none=True)
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Deployment engine error: {response.text}")
-        
-        return response.json()
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.delete("/engine/{deployment_id}", response_model=Dict[str, Any])
-def delete_engine_deployment(
-    *,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    deployment_id: str = Path(..., title="The ID of the deployment to delete")
-):
-    """
-    Delete a deployment
-    """
-    # Check if user has permission to delete deployments
-    if not current_user.role or "deployment:delete" not in [p.name for p in current_user.role.permissions]:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    try:
-        # Forward request to deployment engine
-        headers = {"Authorization": f"Bearer {current_user.access_token}"}
-        response = requests.delete(
-            f"{DEPLOYMENT_ENGINE_URL}/deployments/{deployment_id}",
-            headers=headers
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Deployment engine error: {response.text}")
-        
-        return response.json()
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/", response_model=List[CloudDeploymentResponse])
 def get_deployments(
@@ -1275,144 +1218,6 @@ def list_azure_subscriptions(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@router.put("/engine/{deployment_id}/status", response_model=Dict[str, Any])
-def update_deployment_status(
-    deployment_id: str,
-    update_data: Dict[str, Any],
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-) -> Any:
-    """
-    Update deployment status from the deployment engine
-    """
-    # Set up logging for this endpoint
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-    
-    logger.debug(f"Received status update for deployment {deployment_id}")
-    logger.debug(f"Update data: {json.dumps(update_data, default=str)}")
-    logger.debug(f"User: {current_user.username} (ID: {current_user.id})")
-    
-    # Check if user has permission to update deployments
-    has_permission = any(p.name == "update:deployments" for p in current_user.role.permissions)
-    logger.debug(f"User has update:deployments permission: {has_permission}")
-    
-    if not has_permission:
-        logger.warning(f"User {current_user.username} does not have permission to update deployments")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
-    try:
-        # Find the deployment
-        logger.debug(f"Looking for deployment with ID: {deployment_id}")
-        deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
-        
-        if not deployment:
-            logger.warning(f"Deployment not found: {deployment_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Deployment not found"
-            )
-        
-        logger.debug(f"Found deployment: {deployment.name} (ID: {deployment.id}, DB ID: {deployment.deployment_id})")
-        
-        # Get or create deployment details
-        logger.debug(f"Looking for deployment details for deployment ID: {deployment.id}")
-        deployment_details = db.query(DeploymentDetails).filter(
-            DeploymentDetails.deployment_id == deployment.id
-        ).first()
-        
-        if not deployment_details:
-            logger.debug(f"Creating new deployment details for deployment ID: {deployment.id}")
-            deployment_details = DeploymentDetails(
-                deployment_id=deployment.id,
-                provider="azure",
-                deployment_type=deployment.deployment_type if hasattr(deployment, 'deployment_type') else "arm",
-                cloud_deployment_id=deployment.cloud_deployment_id if hasattr(deployment, 'cloud_deployment_id') else None,
-                cloud_region=deployment.region,
-                status="in_progress"
-            )
-            db.add(deployment_details)
-            logger.debug(f"Added new deployment details to session")
-        else:
-            logger.debug(f"Found existing deployment details: {deployment_details.id}")
-        
-        # Update deployment status
-        status_value = update_data.get("status")
-        if status_value:
-            logger.debug(f"Updating status to: {status_value}")
-            deployment.status = status_value
-            deployment_details.status = status_value
-            
-            # If deployment is complete, update completed_at
-            if status_value in ["succeeded", "failed", "canceled"]:
-                logger.debug(f"Deployment is complete with status: {status_value}, updating completed_at")
-                deployment_details.completed_at = datetime.utcnow()
-        
-        # Update resources
-        resources = update_data.get("resources")
-        if resources:
-            logger.debug(f"Updating resources: {len(resources)} resources")
-            deployment_details.cloud_resources = resources
-        
-        # Update outputs
-        outputs = update_data.get("outputs")
-        if outputs:
-            logger.debug(f"Updating outputs: {len(outputs)} outputs")
-            deployment_details.outputs = outputs
-        
-        # Update logs
-        logs = update_data.get("logs")
-        if logs:
-            logger.debug(f"Updating logs: {len(logs)} log entries")
-            deployment_details.logs = logs
-        
-        # Add to deployment history
-        logger.debug(f"Creating history entry for status: {status_value}")
-        history_entry = DeploymentHistory(
-            deployment_id=deployment.id,
-            status=status_value,
-            message=f"Deployment status updated to {status_value}",
-            details={
-                "resources": resources,
-                "outputs": outputs,
-                "logs": logs,
-                "deployment_result": update_data.get("deployment_result", {})  # Store the deployment result
-            },
-            user_id=current_user.id
-        )
-        db.add(history_entry)
-        logger.debug(f"Added history entry to session")
-        
-        # Commit changes
-        logger.debug("Committing changes to database")
-        try:
-            db.commit()
-            logger.debug("Successfully committed changes to database")
-        except Exception as commit_error:
-            logger.error(f"Error committing to database: {str(commit_error)}")
-            db.rollback()
-            raise commit_error
-        
-        logger.debug(f"Status update for deployment {deployment_id} completed successfully")
-        return {
-            "message": "Deployment status updated successfully",
-            "deployment_id": deployment_id,
-            "status": status_value
-        }
-    
-    except Exception as e:
-        logger.error(f"Error updating deployment status: {str(e)}", exc_info=True)
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating deployment status: {str(e)}"
-        )
-
 
 @router.get("/{deployment_id}/logs", response_model=List[Dict[str, Any]])
 def get_deployment_logs(
