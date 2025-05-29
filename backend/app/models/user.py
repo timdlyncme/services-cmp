@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Table, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, Table, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
+from datetime import datetime
 
 from app.models.base_models import Base, generate_uuid
 
@@ -46,6 +47,8 @@ class Tenant(Base):
     name = Column(String)
     description = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
+    date_created = Column(DateTime, default=datetime.utcnow)
+    date_modified = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     users = relationship("User", back_populates="tenant")
