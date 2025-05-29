@@ -364,9 +364,26 @@ def list_subscriptions(
 def create_deployment(
     deployment: Dict[str, Any],
     background_tasks: BackgroundTasks,
+    target_tenant_id: Optional[str] = None,
     user: dict = Depends(check_permission("deployment:create"))
 ):
     try:
+        # Determine which tenant to use for this deployment
+        deployment_tenant_id = user["tenant_id"]
+        
+        # If target_tenant_id is provided, check if user has permission to deploy for other tenants
+        if target_tenant_id and target_tenant_id != user["tenant_id"]:
+            # Only admin or MSP users can deploy for other tenants
+            if user.get("role") not in ["admin", "msp"]:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Not authorized to create deployments for other tenants"
+                )
+            deployment_tenant_id = target_tenant_id
+            logger.info(f"Using target tenant ID for deployment: {deployment_tenant_id}")
+        else:
+            logger.info(f"Using user's tenant ID for deployment: {deployment_tenant_id}")
+        
         # Use the deployment ID from the backend if provided, otherwise generate a new one
         deployment_id = deployment.get("deployment_id")
         if not deployment_id:
@@ -412,12 +429,12 @@ def create_deployment(
         
         # Get tenant-specific Azure deployer with fresh credentials from database
         azure_deployer = credential_manager.create_azure_deployer_for_tenant(
-            user["tenant_id"], 
+            deployment_tenant_id, 
             settings_id=settings_id
         )
         
         if not azure_deployer:
-            logger.error(f"Failed to get Azure credentials for tenant {user['tenant_id']}")
+            logger.error(f"Failed to get Azure credentials for tenant {deployment_tenant_id}")
             raise ValueError("Azure credentials not configured for this tenant")
         
         # If credentials are provided in the deployment request, use them to override
@@ -479,7 +496,7 @@ def create_deployment(
             "deployment_type": deployment_type,
             "status": result.get("status", "in_progress"),
             "azure_deployment_id": azure_deployment_name,
-            "tenant_id": user["tenant_id"],
+            "tenant_id": deployment_tenant_id,
             "created_by": user["user_id"],
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat(),
@@ -491,18 +508,15 @@ def create_deployment(
         
         logger.info(f"Stored deployment details in memory: {deployment_id}")
         
-        # Start status polling in a background thread
+        # Start background polling for deployment status
         logger.info(f"Starting background polling thread for deployment {deployment_id}")
         thread = threading.Thread(
             target=poll_deployment_status,
-            args=(deployment_id, resource_group, azure_deployment_name, user["token"], user["tenant_id"])
+            args=(deployment_id, resource_group, azure_deployment_name, user["token"], deployment_tenant_id)
         )
         thread.daemon = True
         thread.start()
-        
-        # Store thread reference
         polling_threads[deployment_id] = thread
-        logger.info(f"Background polling thread started for deployment {deployment_id}")
         
         return {
             "deployment_id": deployment_id,  # Return the consistent deployment ID

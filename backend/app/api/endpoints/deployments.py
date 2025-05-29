@@ -1001,10 +1001,16 @@ def create_deployment(
             
             # Send to deployment engine
             headers = {"Authorization": f"Bearer {current_user.access_token}"}
+            params = {}
+            # If deploying to a different tenant, pass target_tenant_id
+            if deployment_tenant_id != current_user.tenant_id:
+                params["target_tenant_id"] = deployment_tenant_id
+            
             response = requests.post(
                 f"{DEPLOYMENT_ENGINE_URL}/deployments",
                 headers=headers,
-                json=engine_deployment
+                json=engine_deployment,
+                params=params
             )
             
             # Debug: Print deployment engine response
