@@ -890,6 +890,15 @@ def create_deployment(
                 elif "region" in deployment.parameters:
                     location = deployment.parameters["region"]
             
+            # Use location from deployment request if provided, otherwise use the determined location
+            if deployment.location:
+                location = deployment.location
+            
+            # Determine resource group - use provided value or generate default
+            resource_group = deployment.resource_group
+            if not resource_group:
+                resource_group = f"rg-{new_deployment.name.lower().replace(' ', '-')}"
+            
             # Ensure template_code is a string and not empty
             template_code = template.code if template.code else ""
             
@@ -899,7 +908,7 @@ def create_deployment(
                 "name": new_deployment.name,
                 "description": new_deployment.description,
                 "deployment_type": template.type.lower(),  # Use template type (terraform, arm, etc.)
-                "resource_group": f"rg-{new_deployment.name.lower().replace(' ', '-')}",
+                "resource_group": resource_group,
                 "location": location,
                 "template": {
                     "source": "code",

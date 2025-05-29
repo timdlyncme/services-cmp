@@ -185,6 +185,8 @@ class DeploymentCreate(DeploymentBase):
     parameters: Optional[Dict[str, Any]] = None
     project_id: Optional[str] = None  # For GCP
     template_version: Optional[str] = None  # Add template_version field
+    resource_group: Optional[str] = None  # Add resource_group field for Azure
+    location: Optional[str] = None  # Add location field for Azure
 
     @validator('template_source')
     def validate_template_source(cls, v, values):
