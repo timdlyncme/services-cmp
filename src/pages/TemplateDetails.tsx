@@ -17,9 +17,8 @@ import { deploymentService } from "@/services/deployment-service";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAzureOpenAI } from "@/contexts/AzureOpenAIContext";
-import { AzureOpenAIService, ChatMessage as AIChatMessage } from "@/services/azureOpenAIService";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AIAssistantService } from "@/services/ai-assistant-service";
+import { AIAssistantService, ChatMessage as AIChatMessage } from "@/services/ai-assistant-service";
 
 interface TemplateVersion {
   id: number;
@@ -43,30 +42,23 @@ const TemplateDetails = () => {
   const { templateId } = useParams();
   const { currentTenant } = useAuth();
   const navigate = useNavigate();
-  
-  // All state declarations grouped together
   const [template, setTemplate] = useState<CloudTemplate | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [loadingVersions, setLoadingVersions] = useState<boolean>(false);
+  const [loadingEnvironments, setLoadingEnvironments] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [versions, setVersions] = useState<TemplateVersion[]>([]);
-  const [loadingVersions, setLoadingVersions] = useState(false);
-  const [environments, setEnvironments] = useState<Environment[]>([]);
-  const [loadingEnvironments, setLoadingEnvironments] = useState(false);
-  const [parameters, setParameters] = useState<TemplateParameter[]>([]);
-  const [variables, setVariables] = useState<TemplateVariable[]>([]);
   const [code, setCode] = useState("");
-  const [activeTab, setActiveTab] = useState("code");
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isCreatingVersion, setIsCreatingVersion] = useState(false);
-  const [versionNotes, setVersionNotes] = useState("");
-  const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false);
-  const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
-  const [isDeploying, setIsDeploying] = useState(false);
-  const [deploymentName, setDeploymentName] = useState("");
-  const [isDeployDialogOpen, setIsDeployDialogOpen] = useState(false);
-  const [deploymentParameters, setDeploymentParameters] = useState<Record<string, string>>({});
-  const [deploymentVariables, setDeploymentVariables] = useState<Record<string, string>>({});
+  const [deployDialogOpen, setDeployDialogOpen] = useState(false);
+  const [deployName, setDeployName] = useState("");
+  const [deployEnv, setDeployEnv] = useState("");
+  const [versions, setVersions] = useState<TemplateVersion[]>([]);
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [parameters, setParameters] = useState<Record<string, TemplateParameter>>({});
+  const [variables, setVariables] = useState<Record<string, TemplateVariable>>({});
+  const [codeExpanded, setCodeExpanded] = useState(true);
+  const [paramsExpanded, setParamsExpanded] = useState(true);
+  const [showPasswordValues, setShowPasswordValues] = useState<Record<string, boolean>>({});
+  const [deploymentInProgress, setDeploymentInProgress] = useState(false);
   
   // AI Assistant state
   const [aiChatMessages, setAiChatMessages] = useState<AIChatMessage[]>([
@@ -76,25 +68,10 @@ const TemplateDetails = () => {
   const [aiMessage, setAiMessage] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiExpanded, setAiExpanded] = useState(false);
-  const [azureOpenAISettings, setAzureOpenAISettings] = useState({
-    enabled: false,
-    endpoint: "",
-    apiKey: "",
-    deploymentName: "",
-    model: "gpt-4",
-    apiVersion: "2023-05-15"
-  });
-  
-  // Refs
   const chatEndRef = useRef<HTMLDivElement>(null);
-  
-  // Hooks
   const { isConfigured, config } = useAzureOpenAI();
-  
-  // Services
   const aiAssistantService = new AIAssistantService();
   
-  // Functions
   const fetchVersions = async (templateId: string) => {
     try {
       setLoadingVersions(true);
@@ -132,7 +109,7 @@ const TemplateDetails = () => {
         
         // Set default environment if available
         if (data.length > 0) {
-          setSelectedEnvironment(data[0]);
+          setDeployEnv(data[0].id);
         }
       } else {
         console.error("Failed to fetch environments");
@@ -146,26 +123,221 @@ const TemplateDetails = () => {
     }
   };
   
-  // Load Azure OpenAI settings
-  const loadAzureOpenAISettings = async () => {
+  useEffect(() => {
+    if (templateId) {
+      fetchTemplate(templateId);
+      fetchVersions(templateId);
+      fetchEnvironments();
+    }
+  }, [templateId]);
+  
+  const fetchTemplate = async (templateId: string) => {
     try {
-      const config = await aiAssistantService.getConfig();
+      setLoading(true);
+      const templateData = await cmpService.getTemplate(templateId);
       
-      setAzureOpenAISettings({
-        enabled: Boolean(config.api_key && config.endpoint && config.deployment_name),
-        endpoint: config.endpoint || "",
-        apiKey: config.api_key === "********" ? "" : (config.api_key || ""),
-        deploymentName: config.deployment_name || "",
-        model: config.model || "gpt-4",
-        apiVersion: config.api_version || "2023-05-15"
-      });
-    } catch (error) {
-      console.error("Error loading Azure OpenAI settings:", error);
-      // Don't show a toast error here, as this might be the first time the user is setting up Azure OpenAI
+      if (templateData) {
+        setTemplate(templateData);
+        setCode(templateData.code || "");
+        
+        // Initialize parameters and variables from template data
+        if (templateData.parameters) {
+          console.log("Loading parameters from template:", templateData.parameters);
+          setParameters(templateData.parameters);
+        } else {
+          console.log("No parameters found in template data");
+          setParameters({});
+        }
+        
+        if (templateData.variables) {
+          console.log("Loading variables from template:", templateData.variables);
+          setVariables(templateData.variables);
+        } else {
+          console.log("No variables found in template data");
+          setVariables({});
+        }
+        
+        // Fetch template versions
+        await fetchVersions(templateId);
+        
+        // Fetch environments
+        await fetchEnvironments();
+        
+        // Set default deployment name
+        if (templateData.name) {
+          setDeployName(`${templateData.name}-deployment`);
+        }
+      } else {
+        setError("Template not found");
+      }
+    } catch (err) {
+      console.error("Error fetching template:", err);
+      setError("Failed to load template details");
+    } finally {
+      setLoading(false);
     }
   };
   
-  // Handle sending message to AI
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [aiChatMessages]);
+  
+  const handleSaveTemplate = async () => {
+    if (!template) return;
+    
+    try {
+      // Check if the code has changed - only create a new version if code has changed
+      const codeHasChanged = code !== template.code;
+      
+      const updatedTemplate = await cmpService.updateTemplate(template.id, {
+        ...template,
+        code: code,
+        parameters: parameters,
+        variables: variables,
+        // Add a flag to indicate if this should create a new version
+        create_new_version: codeHasChanged
+      });
+      
+      if (updatedTemplate) {
+        setTemplate(updatedTemplate);
+        
+        if (codeHasChanged) {
+          toast.success("Template saved successfully and new version created");
+        } else {
+          toast.success("Template parameters and variables saved successfully");
+        }
+        
+        // Refresh versions after save if code has changed
+        if (templateId && codeHasChanged) {
+          await fetchVersions(templateId);
+        }
+      }
+    } catch (err) {
+      console.error("Error saving template:", err);
+      toast.error("Failed to save template");
+    }
+  };
+
+  const handleSaveCodeWithNewVersion = async () => {
+    if (!template) return;
+    
+    try {
+      const updatedTemplate = await cmpService.updateTemplate(template.id, {
+        ...template,
+        code: code,
+        // Always create a new version when using this function
+        create_new_version: true
+      });
+      
+      if (updatedTemplate) {
+        setTemplate(updatedTemplate);
+        toast.success("New template version created successfully");
+        
+        // Refresh versions
+        if (templateId) {
+          await fetchVersions(templateId);
+        }
+      }
+    } catch (err) {
+      console.error("Error creating new template version:", err);
+      toast.error("Failed to create new template version");
+    }
+  };
+
+  const handleSaveParamsAndVariables = async () => {
+    if (!template) return;
+    
+    try {
+      const updatedTemplate = await cmpService.updateTemplate(template.id, {
+        ...template,
+        parameters: parameters,
+        variables: variables,
+        // Never create a new version when using this function
+        create_new_version: false
+      });
+      
+      if (updatedTemplate) {
+        setTemplate(updatedTemplate);
+        toast.success("Template parameters and variables saved successfully");
+      }
+    } catch (err) {
+      console.error("Error saving template parameters and variables:", err);
+      toast.error("Failed to save template parameters and variables");
+    }
+  };
+  
+  const handleDeployTemplate = async () => {
+    if (!template || !deployEnv || !deployName) {
+      toast.error("Please provide all required deployment information");
+      return;
+    }
+    
+    try {
+      setDeploymentInProgress(true);
+      
+      // Find the selected environment to get its name and environment_id
+      const selectedEnvironment = environments.find(env => env.id === deployEnv);
+      if (!selectedEnvironment) {
+        toast.error("Selected environment not found");
+        setDeploymentInProgress(false);
+        return;
+      }
+      
+      // Map ARM template type to 'native' for the backend
+      const backendDeploymentType = template.type === 'arm' ? 'native' : template.type;
+      
+      // Ensure template code is a string, not undefined or null
+      const templateCode = template.code || "";
+      
+      // Prepare the deployment data
+      const deploymentData = {
+        name: deployName,
+        description: `Deployment of ${template.name}`,
+        template_id: template.id, // Use the GUID template_id instead of the numeric id
+        environment_id: selectedEnvironment.internal_id, // Use the internal_id from the environment
+        environment_name: selectedEnvironment.name,
+        provider: template.provider,
+        deployment_type: backendDeploymentType,
+        template_source: "code",
+        template_code: templateCode,
+        parameters: parameters || {},
+        template_version: template.currentVersion // Add the template version to the deployment data
+      };
+      
+      console.log("Deployment data:", JSON.stringify(deploymentData));
+      
+      // Use the deployment service to create the deployment
+      const deploymentResponse = await deploymentService.createDeployment(deploymentData, currentTenant?.tenant_id || "");
+      
+      toast.success(`Deployment "${deployName}" has been submitted successfully`, {
+        description: "You will be redirected to the deployments page to monitor progress.",
+        action: {
+          label: "View Deployments",
+          onClick: () => navigate("/deployments")
+        },
+        duration: 5000
+      });
+      
+      // Keep the dialog open for a moment to show the success state
+      setTimeout(() => {
+        setDeployDialogOpen(false);
+        setDeploymentInProgress(false);
+        navigate("/deployments");
+      }, 2000);
+    } catch (error) {
+      console.error("Error deploying template:", error);
+      setDeploymentInProgress(false);
+      
+      if (error instanceof Error) {
+        toast.error(`Deployment failed: ${error.message}`);
+      } else {
+        toast.error("Failed to deploy template");
+      }
+    }
+  };
+  
   const handleAiSend = async () => {
     if (!aiMessage.trim()) return;
     
@@ -183,7 +355,7 @@ const TemplateDetails = () => {
         description: template.description,
         type: template.type,
         provider: template.provider,
-        code: template.code,
+        code: code,
         parameters: parameters,
         variables: variables
       } : null;
@@ -256,75 +428,142 @@ const TemplateDetails = () => {
     }
   };
   
-  // Effect to fetch template data when ID changes
-  useEffect(() => {
-    const fetchTemplate = async () => {
-      if (!templateId) {
-        setError("No template ID provided");
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        setLoading(true);
-        const templateData = await cmpService.getTemplate(templateId);
-        
-        if (templateData) {
-          setTemplate(templateData);
-          setCode(templateData.code || "");
-          
-          // Initialize parameters and variables from template data
-          if (templateData.parameters) {
-            console.log("Loading parameters from template:", templateData.parameters);
-            setParameters(templateData.parameters);
-          } else {
-            console.log("No parameters found in template data");
-            setParameters([]);
-          }
-          
-          if (templateData.variables) {
-            console.log("Loading variables from template:", templateData.variables);
-            setVariables(templateData.variables);
-          } else {
-            console.log("No variables found in template data");
-            setVariables([]);
-          }
-          
-          // Fetch template versions
-          await fetchVersions(templateId);
-          
-          // Fetch environments
-          await fetchEnvironments();
-          
-          // Set default deployment name
-          if (templateData.name) {
-            setDeploymentName(`${templateData.name}-deployment`);
-          }
-        } else {
-          setError("Template not found");
-        }
-      } catch (err) {
-        console.error("Error fetching template:", err);
-        setError("Failed to load template details");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const handleRestoreVersion = async (version: TemplateVersion) => {
+    if (!template || !templateId) return;
     
-    fetchTemplate();
-  }, [templateId]);
-  
-  // Load Azure OpenAI settings when component mounts
-  useEffect(() => {
-    loadAzureOpenAISettings();
-  }, []);
-  
-  // Scroll to bottom of chat when messages change
-  useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    try {
+      // Fetch the version's code
+      const response = await fetch(`http://localhost:8000/api/templates/${templateId}/versions/${version.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const versionData = await response.json();
+        
+        // Update the template with this version's code
+        const updatedTemplate = await cmpService.updateTemplate(template.id, {
+          ...template,
+          code: versionData.code
+        });
+        
+        if (updatedTemplate) {
+          setTemplate(updatedTemplate);
+          setCode(updatedTemplate.code || "");
+          toast.success(`Restored to version ${version.version}`);
+          
+          // Refresh versions
+          await fetchVersions(templateId);
+        }
+      } else {
+        toast.error("Failed to restore version");
+      }
+    } catch (err) {
+      console.error("Error restoring version:", err);
+      toast.error("Failed to restore version");
     }
-  }, [aiChatMessages]);
+  };
+  
+  const addParameter = () => {
+    const newKey = `param${Object.keys(parameters).length + 1}`;
+    setParameters({
+      ...parameters,
+      [newKey]: {
+        value: "",
+        type: "string"
+      }
+    });
+  };
+  
+  const removeParameter = (key: string) => {
+    const newParams = { ...parameters };
+    delete newParams[key];
+    setParameters(newParams);
+  };
+  
+  const updateParameter = (key: string, field: keyof TemplateParameter, value: string) => {
+    setParameters({
+      ...parameters,
+      [key]: {
+        ...parameters[key],
+        [field]: value
+      }
+    });
+  };
+  
+  const renameParameter = (oldKey: string, newKey: string) => {
+    if (oldKey === newKey) return;
+    
+    // Check if the new key already exists
+    if (parameters[newKey]) {
+      toast.error(`Parameter with name "${newKey}" already exists`);
+      return;
+    }
+    
+    const newParams = { ...parameters };
+    newParams[newKey] = newParams[oldKey];
+    delete newParams[oldKey];
+    setParameters(newParams);
+  };
+  
+  const addVariable = () => {
+    const newKey = `var${Object.keys(variables).length + 1}`;
+    setVariables({
+      ...variables,
+      [newKey]: {
+        value: "",
+        type: "string"
+      }
+    });
+  };
+  
+  const removeVariable = (key: string) => {
+    const newVars = { ...variables };
+    delete newVars[key];
+    setVariables(newVars);
+  };
+  
+  const updateVariable = (key: string, field: keyof TemplateVariable, value: string) => {
+    setVariables({
+      ...variables,
+      [key]: {
+        ...variables[key],
+        [field]: value
+      }
+    });
+  };
+  
+  const renameVariable = (oldKey: string, newKey: string) => {
+    if (oldKey === newKey) return;
+    
+    // Check if the new key already exists
+    if (variables[newKey]) {
+      toast.error(`Variable with name "${newKey}" already exists`);
+      return;
+    }
+    
+    const newVars = { ...variables };
+    newVars[newKey] = newVars[oldKey];
+    delete newVars[oldKey];
+    setVariables(newVars);
+  };
+  
+  const togglePasswordVisibility = (key: string) => {
+    setShowPasswordValues({
+      ...showPasswordValues,
+      [key]: !showPasswordValues[key]
+    });
+  };
+  
+  const providerColor = (provider: string) => {
+    switch (provider) {
+      case "azure": return "bg-cloud-azure text-white";
+      case "aws": return "bg-cloud-aws text-black";
+      case "gcp": return "bg-cloud-gcp text-white";
+      default: return "bg-muted text-muted-foreground";
+    }
+  };
   
   if (loading) {
     return (
@@ -356,14 +595,14 @@ const TemplateDetails = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex justify-between items-center">
         <Button variant="outline" onClick={() => navigate(-1)}>
           <ChevronLeft className="mr-2 h-4 w-4" />
           Back to Templates
         </Button>
         <div className="space-x-2">
-          <Button style={{ backgroundColor: "darkorange" }} onClick={() => setIsDeployDialogOpen(true)}>
+          <Button style={{ backgroundColor: "darkorange" }} onClick={() => setDeployDialogOpen(true)}>
             <Play className="mr-2 h-4 w-4" />
             Deploy Template
           </Button>
@@ -371,7 +610,7 @@ const TemplateDetails = () => {
       </div>
       
       {/* Add back the Dialog component for deployment */}
-      <Dialog open={isDeployDialogOpen} onOpenChange={setIsDeployDialogOpen}>
+      <Dialog open={deployDialogOpen} onOpenChange={setDeployDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Deploy Template</DialogTitle>
@@ -381,19 +620,19 @@ const TemplateDetails = () => {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="deploymentName">Deployment Name</Label>
+              <Label htmlFor="deployName">Deployment Name</Label>
               <Input 
-                id="deploymentName" 
-                value={deploymentName} 
-                onChange={(e) => setDeploymentName(e.target.value)}
+                id="deployName" 
+                value={deployName} 
+                onChange={(e) => setDeployName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="environment">Environment</Label>
+              <Label htmlFor="deployEnv">Environment</Label>
               <Select 
-                value={selectedEnvironment?.id} 
-                onValueChange={(value) => setSelectedEnvironment(environments.find(env => env.id === value))}
-                disabled={isDeploying}
+                value={deployEnv} 
+                onValueChange={setDeployEnv}
+                disabled={deploymentInProgress}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select an environment" />
@@ -468,11 +707,11 @@ const TemplateDetails = () => {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeployDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setDeployDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleDeployTemplate}>
-              {isDeploying ? (
+              {deploymentInProgress ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Deploying...
@@ -488,9 +727,9 @@ const TemplateDetails = () => {
         </DialogContent>
       </Dialog>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <Collapsible open={activeTab === "code"} onOpenChange={setActiveTab}>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 space-y-6">
+          <Collapsible open={codeExpanded} onOpenChange={setCodeExpanded}>
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
@@ -500,7 +739,7 @@ const TemplateDetails = () => {
                   </CardTitle>
                   <CollapsibleTrigger asChild>
                     <Button variant="ghost" size="sm">
-                      {activeTab === "code" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      {codeExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
                   </CollapsibleTrigger>
                 </div>
@@ -527,7 +766,7 @@ const TemplateDetails = () => {
             </Card>
           </Collapsible>
           
-          <Collapsible open={activeTab === "params"} onOpenChange={setActiveTab}>
+          <Collapsible open={paramsExpanded} onOpenChange={setParamsExpanded}>
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
@@ -537,7 +776,7 @@ const TemplateDetails = () => {
                   </CardTitle>
                   <CollapsibleTrigger asChild>
                     <Button variant="ghost" size="sm">
-                      {activeTab === "params" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      {paramsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
                   </CollapsibleTrigger>
                 </div>
@@ -792,6 +1031,84 @@ const TemplateDetails = () => {
             </CardContent>
           </Card>
           
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <History className="mr-2 h-5 w-5" />
+                Version History
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-2 pt-0">
+              <div className="h-[200px] overflow-auto">
+              {loadingVersions ? (
+                <div className="text-center py-4">
+                  <p>Loading versions...</p>
+                </div>
+              ) : versions.length === 0 ? (
+                <div className="text-center py-4">
+                  <p className="text-muted-foreground">No version history available</p>
+                </div>
+              ) : (
+                <div className="space-y-4" style={{ padding: "0px 20px 0px 0px"}}>
+                  {versions.map((version) => (
+                    <div key={version.id} className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-medium">Version {version.version}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(version.created_at).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {version.changes}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          By: {version.created_by}
+                        </p>
+                      </div>
+                      {version.is_current ? (
+                        <Badge>Current</Badge>
+                      ) : (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleRestoreVersion(version)}
+                        >
+                          Restore
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <MessagesSquare className="mr-2 h-5 w-5" />
+                AI Assistant
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="space-y-4">
+                <div className="h-[200px] overflow-auto border rounded-md p-4">
+                  {/* AI chat messages would go here */}
+                  <p className="text-muted-foreground">Ask questions about this template or request changes</p>
+                </div>
+                <div className="flex space-x-2">
+                  <Input 
+                    placeholder="Ask a question about this template..."
+                    value={aiMessage}
+                    onChange={(e) => setAiMessage(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAiSend()}
+                  />
+                  <Button onClick={handleAiSend}>Send</Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
           <Card className={`${aiExpanded ? "fixed inset-4 z-50 overflow-hidden flex flex-col" : ""}`}>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -862,62 +1179,10 @@ const TemplateDetails = () => {
               </div>
               
               <p className="text-xs text-muted-foreground">
-                {!azureOpenAISettings.enabled ? 
+                {!isConfigured ? 
                   "Note: Azure OpenAI is not configured. Configure it in Settings for enhanced AI capabilities." :
                   "Ask questions about this template, request explanations, or suggest modifications."}
               </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <History className="mr-2 h-5 w-5" />
-                Version History
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-2 pt-0">
-              <div className="h-[200px] overflow-auto">
-              {loadingVersions ? (
-                <div className="text-center py-4">
-                  <p>Loading versions...</p>
-                </div>
-              ) : versions.length === 0 ? (
-                <div className="text-center py-4">
-                  <p className="text-muted-foreground">No version history available</p>
-                </div>
-              ) : (
-                <div className="space-y-4" style={{ padding: "0px 20px 0px 0px"}}>
-                  {versions.map((version) => (
-                    <div key={version.id} className="flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-medium">Version {version.version}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(version.created_at).toLocaleString()}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {version.changes}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          By: {version.created_by}
-                        </p>
-                      </div>
-                      {version.is_current ? (
-                        <Badge>Current</Badge>
-                      ) : (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleRestoreVersion(version)}
-                        >
-                          Restore
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              </div>
             </CardContent>
           </Card>
         </div>
