@@ -170,21 +170,17 @@ def get_current_user(authorization: str = Header(None)):
         # Extract user information
         user_id = user_data.get("id")
         username = user_data.get("username")
-        tenant_id = user_data.get("tenantId")
+        tenant_id = user_data.get("tenantId")  # Use camelCase as returned by backend API
         
         # Extract permissions from user data
         permissions = user_data.get("permissions", [])
         if not isinstance(permissions, list):
             permissions = []
         
-        # Get role information
-        role = user_data.get("role")
+        # Extract role from user data
+        role = user_data.get("role", "user")
         
-        logger.debug(f"Extracted user_id: {user_id}")
-        logger.debug(f"Extracted username: {username}")
-        logger.debug(f"Extracted tenant_id: {tenant_id}")
-        logger.debug(f"Extracted permissions: {permissions}")
-        logger.debug(f"Extracted role: {role}")
+        logger.debug(f"Extracted user info: user_id={user_id}, username={username}, tenant_id={tenant_id}, role={role}")
         
         return {
             "user_id": user_id,
