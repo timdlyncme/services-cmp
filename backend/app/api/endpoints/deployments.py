@@ -101,6 +101,10 @@ def get_azure_credentials(
         engine_status = {"configured": False, "message": "Unknown status"}
         if response.status_code == 200:
             engine_status = response.json()
+        else:
+            # If deployment engine returns an error, still show the credentials from database
+            logger.warning(f"Deployment engine credentials check failed: {response.text}")
+            engine_status = {"configured": True, "message": "Credentials managed in database"}
         
         # Format response
         result = []
@@ -254,6 +258,10 @@ def get_azure_credential(
         engine_status = {"configured": False, "message": "Unknown status"}
         if response.status_code == 200:
             engine_status = response.json()
+        else:
+            # If deployment engine returns an error, still show the credentials from database
+            logger.warning(f"Deployment engine credentials check failed: {response.text}")
+            engine_status = {"configured": True, "message": "Credentials managed in database"}
         
         return {
             "id": str(creds.settings_id),  # Use settings_id as the ID
@@ -935,30 +943,27 @@ def create_deployment(
                 engine_deployment["settings_id"] = str(cloud_settings.settings_id)
                 # Extract credentials from connection_details
                 if cloud_settings.connection_details:
-                    # Debug: Print the connection_details structure
                     print(f"Connection details structure: {json.dumps(cloud_settings.connection_details, default=str)}")
                     
-                    # Check if connection_details is a string (JSON) and parse it
+                    # Handle both string and dict formats for connection_details
                     if isinstance(cloud_settings.connection_details, str):
-                        try:
-                            connection_details = json.loads(cloud_settings.connection_details)
-                            print(f"Parsed connection_details from JSON string: {json.dumps(connection_details, default=str)}")
-                        except json.JSONDecodeError as e:
-                            print(f"Error parsing connection_details JSON: {str(e)}")
-                            connection_details = {}
+                        # Parse JSON string
+                        connection_details = json.loads(cloud_settings.connection_details)
+                        print(f"Parsed connection details from string: {json.dumps(connection_details, default=str)}")
                     else:
+                        # Already a dict
                         connection_details = cloud_settings.connection_details
                     
                     # Extract credentials from the connection_details
                     engine_deployment["client_id"] = connection_details.get("client_id", "")
                     engine_deployment["client_secret"] = connection_details.get("client_secret", "")
                     engine_deployment["tenant_id"] = connection_details.get("tenant_id", "")
-                    # If subscription_id is already set from cloud_account, don't override it
-                    if "subscription_id" not in engine_deployment or not engine_deployment["subscription_id"]:
-                        engine_deployment["subscription_id"] = connection_details.get("subscription_id", "")
+                    engine_deployment["subscription_id"] = connection_details.get("subscription_id", "")
                     
                     # Debug log for credentials
                     print(f"Extracted credentials from connection_details: client_id={engine_deployment['client_id'] != ''}, client_secret={engine_deployment['client_secret'] != ''}, tenant_id={engine_deployment['tenant_id'] != ''}, subscription_id={engine_deployment.get('subscription_id', '') != ''}")
+            else:
+                print("No cloud_settings found for this deployment")
             
             # Debug: Print engine deployment data (redact sensitive info)
             debug_data = engine_deployment.copy()
