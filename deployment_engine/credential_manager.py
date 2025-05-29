@@ -17,7 +17,7 @@ from deploy.azure import AzureDeployer
 logger = logging.getLogger(__name__)
 
 # Database configuration
-POSTGRES_SERVER = os.getenv("POSTGRES_SERVER", "localhost")
+POSTGRES_SERVER = os.getenv("POSTGRES_SERVER", "db")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "cmpuser")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "cmppassword")
