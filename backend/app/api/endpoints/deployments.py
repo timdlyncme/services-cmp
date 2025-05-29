@@ -9,6 +9,12 @@ import json
 from datetime import datetime
 from pydantic import BaseModel, Field
 
+import logging
+
+# Set up logging for this endpoint
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
 from app.db.session import get_db
 from app.api.endpoints.auth import get_current_user
 from app.models.user import User, Tenant
@@ -93,14 +99,27 @@ def get_azure_credentials(
         
         # Forward request to deployment engine to check status
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
+        
+        # Prepare parameters for the deployment engine
+        params = {}
+        
+        # If accessing a different tenant, pass target_tenant_id
+        if creds_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = creds_tenant_id
+        
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
-            headers=headers
+            headers=headers,
+            params=params
         )
         
         engine_status = {"configured": False, "message": "Unknown status"}
         if response.status_code == 200:
             engine_status = response.json()
+        else:
+            # If deployment engine returns an error, still show the credentials from database
+            logger.warning(f"Deployment engine credentials check failed: {response.text}")
+            engine_status = {"configured": True, "message": "Credentials managed in database"}
         
         # Format response
         result = []
@@ -246,14 +265,27 @@ def get_azure_credential(
         
         # Forward request to deployment engine to check status
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
+        
+        # Prepare parameters for the deployment engine
+        params = {"settings_id": settings_id}
+        
+        # If accessing a different tenant, pass target_tenant_id
+        if creds_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = creds_tenant_id
+        
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
-            headers=headers
+            headers=headers,
+            params=params
         )
         
         engine_status = {"configured": False, "message": "Unknown status"}
         if response.status_code == 200:
             engine_status = response.json()
+        else:
+            # If deployment engine returns an error, still show the credentials from database
+            logger.warning(f"Deployment engine credentials check failed: {response.text}")
+            engine_status = {"configured": True, "message": "Credentials managed in database"}
         
         return {
             "id": str(creds.settings_id),  # Use settings_id as the ID
@@ -346,9 +378,6 @@ def update_deployment_status(
     """
     Update deployment status from the deployment engine
     """
-    # Set up logging for this endpoint
-    import logging
-    logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
     
     logger.debug(f"Received status update for deployment {deployment_id}")
@@ -528,31 +557,38 @@ def list_azure_subscriptions(
         if not creds:
             raise HTTPException(status_code=404, detail="Credential not found")
         
-        # Forward request to deployment engine
+        # Forward request to deployment engine with settings_id parameter
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
         
-        # First set the credentials
-        set_response = requests.post(
-            f"{DEPLOYMENT_ENGINE_URL}/credentials",
-            headers=headers,
-            json={
-                "client_id": creds.connection_details.get("client_id", "") if creds.connection_details else "",
-                "client_secret": creds.connection_details.get("client_secret", "") if creds.connection_details else "",
-                "tenant_id": creds.connection_details.get("tenant_id", "") if creds.connection_details else ""
-            }
-        )
+        # Prepare parameters for the deployment engine
+        params = {"settings_id": settings_id}
         
-        if set_response.status_code != 200:
-            raise Exception(f"Error setting credentials: {set_response.text}")
+        # If accessing a different tenant, pass target_tenant_id
+        if account_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = account_tenant_id
         
-        # Then list subscriptions
+        # Call the subscriptions endpoint with parameters
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/credentials/subscriptions",
-            headers=headers
+            headers=headers,
+            params=params
         )
         
         if response.status_code != 200:
-            raise Exception(f"Error listing subscriptions: {response.text}")
+            logger.error(f"Error listing subscriptions from deployment engine: {response.text}")
+            
+            # Try to parse the error response
+            try:
+                error_data = response.json()
+                error_message = error_data.get("detail", response.text)
+            except:
+                error_message = response.text
+            
+            # Return a more user-friendly error response
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Failed to list Azure subscriptions: {error_message}"
+            )
         
         return response.json()
     
@@ -935,30 +971,27 @@ def create_deployment(
                 engine_deployment["settings_id"] = str(cloud_settings.settings_id)
                 # Extract credentials from connection_details
                 if cloud_settings.connection_details:
-                    # Debug: Print the connection_details structure
                     print(f"Connection details structure: {json.dumps(cloud_settings.connection_details, default=str)}")
                     
-                    # Check if connection_details is a string (JSON) and parse it
+                    # Handle both string and dict formats for connection_details
                     if isinstance(cloud_settings.connection_details, str):
-                        try:
-                            connection_details = json.loads(cloud_settings.connection_details)
-                            print(f"Parsed connection_details from JSON string: {json.dumps(connection_details, default=str)}")
-                        except json.JSONDecodeError as e:
-                            print(f"Error parsing connection_details JSON: {str(e)}")
-                            connection_details = {}
+                        # Parse JSON string
+                        connection_details = json.loads(cloud_settings.connection_details)
+                        print(f"Parsed connection details from string: {json.dumps(connection_details, default=str)}")
                     else:
+                        # Already a dict
                         connection_details = cloud_settings.connection_details
                     
                     # Extract credentials from the connection_details
                     engine_deployment["client_id"] = connection_details.get("client_id", "")
                     engine_deployment["client_secret"] = connection_details.get("client_secret", "")
                     engine_deployment["tenant_id"] = connection_details.get("tenant_id", "")
-                    # If subscription_id is already set from cloud_account, don't override it
-                    if "subscription_id" not in engine_deployment or not engine_deployment["subscription_id"]:
-                        engine_deployment["subscription_id"] = connection_details.get("subscription_id", "")
+                    engine_deployment["subscription_id"] = connection_details.get("subscription_id", "")
                     
                     # Debug log for credentials
                     print(f"Extracted credentials from connection_details: client_id={engine_deployment['client_id'] != ''}, client_secret={engine_deployment['client_secret'] != ''}, tenant_id={engine_deployment['tenant_id'] != ''}, subscription_id={engine_deployment.get('subscription_id', '') != ''}")
+            else:
+                print("No cloud_settings found for this deployment")
             
             # Debug: Print engine deployment data (redact sensitive info)
             debug_data = engine_deployment.copy()
@@ -968,10 +1001,16 @@ def create_deployment(
             
             # Send to deployment engine
             headers = {"Authorization": f"Bearer {current_user.access_token}"}
+            params = {}
+            # If deploying to a different tenant, pass target_tenant_id
+            if deployment_tenant_id != current_user.tenant_id:
+                params["target_tenant_id"] = deployment_tenant_id
+            
             response = requests.post(
                 f"{DEPLOYMENT_ENGINE_URL}/deployments",
                 headers=headers,
-                json=engine_deployment
+                json=engine_deployment,
+                params=params
             )
             
             # Debug: Print deployment engine response

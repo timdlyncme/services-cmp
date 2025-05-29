@@ -256,8 +256,30 @@ const Settings = () => {
       toast.success(`Connection test successful. Found ${subs.length} subscriptions.`);
     } catch (error) {
       console.error("Error testing Azure connection:", error);
-      addLog(`Connection test failed for ${credential.name}: ${error instanceof Error ? error.message : String(error)}`, "error");
-      toast.error(`Connection test failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      
+      // Extract error message from axios error response
+      let errorMessage = "Unknown error";
+      if (error && typeof error === 'object') {
+        if ('response' in error && error.response && typeof error.response === 'object') {
+          // Axios error with response
+          const response = error.response as any;
+          if (response.data && typeof response.data === 'object' && 'detail' in response.data) {
+            errorMessage = response.data.detail;
+          } else if (response.data && typeof response.data === 'string') {
+            errorMessage = response.data;
+          } else if (response.statusText) {
+            errorMessage = response.statusText;
+          }
+        } else if ('message' in error && typeof error.message === 'string') {
+          // Standard Error object
+          errorMessage = error.message;
+        }
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      addLog(`Connection test failed for ${credential.name}: ${errorMessage}`, "error");
+      toast.error(`Connection test failed: ${errorMessage}`);
     } finally {
       setIsTestingConnection(prev => ({ ...prev, [credential.id]: false }));
     }

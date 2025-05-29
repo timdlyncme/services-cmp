@@ -10,6 +10,7 @@ import logging
 import threading
 import time
 from deploy.azure import AzureDeployer
+from credential_manager import credential_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -26,9 +27,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Azure deployer
-azure_deployer = AzureDeployer()
-
 # API settings
 API_URL = os.getenv("API_URL", "http://api:8000")
 
@@ -38,7 +36,7 @@ deployments = {}
 # Active polling threads
 polling_threads = {}
 
-def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, access_token):
+def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, access_token, tenant_id):
     """
     Background task to poll for deployment status updates
     
@@ -47,6 +45,7 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
         resource_group: The Azure resource group
         azure_deployment_id: The Azure deployment ID
         access_token: The user's access token for authentication
+        tenant_id: The user's tenant ID
     """
     logger.info(f"Starting status polling for deployment {deployment_id}")
     logger.info(f"Resource group: {resource_group}, Azure deployment ID: {azure_deployment_id}")
@@ -54,6 +53,14 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
     try:
         # Continue polling until deployment is complete or failed
         while True:
+            # Get tenant-specific Azure deployer with fresh credentials
+            azure_deployer = credential_manager.create_azure_deployer_for_tenant(
+                tenant_id
+            )
+            if not azure_deployer:
+                logger.error(f"Failed to get Azure deployer for tenant {tenant_id}")
+                break
+            
             # Get deployment status from Azure
             logger.info(f"Polling Azure for deployment status: {azure_deployment_id}")
             azure_status = azure_deployer.get_deployment_status(
@@ -163,21 +170,17 @@ def get_current_user(authorization: str = Header(None)):
         # Extract user information
         user_id = user_data.get("id")
         username = user_data.get("username")
-        tenant_id = user_data.get("tenantId")
+        tenant_id = user_data.get("tenantId")  # Use camelCase as returned by backend API
         
         # Extract permissions from user data
         permissions = user_data.get("permissions", [])
         if not isinstance(permissions, list):
             permissions = []
         
-        # Get role information
-        role = user_data.get("role")
+        # Extract role from user data
+        role = user_data.get("role", "user")
         
-        logger.debug(f"Extracted user_id: {user_id}")
-        logger.debug(f"Extracted username: {username}")
-        logger.debug(f"Extracted tenant_id: {tenant_id}")
-        logger.debug(f"Extracted permissions: {permissions}")
-        logger.debug(f"Extracted role: {role}")
+        logger.debug(f"Extracted user info: user_id={user_id}, username={username}, tenant_id={tenant_id}, role={role}")
         
         return {
             "user_id": user_id,
@@ -246,29 +249,52 @@ def set_credentials(
     credentials: Dict[str, str],
     user: dict = Depends(check_permission("deployment:manage"))
 ):
-    try:
-        logger.debug(f"Setting credentials for user: {user['username']}")
-        # Set Azure credentials
-        azure_deployer.set_credentials(
-            client_id=credentials["client_id"],
-            client_secret=credentials["client_secret"],
-            tenant_id=credentials["tenant_id"]
-        )
-        
-        return {"message": "Credentials set successfully"}
-    except Exception as e:
-        logger.error(f"Error setting credentials: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    """
+    DEPRECATED: This endpoint is deprecated in favor of database-driven credential management.
+    Credentials are now automatically loaded from the database based on tenant context.
+    This endpoint is maintained for backward compatibility but does not perform any action.
+    """
+    logger.warning(f"Deprecated /credentials endpoint called by user: {user['username']}")
+    return {"message": "Credentials are now managed automatically from database"}
 
 @app.get("/credentials")
-def get_credentials(user: dict = Depends(check_permission("deployment:read"))):
+def get_credentials(
+    settings_id: Optional[str] = None,
+    target_tenant_id: Optional[str] = None,
+    user: dict = Depends(check_permission("deployment:read"))
+):
+    """
+    Get Azure credentials status for the current tenant or a target tenant.
+    Credentials are loaded fresh from the database.
+    
+    Args:
+        settings_id (Optional[str]): Specific settings ID to use for credentials
+        target_tenant_id (Optional[str]): Target tenant ID (admin/MSP only)
+    """
     try:
-        logger.debug(f"Getting credentials for user: {user['username']}")
-        # Get Azure credentials status
-        status = azure_deployer.get_credential_status()
+        # Determine which tenant to use
+        tenant_id = user["tenant_id"]
+        
+        # If target_tenant_id is provided, check if user has permission to access other tenants
+        if target_tenant_id and target_tenant_id != user["tenant_id"]:
+            # Only admin or MSP users can access other tenants
+            if user.get("role") not in ["admin", "msp"]:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Not authorized to access credentials for other tenants"
+                )
+            tenant_id = target_tenant_id
+        
+        logger.debug(f"Getting credentials status for tenant: {tenant_id}, settings_id: {settings_id}")
+        
+        # Get credential status from database
+        status = credential_manager.get_tenant_credential_status(tenant_id, settings_id)
         return status
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error getting credentials: {str(e)}")
+        logger.error(f"Error getting credentials for tenant {tenant_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/credentials/subscription")
@@ -276,26 +302,61 @@ def set_subscription(
     subscription: Dict[str, str],
     user: dict = Depends(check_permission("deployment:manage"))
 ):
-    try:
-        logger.debug(f"Setting subscription for user: {user['username']}")
-        # Set Azure subscription
-        result = azure_deployer.set_subscription(
-            subscription_id=subscription["subscription_id"]
-        )
-        return result
-    except Exception as e:
-        logger.error(f"Error setting subscription: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    """
+    DEPRECATED: Subscription management is now handled automatically.
+    This endpoint is maintained for backward compatibility.
+    """
+    logger.warning(f"Deprecated /credentials/subscription endpoint called by user: {user['username']}")
+    return {"message": "Subscription management is now handled automatically"}
 
 @app.get("/credentials/subscriptions")
-def list_subscriptions(user: dict = Depends(check_permission("deployment:read"))):
+def list_subscriptions(
+    settings_id: Optional[str] = None,
+    target_tenant_id: Optional[str] = None,
+    user: dict = Depends(check_permission("deployment:read"))
+):
+    """
+    List Azure subscriptions for the current tenant or a target tenant.
+    Uses fresh credentials from the database.
+    
+    Args:
+        settings_id (Optional[str]): Specific settings ID to use for credentials
+        target_tenant_id (Optional[str]): Target tenant ID (admin/MSP only)
+    """
     try:
-        logger.debug(f"Listing subscriptions for user: {user['username']}")
-        # List Azure subscriptions
-        subscriptions = azure_deployer.list_subscriptions()
-        return subscriptions
+        # Determine which tenant to use
+        tenant_id = user["tenant_id"]
+        
+        # If target_tenant_id is provided, check if user has permission to access other tenants
+        if target_tenant_id and target_tenant_id != user["tenant_id"]:
+            # Only admin or MSP users can access other tenants
+            if user.get("role") not in ["admin", "msp"]:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Not authorized to access credentials for other tenants"
+                )
+            tenant_id = target_tenant_id
+        
+        logger.debug(f"Listing subscriptions for tenant: {tenant_id}, settings_id: {settings_id}")
+        
+        # Get subscriptions using tenant-specific credentials
+        result = credential_manager.list_tenant_subscriptions(
+            tenant_id, 
+            settings_id=settings_id
+        )
+        
+        # Check if the operation was successful
+        if not result.get("success", False):
+            error_message = result.get("error", "Unknown error occurred")
+            logger.error(f"Failed to list subscriptions for tenant {tenant_id}: {error_message}")
+            raise HTTPException(status_code=400, detail=error_message)
+        
+        return result.get("subscriptions", [])
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error listing subscriptions: {str(e)}")
+        logger.error(f"Error listing subscriptions for tenant {tenant_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Deployment endpoints
@@ -303,9 +364,26 @@ def list_subscriptions(user: dict = Depends(check_permission("deployment:read"))
 def create_deployment(
     deployment: Dict[str, Any],
     background_tasks: BackgroundTasks,
+    target_tenant_id: Optional[str] = None,
     user: dict = Depends(check_permission("deployment:create"))
 ):
     try:
+        # Determine which tenant to use for this deployment
+        deployment_tenant_id = user["tenant_id"]
+        
+        # If target_tenant_id is provided, check if user has permission to deploy for other tenants
+        if target_tenant_id and target_tenant_id != user["tenant_id"]:
+            # Only admin or MSP users can deploy for other tenants
+            if user.get("role") not in ["admin", "msp"]:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Not authorized to create deployments for other tenants"
+                )
+            deployment_tenant_id = target_tenant_id
+            logger.info(f"Using target tenant ID for deployment: {deployment_tenant_id}")
+        else:
+            logger.info(f"Using user's tenant ID for deployment: {deployment_tenant_id}")
+        
         # Use the deployment ID from the backend if provided, otherwise generate a new one
         deployment_id = deployment.get("deployment_id")
         if not deployment_id:
@@ -345,27 +423,35 @@ def create_deployment(
         client_secret = deployment.get("client_secret")
         tenant_id = deployment.get("tenant_id")
         subscription_id = deployment.get("subscription_id")
+        settings_id = deployment.get("settings_id")  # Optional specific settings ID
         
         logger.info(f"Credentials provided: client_id={bool(client_id)}, client_secret={bool(client_secret)}, tenant_id={bool(tenant_id)}, subscription_id={bool(subscription_id)}")
         
-        # Set Azure credentials from deployment request
+        # Get tenant-specific Azure deployer with fresh credentials from database
+        azure_deployer = credential_manager.create_azure_deployer_for_tenant(
+            deployment_tenant_id, 
+            settings_id=settings_id
+        )
+        
+        if not azure_deployer:
+            logger.error(f"Failed to get Azure credentials for tenant {deployment_tenant_id}")
+            raise ValueError("Azure credentials not configured for this tenant")
+        
+        # If credentials are provided in the deployment request, use them to override
         if client_id and client_secret and tenant_id:
-            logger.info("Setting Azure credentials from deployment request")
+            logger.info("Using Azure credentials from deployment request")
             azure_deployer.set_credentials(
                 client_id=client_id,
                 client_secret=client_secret,
                 tenant_id=tenant_id,
                 subscription_id=subscription_id
             )
-        else:
-            logger.error(f"Missing required credentials: client_id={bool(client_id)}, client_secret={bool(client_secret)}, tenant_id={bool(tenant_id)}")
-            raise ValueError("Missing required Azure credentials")
         
-        # Check if Azure credentials are configured
+        # Verify credentials are configured
         cred_status = azure_deployer.get_credential_status()
         if not cred_status.get("configured", False):
-            logger.error("Azure credentials not configured")
-            raise ValueError("Azure credentials not configured")
+            logger.error("Azure credentials not properly configured")
+            raise ValueError("Azure credentials not properly configured")
         
         # Set subscription if provided and not already set
         if subscription_id and azure_deployer.subscription_id != subscription_id:
@@ -410,7 +496,7 @@ def create_deployment(
             "deployment_type": deployment_type,
             "status": result.get("status", "in_progress"),
             "azure_deployment_id": azure_deployment_name,
-            "tenant_id": user["tenant_id"],
+            "tenant_id": deployment_tenant_id,
             "created_by": user["user_id"],
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat(),
@@ -422,18 +508,15 @@ def create_deployment(
         
         logger.info(f"Stored deployment details in memory: {deployment_id}")
         
-        # Start status polling in a background thread
+        # Start background polling for deployment status
         logger.info(f"Starting background polling thread for deployment {deployment_id}")
         thread = threading.Thread(
             target=poll_deployment_status,
-            args=(deployment_id, resource_group, azure_deployment_name, user["token"])
+            args=(deployment_id, resource_group, azure_deployment_name, user["token"], deployment_tenant_id)
         )
         thread.daemon = True
         thread.start()
-        
-        # Store thread reference
         polling_threads[deployment_id] = thread
-        logger.info(f"Background polling thread started for deployment {deployment_id}")
         
         return {
             "deployment_id": deployment_id,  # Return the consistent deployment ID
@@ -492,17 +575,23 @@ def get_deployment(
         # Always get deployment status from Azure
         if deployment.get("azure_deployment_id") and deployment.get("resource_group"):
             try:
-                azure_status = azure_deployer.get_deployment_status(
-                    resource_group=deployment["resource_group"],
-                    deployment_name=deployment["azure_deployment_id"]
+                # Get tenant-specific Azure deployer with fresh credentials
+                azure_deployer = credential_manager.create_azure_deployer_for_tenant(
+                    user["tenant_id"]
                 )
                 
-                # Update deployment status
-                deployment["status"] = azure_status.get("status", deployment["status"])
-                deployment["resources"] = azure_status.get("resources", [])
-                deployment["outputs"] = azure_status.get("outputs", {})
-                deployment["logs"] = azure_status.get("logs", [])
-                deployment["updated_at"] = datetime.utcnow().isoformat()
+                if azure_deployer:
+                    azure_status = azure_deployer.get_deployment_status(
+                        resource_group=deployment["resource_group"],
+                        deployment_name=deployment["azure_deployment_id"]
+                    )
+                    
+                    # Update deployment status
+                    deployment["status"] = azure_status.get("status", deployment["status"])
+                    deployment["resources"] = azure_status.get("resources", [])
+                    deployment["outputs"] = azure_status.get("outputs", {})
+                    deployment["logs"] = azure_status.get("logs", [])
+                    deployment["updated_at"] = datetime.utcnow().isoformat()
             except Exception as e:
                 logger.error(f"Error getting deployment status from Azure: {str(e)}")
                 # Don't fail the request if Azure status check fails
@@ -532,6 +621,15 @@ def update_deployment(
         # Extract update details
         template = update_data.get("template")
         parameters = update_data.get("parameters")
+        
+        # Get tenant-specific Azure deployer with fresh credentials
+        azure_deployer = credential_manager.create_azure_deployer_for_tenant(
+            user["tenant_id"]
+        )
+        
+        if not azure_deployer:
+            logger.error(f"Failed to get Azure credentials for tenant {user['tenant_id']}")
+            raise HTTPException(status_code=500, detail="Azure credentials not configured for this tenant")
         
         # Prepare template data
         template_data = None
@@ -577,6 +675,15 @@ def delete_deployment(
         deployment = deployments[deployment_id]
         if deployment["tenant_id"] != user["tenant_id"]:
             raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Get tenant-specific Azure deployer with fresh credentials
+        azure_deployer = credential_manager.create_azure_deployer_for_tenant(
+            user["tenant_id"]
+        )
+        
+        if not azure_deployer:
+            logger.error(f"Failed to get Azure credentials for tenant {user['tenant_id']}")
+            raise HTTPException(status_code=500, detail="Azure credentials not configured for this tenant")
         
         # Delete deployment from Azure
         result = azure_deployer.delete_deployment(
