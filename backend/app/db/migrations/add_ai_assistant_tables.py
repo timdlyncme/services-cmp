@@ -51,7 +51,8 @@ def upgrade():
     # Initialize the config table with default values if it's empty
     with engine.connect() as conn:
         # Check if the config table is empty
-        result = conn.execute("SELECT COUNT(*) FROM ai_assistant_config")
+        from sqlalchemy import text
+        result = conn.execute(text("SELECT COUNT(*) FROM ai_assistant_config"))
         count = result.scalar()
         
         if count == 0:
@@ -82,4 +83,3 @@ def downgrade():
 
 if __name__ == "__main__":
     upgrade()
-
