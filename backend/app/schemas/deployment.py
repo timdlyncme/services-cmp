@@ -271,7 +271,7 @@ class DeploymentDetailResponse(DeploymentResponse):
     deployment_type: str
     template_source: str
     template_url: Optional[str] = None
-    cloud_region: Optional[str] = None
+    cloud_properties: Optional[Dict[str, Any]] = None  # Cloud properties like location, resource_group, etc.
     cloud_resources: Optional[List[Dict[str, Any]]] = None
     outputs: Optional[Dict[str, Any]] = None
     logs: Optional[str] = None

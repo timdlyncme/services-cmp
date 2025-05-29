@@ -20,8 +20,7 @@ class DeploymentDetails(Base):
     
     # Cloud-specific details
     cloud_deployment_id = Column(String, nullable=True)  # ID from the cloud provider
-    cloud_region = Column(String, nullable=True)
-    resource_group = Column(String, nullable=True)  # Resource group name
+    cloud_properties = Column(JSON, nullable=True)  # Cloud properties like location, resource_group, etc.
     cloud_resources = Column(JSON, nullable=True)  # List of resources created
     
     # Deployment logs and outputs
