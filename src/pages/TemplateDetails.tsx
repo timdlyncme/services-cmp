@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -10,12 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { CloudTemplate, TemplateParameter, TemplateVariable } from "@/types/cloud";
-import { ChevronLeft, Save, Play, MessagesSquare, History, FileEdit, Plus, Trash2, ChevronDown, ChevronUp, Eye, EyeOff, Loader2 } from "lucide-react";
+import { ChevronLeft, Save, Play, MessagesSquare, History, FileEdit, Plus, Trash2, ChevronDown, ChevronUp, Eye, EyeOff, Loader2, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 import { cmpService } from "@/services/cmp-service";
 import { deploymentService } from "@/services/deployment-service";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useAzureOpenAI } from "@/contexts/AzureOpenAIContext";
+import { AzureOpenAIService, ChatMessage as AIChatMessage } from "@/services/azureOpenAIService";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface TemplateVersion {
   id: number;
@@ -57,6 +60,16 @@ const TemplateDetails = () => {
   const [paramsExpanded, setParamsExpanded] = useState(true);
   const [showPasswordValues, setShowPasswordValues] = useState<Record<string, boolean>>({});
   const [deploymentInProgress, setDeploymentInProgress] = useState(false);
+  
+  // AI Assistant state
+  const [aiChatMessages, setAiChatMessages] = useState<AIChatMessage[]>([
+    { role: "system", content: "You are an AI assistant that helps with understanding and modifying cloud templates. You have knowledge about Azure, AWS, and GCP resources and infrastructure as code." },
+    { role: "assistant", content: "Hello! I can help you understand and modify this template. What would you like to know?" }
+  ]);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiExpanded, setAiExpanded] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const { isConfigured, config } = useAzureOpenAI();
   
   const fetchVersions = async (templateId: string) => {
     try {
@@ -320,12 +333,74 @@ const TemplateDetails = () => {
     }
   };
   
-  const handleAiSend = () => {
+  const handleAiSend = async () => {
     if (!aiMessage.trim()) return;
     
-    // In a real app, this would call an AI service
-    toast.success("Message sent to AI assistant");
+    // Add user message to chat
+    const userMessage: AIChatMessage = { role: "user", content: aiMessage };
+    setAiChatMessages(prev => [...prev, userMessage]);
     setAiMessage("");
+    setIsAiLoading(true);
+    
+    try {
+      if (isConfigured) {
+        // Use Azure OpenAI service
+        const azureOpenAIService = new AzureOpenAIService(config);
+        
+        // Create context about the template
+        const systemMessage: AIChatMessage = {
+          role: "system",
+          content: `You are an AI assistant helping with a cloud template. 
+          Template details:
+          Name: ${template?.name}
+          Type: ${template?.type}
+          Provider: ${template?.provider}
+          Description: ${template?.description}
+          
+          The user is asking about this template. Provide helpful, concise responses.`
+        };
+        
+        // Get response from Azure OpenAI
+        const response = await azureOpenAIService.sendChatCompletion(
+          [systemMessage, ...aiChatMessages, userMessage],
+          { temperature: 0.7 }
+        );
+        
+        // Add AI response to chat
+        setAiChatMessages(prev => [...prev, { role: "assistant", content: response }]);
+      } else {
+        // Fallback for when Azure OpenAI is not configured
+        // Simulate a response after a delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        let mockResponse = "I'd be happy to help with this template, but it seems the AI service is not fully configured. ";
+        mockResponse += "You can configure Azure OpenAI in the Settings page to enable AI assistance.";
+        
+        if (template) {
+          // Add some template-specific mock response
+          if (aiMessage.toLowerCase().includes("what") && aiMessage.toLowerCase().includes("do")) {
+            mockResponse = `This template creates ${
+              template.provider === "azure" ? "Azure resources including a Resource Group, App Service Plan, and App Service for hosting a web application." :
+              template.provider === "aws" ? "AWS resources including an EKS cluster for deploying containerized microservices." :
+              "Google Cloud resources including a Storage Bucket configured for hosting a static website with CDN."
+            }`;
+          }
+        }
+        
+        setAiChatMessages(prev => [...prev, { role: "assistant", content: mockResponse }]);
+      }
+    } catch (error) {
+      console.error("Error getting AI response:", error);
+      toast.error("Failed to get AI response");
+      
+      // Add error message to chat
+      setAiChatMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: "I'm sorry, I encountered an error while processing your request. Please try again later." 
+      }]);
+    } finally {
+      setIsAiLoading(false);
+    }
   };
   
   const handleRestoreVersion = async (version: TemplateVersion) => {
@@ -495,7 +570,7 @@ const TemplateDetails = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
         <Button variant="outline" onClick={() => navigate(-1)}>
           <ChevronLeft className="mr-2 h-4 w-4" />
@@ -627,8 +702,8 @@ const TemplateDetails = () => {
         </DialogContent>
       </Dialog>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
           <Collapsible open={codeExpanded} onOpenChange={setCodeExpanded}>
             <Card>
               <CardHeader className="pb-3">
@@ -931,42 +1006,58 @@ const TemplateDetails = () => {
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <MessagesSquare className="mr-2 h-5 w-5" />
-                AI Assistant
-              </CardTitle>
+          <Card className={`${aiExpanded ? "fixed inset-4 z-50 overflow-hidden flex flex-col" : ""}`}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center">
+                  <MessagesSquare className="mr-2 h-5 w-5" />
+                  AI Assistant
+                </CardTitle>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={() => setAiExpanded(!aiExpanded)}
+                >
+                  {aiExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </Button>
+              </div>
               <CardDescription>
                 Ask questions about this template or request changes
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="bg-muted/50 p-4 rounded-md h-[200px] overflow-auto">
-                <div className="space-y-4">
-                  <div className="bg-primary/10 p-3 rounded-lg rounded-tl-none max-w-[80%]">
-                    <p className="text-sm">
-                      Hello! I can help you understand and modify this template. What would you like to know?
-                    </p>
-                  </div>
-                  <div className="flex justify-end">
-                    <div className="bg-primary text-primary-foreground p-3 rounded-lg rounded-tr-none max-w-[80%]">
-                      <p className="text-sm">
-                        Can you explain what this template does?
-                      </p>
+            <CardContent className={`space-y-4 ${aiExpanded ? "flex-grow overflow-hidden flex flex-col" : ""}`}>
+              <ScrollArea className={`rounded-md ${aiExpanded ? "flex-grow" : "h-[300px]"}`}>
+                <div className="space-y-4 p-1">
+                  {aiChatMessages.filter(msg => msg.role !== "system").map((message, index) => (
+                    <div 
+                      key={index} 
+                      className={`${
+                        message.role === "assistant" 
+                          ? "bg-primary/10 p-3 rounded-lg rounded-tl-none max-w-[80%]" 
+                          : "flex justify-end"
+                      }`}
+                    >
+                      {message.role === "assistant" ? (
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      ) : (
+                        <div className="bg-primary text-primary-foreground p-3 rounded-lg rounded-tr-none max-w-[80%]">
+                          <p className="text-sm">{message.content}</p>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <div className="bg-primary/10 p-3 rounded-lg rounded-tl-none max-w-[80%]">
-                    <p className="text-sm">
-                      This template creates {
-                        template.provider === "azure" ? "Azure resources including a Resource Group, App Service Plan, and App Service for hosting a web application." :
-                        template.provider === "aws" ? "AWS resources including an EKS cluster for deploying containerized microservices." :
-                        "Google Cloud resources including a Storage Bucket configured for hosting a static website with CDN."
-                      }
-                    </p>
-                  </div>
+                  ))}
+                  {isAiLoading && (
+                    <div className="bg-primary/10 p-3 rounded-lg rounded-tl-none max-w-[80%]">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce"></div>
+                        <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce delay-100"></div>
+                        <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce delay-200"></div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
                 </div>
-              </div>
+              </ScrollArea>
               
               <div className="flex space-x-2">
                 <Input 
@@ -974,11 +1065,21 @@ const TemplateDetails = () => {
                   value={aiMessage}
                   onChange={(e) => setAiMessage(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAiSend()}
+                  disabled={isAiLoading}
                 />
-                <Button onClick={handleAiSend}>
-                  Send
+                <Button 
+                  onClick={handleAiSend}
+                  disabled={isAiLoading || !aiMessage.trim()}
+                >
+                  {isAiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
                 </Button>
               </div>
+              
+              {!isConfigured && (
+                <p className="text-xs text-muted-foreground">
+                  Note: Azure OpenAI is not configured. Configure it in Settings for enhanced AI capabilities.
+                </p>
+              )}
             </CardContent>
           </Card>
           
