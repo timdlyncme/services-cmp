@@ -9,7 +9,21 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { IntegrationConfig, IntegrationStatus } from "@/types/cloud";
-import { Settings as SettingsIcon, Key, Terminal, CloudCog, Github, Plus, Trash2, RefreshCw, Loader2 } from "lucide-react";
+import { 
+  Settings as SettingsIcon, 
+  Key, 
+  Terminal, 
+  CloudCog, 
+  Github, 
+  Plus, 
+  Trash2, 
+  RefreshCw, 
+  Loader2,
+  BrainCircuit,
+  CheckCircle2,
+  AlertCircle,
+  Info
+} from "lucide-react";
 import { toast } from "sonner";
 import { cmpService } from "@/services/cmp-service";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -17,6 +31,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { AIAssistantService } from "@/services/ai-assistant-service";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // Interface for Azure credentials
 interface AzureCredential {
@@ -79,6 +95,14 @@ const Settings = () => {
   });
   const [isTestingAIConnection, setIsTestingAIConnection] = useState(false);
   const [isSavingAISettings, setIsSavingAISettings] = useState(false);
+  const [aiConnectionStatus, setAIConnectionStatus] = useState<{
+    status: 'connected' | 'not_configured' | 'error';
+    message: string;
+    lastChecked?: string;
+  }>({
+    status: 'not_configured',
+    message: 'Azure OpenAI is not configured'
+  });
   const aiAssistantService = new AIAssistantService();
   
   // Add log with timestamp
@@ -131,6 +155,14 @@ const Settings = () => {
         deploymentName: config.deployment_name || "",
         model: config.model || "gpt-4",
         apiVersion: config.api_version || "2023-05-15"
+      });
+      
+      // Also check the connection status
+      const status = await aiAssistantService.checkStatus();
+      setAIConnectionStatus({
+        status: status.status,
+        message: status.message,
+        lastChecked: new Date().toISOString()
       });
       
       addLog("Azure OpenAI settings loaded successfully", "success");
@@ -264,8 +296,14 @@ const Settings = () => {
       // Then test the connection
       const status = await aiAssistantService.checkStatus();
       
-      if (status.status === "connected") {
-        addLog("Azure OpenAI connection successful", "success");
+      setAIConnectionStatus({
+        status: status.status,
+        message: status.message,
+        lastChecked: new Date().toISOString()
+      });
+      
+      if (status.status === 'connected') {
+        addLog("Azure OpenAI connection test successful", "success");
         toast.success("Azure OpenAI connection test successful");
       } else {
         addLog(`Azure OpenAI connection test failed: ${status.message}`, "error");
@@ -273,40 +311,77 @@ const Settings = () => {
       }
     } catch (error) {
       console.error("Error testing Azure OpenAI connection:", error);
-      addLog(`Azure OpenAI connection test failed: ${error instanceof Error ? error.message : String(error)}`, "error");
-      toast.error("Azure OpenAI connection test failed");
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addLog(`Error testing Azure OpenAI connection: ${errorMessage}`, "error");
+      toast.error(`Connection test failed: ${errorMessage}`);
+      
+      setAIConnectionStatus({
+        status: 'error',
+        message: errorMessage,
+        lastChecked: new Date().toISOString()
+      });
     } finally {
       setIsTestingAIConnection(false);
     }
   };
   
   // Save Azure OpenAI settings
-  const handleSaveAISettings = async (showToast = true) => {
-    if (isSavingAISettings) return;
+  const handleSaveAISettings = async (showToast: boolean = true) => {
+    if (!azureOpenAISettings.enabled) {
+      // If disabled, just save empty settings
+      setIsSavingAISettings(true);
+      addLog("Disabling Azure OpenAI integration...");
+      
+      try {
+        await aiAssistantService.updateConfig({
+          api_key: "",
+          endpoint: "",
+          deployment_name: "",
+          model: azureOpenAISettings.model,
+          api_version: azureOpenAISettings.apiVersion
+        });
+        
+        addLog("Azure OpenAI integration disabled", "success");
+        if (showToast) {
+          toast.success("Azure OpenAI integration disabled");
+        }
+        
+        // Update connection status
+        setAIConnectionStatus({
+          status: 'not_configured',
+          message: 'Azure OpenAI is not configured',
+          lastChecked: new Date().toISOString()
+        });
+      } catch (error) {
+        console.error("Error disabling Azure OpenAI:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        addLog(`Error disabling Azure OpenAI: ${errorMessage}`, "error");
+        if (showToast) {
+          toast.error(`Failed to disable Azure OpenAI: ${errorMessage}`);
+        }
+      } finally {
+        setIsSavingAISettings(false);
+      }
+      return;
+    }
+    
+    // Validate required fields
+    if (!azureOpenAISettings.endpoint || !azureOpenAISettings.apiKey || !azureOpenAISettings.deploymentName) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
     
     setIsSavingAISettings(true);
     addLog("Saving Azure OpenAI settings...");
     
     try {
-      // Only send the settings to the API if enabled
-      if (azureOpenAISettings.enabled) {
-        await aiAssistantService.updateConfig({
-          api_key: azureOpenAISettings.apiKey,
-          endpoint: azureOpenAISettings.endpoint,
-          deployment_name: azureOpenAISettings.deploymentName,
-          model: azureOpenAISettings.model,
-          api_version: azureOpenAISettings.apiVersion
-        });
-      } else {
-        // If disabled, clear the settings
-        await aiAssistantService.updateConfig({
-          api_key: "",
-          endpoint: "",
-          deployment_name: "",
-          model: "gpt-4",
-          api_version: "2023-05-15"
-        });
-      }
+      await aiAssistantService.updateConfig({
+        api_key: azureOpenAISettings.apiKey,
+        endpoint: azureOpenAISettings.endpoint,
+        deployment_name: azureOpenAISettings.deploymentName,
+        model: azureOpenAISettings.model,
+        api_version: azureOpenAISettings.apiVersion
+      });
       
       addLog("Azure OpenAI settings saved successfully", "success");
       if (showToast) {
@@ -314,11 +389,11 @@ const Settings = () => {
       }
     } catch (error) {
       console.error("Error saving Azure OpenAI settings:", error);
-      addLog(`Failed to save Azure OpenAI settings: ${error instanceof Error ? error.message : String(error)}`, "error");
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addLog(`Error saving Azure OpenAI settings: ${errorMessage}`, "error");
       if (showToast) {
-        toast.error("Failed to save Azure OpenAI settings");
+        toast.error(`Failed to save Azure OpenAI settings: ${errorMessage}`);
       }
-      throw error; // Re-throw the error so the caller can handle it
     } finally {
       setIsSavingAISettings(false);
     }
@@ -354,25 +429,41 @@ const Settings = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto py-6 space-y-8">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
           <p className="text-muted-foreground">
-            Manage your cloud integrations and platform settings
+            Configure integrations and platform settings
           </p>
         </div>
       </div>
       
-      <Tabs defaultValue="cloud-providers">
-        <TabsList className="grid grid-cols-4 w-full sm:w-[500px]">
-          <TabsTrigger value="cloud-providers">Cloud Providers</TabsTrigger>
-          <TabsTrigger value="ai-services">AI Services</TabsTrigger>
-          {user?.role === "admin" && <TabsTrigger value="github">GitHub Integration</TabsTrigger>}
-          <TabsTrigger value="debug">Debug</TabsTrigger>
+      <Tabs defaultValue="azure" className="space-y-4">
+        <TabsList className="grid grid-cols-4 md:w-[600px]">
+          <TabsTrigger value="azure" className="flex items-center">
+            <CloudCog className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">Azure</span>
+            <span className="sm:hidden">Azure</span>
+          </TabsTrigger>
+          <TabsTrigger value="ai" className="flex items-center">
+            <BrainCircuit className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">AI Services</span>
+            <span className="sm:hidden">AI</span>
+          </TabsTrigger>
+          <TabsTrigger value="github" className="flex items-center">
+            <Github className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">GitHub</span>
+            <span className="sm:hidden">GitHub</span>
+          </TabsTrigger>
+          <TabsTrigger value="debug" className="flex items-center">
+            <Terminal className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">Debug</span>
+            <span className="sm:hidden">Debug</span>
+          </TabsTrigger>
         </TabsList>
         
-        <TabsContent value="cloud-providers" className="space-y-6">
+        <TabsContent value="azure" className="space-y-6">
           <div className="grid grid-cols-1 gap-6">
             <Card>
               <CardHeader>
@@ -652,74 +743,158 @@ const Settings = () => {
           </div>
         </TabsContent>
         
-        <TabsContent value="ai-services" className="space-y-6">
+        <TabsContent value="ai" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <CloudCog className="h-5 w-5 mr-2" />
-                Azure OpenAI Service
+                <BrainCircuit className="h-5 w-5 mr-2" />
+                AI Services Configuration
               </CardTitle>
               <CardDescription>
-                Configure Azure OpenAI for AI-powered assistance and insights
+                Configure Azure OpenAI for AI Assistant and other AI features
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center space-x-4">
                 <Switch
-                  id="openai-enable"
+                  id="ai-enable"
                   checked={azureOpenAISettings.enabled}
                   onCheckedChange={(checked) => handleAzureOpenAISettingChange("enabled", checked)}
                 />
-                <Label htmlFor="openai-enable">Enable Azure OpenAI Integration</Label>
+                <div>
+                  <Label htmlFor="ai-enable">Enable Azure OpenAI Integration</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Connect to Azure OpenAI to enable AI Assistant and other AI features
+                  </p>
+                </div>
               </div>
               
+              {aiConnectionStatus.status === 'connected' && (
+                <Alert className="bg-green-50 border-green-200">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <AlertTitle className="text-green-800">Connected to Azure OpenAI</AlertTitle>
+                  <AlertDescription className="text-green-700">
+                    Your Azure OpenAI integration is working correctly.
+                    {aiConnectionStatus.lastChecked && (
+                      <span className="text-xs block mt-1">
+                        Last checked: {new Date(aiConnectionStatus.lastChecked).toLocaleString()}
+                      </span>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {aiConnectionStatus.status === 'error' && (
+                <Alert className="bg-red-50 border-red-200">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <AlertTitle className="text-red-800">Connection Error</AlertTitle>
+                  <AlertDescription className="text-red-700">
+                    {aiConnectionStatus.message}
+                    {aiConnectionStatus.lastChecked && (
+                      <span className="text-xs block mt-1">
+                        Last checked: {new Date(aiConnectionStatus.lastChecked).toLocaleString()}
+                      </span>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               {azureOpenAISettings.enabled && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="openai-endpoint">API Endpoint</Label>
-                    <Input
-                      id="openai-endpoint"
-                      placeholder="https://your-resource.openai.azure.com"
-                      value={azureOpenAISettings.endpoint}
-                      onChange={(e) => handleAzureOpenAISettingChange("endpoint", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="openai-key">API Key</Label>
-                    <Input
-                      id="openai-key"
-                      type="password"
-                      placeholder="Enter API Key"
-                      value={azureOpenAISettings.apiKey}
-                      onChange={(e) => handleAzureOpenAISettingChange("apiKey", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="openai-deployment">Deployment Name</Label>
-                    <Input
-                      id="openai-deployment"
-                      placeholder="Enter deployment name"
-                      value={azureOpenAISettings.deploymentName}
-                      onChange={(e) => handleAzureOpenAISettingChange("deploymentName", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="openai-model">Model</Label>
-                    <Input
-                      id="openai-model"
-                      placeholder="Enter model name"
-                      value={azureOpenAISettings.model}
-                      onChange={(e) => handleAzureOpenAISettingChange("model", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="openai-api-version">API Version</Label>
-                    <Input
-                      id="openai-api-version"
-                      placeholder="Enter API version"
-                      value={azureOpenAISettings.apiVersion}
-                      onChange={(e) => handleAzureOpenAISettingChange("apiVersion", e.target.value)}
-                    />
+                <div className="space-y-4">
+                  <Alert className="bg-blue-50 border-blue-200">
+                    <Info className="h-4 w-4 text-blue-600" />
+                    <AlertTitle className="text-blue-800">Azure OpenAI Setup Guide</AlertTitle>
+                    <AlertDescription className="text-blue-700">
+                      <p className="mb-2">To set up Azure OpenAI, you'll need:</p>
+                      <ol className="list-decimal list-inside space-y-1">
+                        <li>An Azure OpenAI resource in your Azure portal</li>
+                        <li>A deployed model (e.g., GPT-4 or GPT-3.5-Turbo)</li>
+                        <li>The API key, endpoint URL, and deployment name</li>
+                      </ol>
+                    </AlertDescription>
+                  </Alert>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="openai-endpoint">
+                        Azure OpenAI Endpoint <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="openai-endpoint"
+                        placeholder="https://your-resource-name.openai.azure.com"
+                        value={azureOpenAISettings.endpoint}
+                        onChange={(e) => handleAzureOpenAISettingChange("endpoint", e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        The endpoint URL for your Azure OpenAI resource
+                      </p>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="openai-api-key">
+                        API Key <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="openai-api-key"
+                        type="password"
+                        placeholder="Enter your Azure OpenAI API key"
+                        value={azureOpenAISettings.apiKey}
+                        onChange={(e) => handleAzureOpenAISettingChange("apiKey", e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        The API key for your Azure OpenAI resource
+                      </p>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="openai-deployment">
+                        Deployment Name <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="openai-deployment"
+                        placeholder="Enter your model deployment name"
+                        value={azureOpenAISettings.deploymentName}
+                        onChange={(e) => handleAzureOpenAISettingChange("deploymentName", e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        The name of your deployed model in Azure OpenAI
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="openai-model">Model</Label>
+                      <Select
+                        value={azureOpenAISettings.model}
+                        onValueChange={(value) => handleAzureOpenAISettingChange("model", value)}
+                      >
+                        <SelectTrigger id="openai-model">
+                          <SelectValue placeholder="Select model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="gpt-4">GPT-4</SelectItem>
+                          <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
+                          <SelectItem value="gpt-4-32k">GPT-4 32k</SelectItem>
+                          <SelectItem value="gpt-35-turbo">GPT-3.5 Turbo</SelectItem>
+                          <SelectItem value="gpt-35-turbo-16k">GPT-3.5 Turbo 16k</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="openai-api-version">API Version</Label>
+                      <Select
+                        value={azureOpenAISettings.apiVersion}
+                        onValueChange={(value) => handleAzureOpenAISettingChange("apiVersion", value)}
+                      >
+                        <SelectTrigger id="openai-api-version">
+                          <SelectValue placeholder="Select API version" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2023-05-15">2023-05-15</SelectItem>
+                          <SelectItem value="2023-06-01-preview">2023-06-01-preview</SelectItem>
+                          <SelectItem value="2023-07-01-preview">2023-07-01-preview</SelectItem>
+                          <SelectItem value="2023-08-01-preview">2023-08-01-preview</SelectItem>
+                          <SelectItem value="2023-09-01-preview">2023-09-01-preview</SelectItem>
+                          <SelectItem value="2023-12-01-preview">2023-12-01-preview</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               )}
