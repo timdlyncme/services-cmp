@@ -19,6 +19,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useAzureOpenAI } from "@/contexts/AzureOpenAIContext";
 import { AzureOpenAIService, ChatMessage as AIChatMessage } from "@/services/azureOpenAIService";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { AIAssistantService } from "@/services/ai-assistant-service";
 
 interface TemplateVersion {
   id: number;
@@ -68,8 +69,17 @@ const TemplateDetails = () => {
   ]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiExpanded, setAiExpanded] = useState(false);
+  const [azureOpenAISettings, setAzureOpenAISettings] = useState({
+    enabled: false,
+    endpoint: "",
+    apiKey: "",
+    deploymentName: "",
+    model: "gpt-4",
+    apiVersion: "2023-05-15"
+  });
   const chatEndRef = useRef<HTMLDivElement>(null);
   const { isConfigured, config } = useAzureOpenAI();
+  const aiAssistantService = new AIAssistantService();
   
   const fetchVersions = async (templateId: string) => {
     try {
@@ -119,6 +129,25 @@ const TemplateDetails = () => {
       toast.error("Error loading environments");
     } finally {
       setLoadingEnvironments(false);
+    }
+  };
+  
+  // Load Azure OpenAI settings
+  const loadAzureOpenAISettings = async () => {
+    try {
+      const config = await aiAssistantService.getConfig();
+      
+      setAzureOpenAISettings({
+        enabled: Boolean(config.api_key && config.endpoint && config.deployment_name),
+        endpoint: config.endpoint || "",
+        apiKey: config.api_key === "********" ? "" : (config.api_key || ""),
+        deploymentName: config.deployment_name || "",
+        model: config.model || "gpt-4",
+        apiVersion: config.api_version || "2023-05-15"
+      });
+    } catch (error) {
+      console.error("Error loading Azure OpenAI settings:", error);
+      // Don't show a toast error here, as this might be the first time the user is setting up Azure OpenAI
     }
   };
   
@@ -343,52 +372,72 @@ const TemplateDetails = () => {
     setIsAiLoading(true);
     
     try {
-      if (isConfigured) {
-        // Use Azure OpenAI service
-        const azureOpenAIService = new AzureOpenAIService(config);
-        
-        // Create context about the template
-        const systemMessage: AIChatMessage = {
-          role: "system",
-          content: `You are an AI assistant helping with a cloud template. 
-          Template details:
-          Name: ${template?.name}
-          Type: ${template?.type}
-          Provider: ${template?.provider}
-          Description: ${template?.description}
+      // Prepare template data for context
+      const templateData = template ? {
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        type: template.type,
+        provider: template.provider,
+        code: template.code,
+        parameters: parameters,
+        variables: variables
+      } : null;
+      
+      // Use streaming API for better user experience
+      const abortController = aiAssistantService.streamChat(
+        {
+          messages: [...aiChatMessages.filter(msg => msg.role !== "system"), userMessage],
+          template_data: templateData,
+          temperature: 0.7
+        },
+        (content) => {
+          // Update the streaming message
+          setAiChatMessages(prev => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            
+            // If the last message is from the assistant and is streaming, update it
+            if (lastMessage && lastMessage.role === "assistant") {
+              newMessages[newMessages.length - 1] = {
+                ...lastMessage,
+                content: lastMessage.content + content
+              };
+            } else {
+              // Otherwise, add a new message
+              newMessages.push({
+                role: "assistant",
+                content: content
+              });
+            }
+            
+            return newMessages;
+          });
+        },
+        (error) => {
+          console.error("Error in AI streaming:", error);
+          toast.error("Error getting AI response");
           
-          The user is asking about this template. Provide helpful, concise responses.`
-        };
-        
-        // Get response from Azure OpenAI
-        const response = await azureOpenAIService.sendChatCompletion(
-          [systemMessage, ...aiChatMessages, userMessage],
-          { temperature: 0.7 }
-        );
-        
-        // Add AI response to chat
-        setAiChatMessages(prev => [...prev, { role: "assistant", content: response }]);
-      } else {
-        // Fallback for when Azure OpenAI is not configured
-        // Simulate a response after a delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        let mockResponse = "I'd be happy to help with this template, but it seems the AI service is not fully configured. ";
-        mockResponse += "You can configure Azure OpenAI in the Settings page to enable AI assistance.";
-        
-        if (template) {
-          // Add some template-specific mock response
-          if (aiMessage.toLowerCase().includes("what") && aiMessage.toLowerCase().includes("do")) {
-            mockResponse = `This template creates ${
-              template.provider === "azure" ? "Azure resources including a Resource Group, App Service Plan, and App Service for hosting a web application." :
-              template.provider === "aws" ? "AWS resources including an EKS cluster for deploying containerized microservices." :
-              "Google Cloud resources including a Storage Bucket configured for hosting a static website with CDN."
-            }`;
-          }
+          // Add error message to chat
+          setAiChatMessages(prev => [...prev, { 
+            role: "assistant", 
+            content: "I'm sorry, I encountered an error while processing your request. Please try again later." 
+          }]);
+          
+          setIsAiLoading(false);
+        },
+        () => {
+          // Streaming completed
+          setIsAiLoading(false);
         }
-        
-        setAiChatMessages(prev => [...prev, { role: "assistant", content: mockResponse }]);
-      }
+      );
+      
+      // Store the abort controller for cleanup
+      return () => {
+        if (abortController) {
+          abortController();
+        }
+      };
     } catch (error) {
       console.error("Error getting AI response:", error);
       toast.error("Failed to get AI response");
@@ -398,7 +447,7 @@ const TemplateDetails = () => {
         role: "assistant", 
         content: "I'm sorry, I encountered an error while processing your request. Please try again later." 
       }]);
-    } finally {
+      
       setIsAiLoading(false);
     }
   };
@@ -569,6 +618,18 @@ const TemplateDetails = () => {
     );
   }
 
+  // Scroll to bottom of chat when messages change
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [aiChatMessages]);
+  
+  // Load Azure OpenAI settings when component mounts
+  useEffect(() => {
+    loadAzureOpenAISettings();
+  }, []);
+  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -1046,7 +1107,7 @@ const TemplateDetails = () => {
                       )}
                     </div>
                   ))}
-                  {isAiLoading && (
+                  {isAiLoading && !aiChatMessages[aiChatMessages.length - 1]?.content && (
                     <div className="bg-primary/10 p-3 rounded-lg rounded-tl-none max-w-[80%]">
                       <div className="flex items-center space-x-2">
                         <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce"></div>
@@ -1075,11 +1136,11 @@ const TemplateDetails = () => {
                 </Button>
               </div>
               
-              {!isConfigured && (
-                <p className="text-xs text-muted-foreground">
-                  Note: Azure OpenAI is not configured. Configure it in Settings for enhanced AI capabilities.
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                {!azureOpenAISettings.enabled ? 
+                  "Note: Azure OpenAI is not configured. Configure it in Settings for enhanced AI capabilities." :
+                  "Ask questions about this template, request explanations, or suggest modifications."}
+              </p>
             </CardContent>
           </Card>
           

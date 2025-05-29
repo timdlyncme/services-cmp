@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { AIAssistantService } from "@/services/ai-assistant-service";
 
 // Interface for Azure credentials
 interface AzureCredential {
@@ -77,6 +78,8 @@ const Settings = () => {
     apiVersion: "2023-05-15"
   });
   const [isTestingAIConnection, setIsTestingAIConnection] = useState(false);
+  const [isSavingAISettings, setIsSavingAISettings] = useState(false);
+  const aiAssistantService = new AIAssistantService();
   
   // Add log with timestamp
   const addLog = (message: string, type: "info" | "success" | "warning" | "error" = "info") => {
@@ -111,6 +114,30 @@ const Settings = () => {
       addLog(`Failed to load Azure credentials: ${error instanceof Error ? error.message : String(error)}`, "error");
     } finally {
       setIsLoadingCredentials(false);
+    }
+  };
+  
+  // Load Azure OpenAI settings
+  const loadAzureOpenAISettings = async () => {
+    addLog("Loading Azure OpenAI settings...");
+    
+    try {
+      const config = await aiAssistantService.getConfig();
+      
+      setAzureOpenAISettings({
+        enabled: Boolean(config.api_key && config.endpoint && config.deployment_name),
+        endpoint: config.endpoint || "",
+        apiKey: config.api_key === "********" ? "" : (config.api_key || ""),
+        deploymentName: config.deployment_name || "",
+        model: config.model || "gpt-4",
+        apiVersion: config.api_version || "2023-05-15"
+      });
+      
+      addLog("Azure OpenAI settings loaded successfully", "success");
+    } catch (error) {
+      console.error("Error loading Azure OpenAI settings:", error);
+      addLog(`Failed to load Azure OpenAI settings: ${error instanceof Error ? error.message : String(error)}`, "error");
+      // Don't show a toast error here, as this might be the first time the user is setting up Azure OpenAI
     }
   };
   
@@ -231,12 +258,19 @@ const Settings = () => {
     addLog("Testing Azure OpenAI connection...");
     
     try {
-      // In a real implementation, this would call an API endpoint to test the connection
-      // For now, we'll simulate a successful connection after a delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // First, save the current settings
+      await handleSaveAISettings(false);
       
-      addLog("Azure OpenAI connection successful", "success");
-      toast.success("Azure OpenAI connection test successful");
+      // Then test the connection
+      const status = await aiAssistantService.checkStatus();
+      
+      if (status.status === "connected") {
+        addLog("Azure OpenAI connection successful", "success");
+        toast.success("Azure OpenAI connection test successful");
+      } else {
+        addLog(`Azure OpenAI connection test failed: ${status.message}`, "error");
+        toast.error(`Connection test failed: ${status.message}`);
+      }
     } catch (error) {
       console.error("Error testing Azure OpenAI connection:", error);
       addLog(`Azure OpenAI connection test failed: ${error instanceof Error ? error.message : String(error)}`, "error");
@@ -247,34 +281,53 @@ const Settings = () => {
   };
   
   // Save Azure OpenAI settings
-  const handleSaveAISettings = async () => {
+  const handleSaveAISettings = async (showToast = true) => {
+    if (isSavingAISettings) return;
+    
+    setIsSavingAISettings(true);
     addLog("Saving Azure OpenAI settings...");
     
     try {
-      // In a real implementation, this would call an API endpoint to save the settings
-      // For now, we'll simulate a successful save after a delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Save to localStorage for demo purposes
-      localStorage.setItem("azureOpenAIConfig", JSON.stringify({
-        apiKey: azureOpenAISettings.apiKey,
-        endpoint: azureOpenAISettings.endpoint,
-        deploymentName: azureOpenAISettings.deploymentName,
-        apiVersion: azureOpenAISettings.apiVersion
-      }));
+      // Only send the settings to the API if enabled
+      if (azureOpenAISettings.enabled) {
+        await aiAssistantService.updateConfig({
+          api_key: azureOpenAISettings.apiKey,
+          endpoint: azureOpenAISettings.endpoint,
+          deployment_name: azureOpenAISettings.deploymentName,
+          model: azureOpenAISettings.model,
+          api_version: azureOpenAISettings.apiVersion
+        });
+      } else {
+        // If disabled, clear the settings
+        await aiAssistantService.updateConfig({
+          api_key: "",
+          endpoint: "",
+          deployment_name: "",
+          model: "gpt-4",
+          api_version: "2023-05-15"
+        });
+      }
       
       addLog("Azure OpenAI settings saved successfully", "success");
-      toast.success("Azure OpenAI settings saved successfully");
+      if (showToast) {
+        toast.success("Azure OpenAI settings saved successfully");
+      }
     } catch (error) {
       console.error("Error saving Azure OpenAI settings:", error);
       addLog(`Failed to save Azure OpenAI settings: ${error instanceof Error ? error.message : String(error)}`, "error");
-      toast.error("Failed to save Azure OpenAI settings");
+      if (showToast) {
+        toast.error("Failed to save Azure OpenAI settings");
+      }
+      throw error; // Re-throw the error so the caller can handle it
+    } finally {
+      setIsSavingAISettings(false);
     }
   };
   
   useEffect(() => {
     if (currentTenant) {
       loadAzureCredentials();
+      loadAzureOpenAISettings();
       addLog("Settings page initialized", "info");
     }
   }, [currentTenant]);
@@ -675,7 +728,7 @@ const Settings = () => {
               <Button 
                 variant="outline"
                 onClick={handleTestAIConnection}
-                disabled={!azureOpenAISettings.enabled || isTestingAIConnection}
+                disabled={!azureOpenAISettings.enabled || isTestingAIConnection || isSavingAISettings}
               >
                 {isTestingAIConnection ? (
                   <>
@@ -687,10 +740,17 @@ const Settings = () => {
                 )}
               </Button>
               <Button 
-                onClick={handleSaveAISettings}
-                disabled={!azureOpenAISettings.enabled}
+                onClick={() => handleSaveAISettings(true)}
+                disabled={isSavingAISettings}
               >
-                Save Changes
+                {isSavingAISettings ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>Save Changes</>
+                )}
               </Button>
             </CardFooter>
           </Card>
