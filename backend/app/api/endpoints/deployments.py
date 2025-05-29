@@ -95,11 +95,11 @@ def get_azure_credentials(
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
         
         # Prepare parameters for the deployment engine
-        params = {"settings_id": str(creds.settings_id)}
+        params = {}
         
         # If accessing a different tenant, pass target_tenant_id
-        if tenant_id != current_user.tenant.tenant_id:
-            params["target_tenant_id"] = tenant_id
+        if creds_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = creds_tenant_id
         
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
@@ -264,8 +264,8 @@ def get_azure_credential(
         params = {"settings_id": settings_id}
         
         # If accessing a different tenant, pass target_tenant_id
-        if account_tenant_id != current_user.tenant.tenant_id:
-            params["target_tenant_id"] = account_tenant_id
+        if creds_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = creds_tenant_id
         
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
