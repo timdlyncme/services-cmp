@@ -93,9 +93,18 @@ def get_azure_credentials(
         
         # Forward request to deployment engine to check status
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
+        
+        # Prepare parameters for the deployment engine
+        params = {"settings_id": str(creds.settings_id)}
+        
+        # If accessing a different tenant, pass target_tenant_id
+        if tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = tenant_id
+        
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
-            headers=headers
+            headers=headers,
+            params=params
         )
         
         engine_status = {"configured": False, "message": "Unknown status"}
@@ -250,9 +259,18 @@ def get_azure_credential(
         
         # Forward request to deployment engine to check status
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
+        
+        # Prepare parameters for the deployment engine
+        params = {"settings_id": settings_id}
+        
+        # If accessing a different tenant, pass target_tenant_id
+        if account_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = account_tenant_id
+        
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
-            headers=headers
+            headers=headers,
+            params=params
         )
         
         engine_status = {"configured": False, "message": "Unknown status"}
@@ -536,30 +554,25 @@ def list_azure_subscriptions(
         if not creds:
             raise HTTPException(status_code=404, detail="Credential not found")
         
-        # Forward request to deployment engine
+        # Forward request to deployment engine with settings_id parameter
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
         
-        # First set the credentials
-        set_response = requests.post(
-            f"{DEPLOYMENT_ENGINE_URL}/credentials",
-            headers=headers,
-            json={
-                "client_id": creds.connection_details.get("client_id", "") if creds.connection_details else "",
-                "client_secret": creds.connection_details.get("client_secret", "") if creds.connection_details else "",
-                "tenant_id": creds.connection_details.get("tenant_id", "") if creds.connection_details else ""
-            }
-        )
+        # Prepare parameters for the deployment engine
+        params = {"settings_id": settings_id}
         
-        if set_response.status_code != 200:
-            raise Exception(f"Error setting credentials: {set_response.text}")
+        # If accessing a different tenant, pass target_tenant_id
+        if account_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = account_tenant_id
         
-        # Then list subscriptions
+        # Call the subscriptions endpoint with parameters
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/credentials/subscriptions",
-            headers=headers
+            headers=headers,
+            params=params
         )
         
         if response.status_code != 200:
+            logger.error(f"Error listing subscriptions from deployment engine: {response.text}")
             raise Exception(f"Error listing subscriptions: {response.text}")
         
         return response.json()

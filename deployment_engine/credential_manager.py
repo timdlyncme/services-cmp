@@ -155,43 +155,59 @@ class MultiTenantCredentialManager:
             logger.error(f"Error creating Azure deployer for tenant {tenant_id}: {str(e)}")
             return None
     
-    def get_tenant_credential_status(self, tenant_id: str, settings_id: Optional[str] = None) -> Dict[str, Any]:
+    def get_tenant_credential_status(self, tenant_id: str, settings_id: Optional[str] = None) -> dict:
         """
         Get credential status for a specific tenant.
         
         Args:
             tenant_id (str): The tenant ID
-            settings_id (str, optional): Specific settings ID to use
+            settings_id (Optional[str]): Specific settings ID to check
             
         Returns:
-            Dict[str, Any]: Status information
+            dict: Credential status information
         """
         try:
-            credentials = self.get_tenant_credentials(tenant_id, settings_id)
-            if not credentials:
+            with self.SessionLocal() as session:
+                query = session.query(CloudSettings).filter(
+                    CloudSettings.tenant_id == tenant_id,
+                    CloudSettings.provider == "azure",
+                    CloudSettings.is_active == True
+                )
+                
+                # If settings_id is provided, filter by it
+                if settings_id:
+                    query = query.filter(CloudSettings.settings_id == settings_id)
+                
+                creds = query.first()
+                
+                if not creds or not creds.connection_details:
+                    return {"configured": False, "message": "No Azure credentials found"}
+                
+                # Check if all required fields are present
+                connection_details = creds.connection_details
+                if isinstance(connection_details, str):
+                    connection_details = json.loads(connection_details)
+                
+                required_fields = ["client_id", "client_secret", "tenant_id"]
+                missing_fields = [field for field in required_fields 
+                                if not connection_details.get(field)]
+                
+                if missing_fields:
+                    return {
+                        "configured": False, 
+                        "message": f"Missing required fields: {', '.join(missing_fields)}"
+                    }
+                
                 return {
-                    "configured": False,
-                    "message": "No Azure credentials configured for this tenant"
+                    "configured": True,
+                    "message": "Azure credentials configured",
+                    "settings_id": str(creds.settings_id),
+                    "name": creds.name
                 }
-            
-            # Create temporary deployer to check status
-            deployer = self.create_azure_deployer_for_tenant(tenant_id, settings_id)
-            if not deployer:
-                return {
-                    "configured": False,
-                    "message": "Failed to create Azure deployer"
-                }
-            
-            # Get credential status from deployer
-            status = deployer.get_credential_status()
-            return status
-            
+                
         except Exception as e:
             logger.error(f"Error getting credential status for tenant {tenant_id}: {str(e)}")
-            return {
-                "configured": False,
-                "message": f"Error checking credentials: {str(e)}"
-            }
+            return {"configured": False, "message": f"Error: {str(e)}"}
     
     def list_tenant_subscriptions(self, tenant_id: str, settings_id: Optional[str] = None) -> list:
         """
@@ -219,4 +235,3 @@ class MultiTenantCredentialManager:
 
 # Global instance
 credential_manager = MultiTenantCredentialManager()
-

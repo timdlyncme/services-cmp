@@ -262,20 +262,43 @@ def set_credentials(
     return {"message": "Credentials are now managed automatically from database"}
 
 @app.get("/credentials")
-def get_credentials(user: dict = Depends(check_permission("deployment:read"))):
+def get_credentials(
+    settings_id: Optional[str] = None,
+    target_tenant_id: Optional[str] = None,
+    user: dict = Depends(check_permission("deployment:read"))
+):
     """
-    Get Azure credentials status for the current tenant.
+    Get Azure credentials status for the current tenant or a target tenant.
     Credentials are loaded fresh from the database.
+    
+    Args:
+        settings_id (Optional[str]): Specific settings ID to use for credentials
+        target_tenant_id (Optional[str]): Target tenant ID (admin/MSP only)
     """
     try:
-        logger.debug(f"Getting credentials status for tenant: {user['tenant_id']}")
+        # Determine which tenant to use
+        tenant_id = user["tenant_id"]
+        
+        # If target_tenant_id is provided, check if user has permission to access other tenants
+        if target_tenant_id and target_tenant_id != user["tenant_id"]:
+            # Only admin or MSP users can access other tenants
+            if user.get("role") not in ["admin", "msp"]:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Not authorized to access credentials for other tenants"
+                )
+            tenant_id = target_tenant_id
+        
+        logger.debug(f"Getting credentials status for tenant: {tenant_id}, settings_id: {settings_id}")
         
         # Get credential status from database
-        status = credential_manager.get_tenant_credential_status(user["tenant_id"])
+        status = credential_manager.get_tenant_credential_status(tenant_id, settings_id)
         return status
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error getting credentials for tenant {user['tenant_id']}: {str(e)}")
+        logger.error(f"Error getting credentials for tenant {tenant_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/credentials/subscription")
@@ -291,20 +314,46 @@ def set_subscription(
     return {"message": "Subscription management is now handled automatically"}
 
 @app.get("/credentials/subscriptions")
-def list_subscriptions(user: dict = Depends(check_permission("deployment:read"))):
+def list_subscriptions(
+    settings_id: Optional[str] = None,
+    target_tenant_id: Optional[str] = None,
+    user: dict = Depends(check_permission("deployment:read"))
+):
     """
-    List Azure subscriptions for the current tenant.
+    List Azure subscriptions for the current tenant or a target tenant.
     Uses fresh credentials from the database.
+    
+    Args:
+        settings_id (Optional[str]): Specific settings ID to use for credentials
+        target_tenant_id (Optional[str]): Target tenant ID (admin/MSP only)
     """
     try:
-        logger.debug(f"Listing subscriptions for tenant: {user['tenant_id']}")
+        # Determine which tenant to use
+        tenant_id = user["tenant_id"]
+        
+        # If target_tenant_id is provided, check if user has permission to access other tenants
+        if target_tenant_id and target_tenant_id != user["tenant_id"]:
+            # Only admin or MSP users can access other tenants
+            if user.get("role") not in ["admin", "msp"]:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Not authorized to access credentials for other tenants"
+                )
+            tenant_id = target_tenant_id
+        
+        logger.debug(f"Listing subscriptions for tenant: {tenant_id}, settings_id: {settings_id}")
         
         # Get subscriptions using tenant-specific credentials
-        subscriptions = credential_manager.list_tenant_subscriptions(user["tenant_id"])
+        subscriptions = credential_manager.list_tenant_subscriptions(
+            tenant_id, 
+            settings_id=settings_id
+        )
         return subscriptions
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error listing subscriptions for tenant {user['tenant_id']}: {str(e)}")
+        logger.error(f"Error listing subscriptions for tenant {tenant_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Deployment endpoints
