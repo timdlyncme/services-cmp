@@ -15,6 +15,7 @@ interface AuthContextType {
   switchTenant: (tenantId: string) => void;
   hasPermission: (permission: string) => boolean;
   checkServerConnection: () => Promise<boolean>;
+  updateTenants: (updatedTenants: Tenant[]) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -239,6 +240,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false;
   };
 
+  const updateTenants = (updatedTenants: Tenant[]) => {
+    setTenants(updatedTenants);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -253,6 +258,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         switchTenant,
         hasPermission,
         checkServerConnection,
+        updateTenants,
       }}
     >
       {children}
