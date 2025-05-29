@@ -1,5 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel
+from datetime import datetime
 
 
 class TenantBase(BaseModel):
@@ -18,7 +19,8 @@ class TenantUpdate(TenantBase):
 class TenantResponse(TenantBase):
     id: int
     tenant_id: str
+    date_created: Optional[datetime] = None
+    date_modified: Optional[datetime] = None
 
     class Config:
         from_attributes = True
-

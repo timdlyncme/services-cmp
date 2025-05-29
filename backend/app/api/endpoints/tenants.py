@@ -1,5 +1,6 @@
 from typing import Any, List
 import uuid
+import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
@@ -41,7 +42,9 @@ def get_tenants(
                 id=tenant.id,
                 tenant_id=tenant.tenant_id,
                 name=tenant.name,
-                description=tenant.description
+                description=tenant.description,
+                date_created=tenant.date_created,
+                date_modified=tenant.date_modified
             ) for tenant in tenants
         ]
     except Exception as e:
@@ -109,7 +112,9 @@ def get_tenant(
             id=tenant.id,
             tenant_id=tenant.tenant_id,
             name=tenant.name,
-            description=tenant.description
+            description=tenant.description,
+            date_created=tenant.date_created,
+            date_modified=tenant.date_modified
         )
     
     except HTTPException:
@@ -144,7 +149,9 @@ def create_tenant(
         new_tenant = Tenant(
             tenant_id=str(uuid.uuid4()),
             name=tenant.name,
-            description=tenant.description
+            description=tenant.description,
+            date_created=datetime.datetime.utcnow(),
+            date_modified=datetime.datetime.utcnow()
         )
         
         db.add(new_tenant)
@@ -155,7 +162,9 @@ def create_tenant(
             id=new_tenant.id,
             tenant_id=new_tenant.tenant_id,
             name=new_tenant.name,
-            description=new_tenant.description
+            description=new_tenant.description,
+            date_created=new_tenant.date_created,
+            date_modified=new_tenant.date_modified
         )
     
     except Exception as e:
@@ -197,6 +206,7 @@ def update_tenant(
         # Update tenant
         tenant.name = tenant_update.name
         tenant.description = tenant_update.description
+        tenant.date_modified = datetime.datetime.utcnow()
         
         db.commit()
         db.refresh(tenant)
@@ -205,7 +215,9 @@ def update_tenant(
             id=tenant.id,
             tenant_id=tenant.tenant_id,
             name=tenant.name,
-            description=tenant.description
+            description=tenant.description,
+            date_created=tenant.date_created,
+            date_modified=tenant.date_modified
         )
     
     except HTTPException:
@@ -247,7 +259,7 @@ def delete_tenant(
             )
         
         # Check if tenant has any users
-        users = db.query(User).filter(User.tenant_id == tenant.id).first()
+        users = db.query(User).filter(User.tenant_id == tenant.tenant_id).first()
         if users:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -256,7 +268,7 @@ def delete_tenant(
         
         # Check if tenant has any cloud accounts
         from app.models.deployment import CloudAccount
-        cloud_accounts = db.query(CloudAccount).filter(CloudAccount.tenant_id == tenant.id).first()
+        cloud_accounts = db.query(CloudAccount).filter(CloudAccount.tenant_id == tenant.tenant_id).first()
         if cloud_accounts:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -265,7 +277,7 @@ def delete_tenant(
         
         # Check if tenant has any environments
         from app.models.deployment import Environment
-        environments = db.query(Environment).filter(Environment.tenant_id == tenant.id).first()
+        environments = db.query(Environment).filter(Environment.tenant_id == tenant.tenant_id).first()
         if environments:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -274,7 +286,7 @@ def delete_tenant(
         
         # Check if tenant has any templates
         from app.models.deployment import Template
-        templates = db.query(Template).filter(Template.tenant_id == tenant.id).first()
+        templates = db.query(Template).filter(Template.tenant_id == tenant.tenant_id).first()
         if templates:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -283,7 +295,7 @@ def delete_tenant(
         
         # Check if tenant has any deployments
         from app.models.deployment import Deployment
-        deployments = db.query(Deployment).filter(Deployment.tenant_id == tenant.id).first()
+        deployments = db.query(Deployment).filter(Deployment.tenant_id == tenant.tenant_id).first()
         if deployments:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

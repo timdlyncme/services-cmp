@@ -489,19 +489,24 @@ def get_deployment(
         if deployment["tenant_id"] != user["tenant_id"]:
             raise HTTPException(status_code=403, detail="Access denied")
         
-        # Get deployment status from Azure
+        # Always get deployment status from Azure
         if deployment.get("azure_deployment_id") and deployment.get("resource_group"):
-            azure_status = azure_deployer.get_deployment_status(
-                resource_group=deployment["resource_group"],
-                deployment_name=deployment["azure_deployment_id"]
-            )
-            
-            # Update deployment status
-            deployment["status"] = azure_status.get("status", deployment["status"])
-            deployment["resources"] = azure_status.get("resources", [])
-            deployment["outputs"] = azure_status.get("outputs", {})
-            deployment["logs"] = azure_status.get("logs", [])
-            deployment["updated_at"] = datetime.utcnow().isoformat()
+            try:
+                azure_status = azure_deployer.get_deployment_status(
+                    resource_group=deployment["resource_group"],
+                    deployment_name=deployment["azure_deployment_id"]
+                )
+                
+                # Update deployment status
+                deployment["status"] = azure_status.get("status", deployment["status"])
+                deployment["resources"] = azure_status.get("resources", [])
+                deployment["outputs"] = azure_status.get("outputs", {})
+                deployment["logs"] = azure_status.get("logs", [])
+                deployment["updated_at"] = datetime.utcnow().isoformat()
+            except Exception as e:
+                logger.error(f"Error getting deployment status from Azure: {str(e)}")
+                # Don't fail the request if Azure status check fails
+                # Just return the cached data
         
         return deployment
     except Exception as e:

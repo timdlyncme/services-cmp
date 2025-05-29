@@ -5,7 +5,8 @@ export interface Tenant {
   tenant_id: string;  // Added tenant_id field
   name: string;
   description?: string;
-  createdAt: string;
+  date_created?: string;
+  date_modified?: string;
 }
 
 export interface CloudAccount {
