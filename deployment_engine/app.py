@@ -244,7 +244,7 @@ def debug_token(user: dict = Depends(get_current_user)):
     }
 
 # Credentials endpoints
-@app.post("/credentials")
+@app.post("/credentials", tags=["credentials"])
 def set_credentials(
     credentials: Dict[str, str],
     user: dict = Depends(check_permission("deployment:manage"))
@@ -257,7 +257,7 @@ def set_credentials(
     logger.warning(f"Deprecated /credentials endpoint called by user: {user['username']}")
     return {"message": "Credentials are now managed automatically from database"}
 
-@app.get("/credentials")
+@app.get("/credentials", tags=["credentials"])
 def get_credentials(
     settings_id: Optional[str] = None,
     target_tenant_id: Optional[str] = None,
@@ -297,7 +297,7 @@ def get_credentials(
         logger.error(f"Error getting credentials for tenant {tenant_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/credentials/subscription")
+@app.post("/credentials/subscription", tags=["credentials"])
 def set_subscription(
     subscription: Dict[str, str],
     user: dict = Depends(check_permission("deployment:manage"))
@@ -309,7 +309,7 @@ def set_subscription(
     logger.warning(f"Deprecated /credentials/subscription endpoint called by user: {user['username']}")
     return {"message": "Subscription management is now handled automatically"}
 
-@app.get("/credentials/subscriptions")
+@app.get("/credentials/subscriptions", tags=["credentials"])
 def list_subscriptions(
     settings_id: Optional[str] = None,
     target_tenant_id: Optional[str] = None,
@@ -360,7 +360,7 @@ def list_subscriptions(
         raise HTTPException(status_code=500, detail=str(e))
 
 # Deployment endpoints
-@app.post("/deployments")
+@app.post("/deployments", tags=["deployments"])
 def create_deployment(
     deployment: Dict[str, Any],
     background_tasks: BackgroundTasks,
@@ -528,182 +528,6 @@ def create_deployment(
         logger.error(f"Error creating deployment: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/deployments")
-def list_deployments(
-    status: Optional[str] = None,
-    limit: int = 10,
-    offset: int = 0,
-    user: dict = Depends(check_permission("deployment:read"))
-):
-    try:
-        # Filter deployments by tenant
-        tenant_deployments = [
-            d for d in deployments.values()
-            if d["tenant_id"] == user["tenant_id"]
-        ]
-        
-        # Filter by status if provided
-        if status:
-            tenant_deployments = [d for d in tenant_deployments if d["status"] == status]
-        
-        # Sort by created_at in descending order
-        tenant_deployments.sort(key=lambda x: x["created_at"], reverse=True)
-        
-        # Apply pagination
-        paginated_deployments = tenant_deployments[offset:offset + limit]
-        
-        return paginated_deployments
-    except Exception as e:
-        logger.error(f"Error listing deployments: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/deployments/{deployment_id}")
-def get_deployment(
-    deployment_id: str,
-    user: dict = Depends(check_permission("deployment:read"))
-):
-    try:
-        # Check if deployment exists
-        if deployment_id not in deployments:
-            raise HTTPException(status_code=404, detail="Deployment not found")
-        
-        # Check if user has access to this deployment
-        deployment = deployments[deployment_id]
-        if deployment["tenant_id"] != user["tenant_id"]:
-            raise HTTPException(status_code=403, detail="Access denied")
-        
-        # Always get deployment status from Azure
-        if deployment.get("azure_deployment_id") and deployment.get("resource_group"):
-            try:
-                # Get tenant-specific Azure deployer with fresh credentials
-                azure_deployer = credential_manager.create_azure_deployer_for_tenant(
-                    user["tenant_id"]
-                )
-                
-                if azure_deployer:
-                    azure_status = azure_deployer.get_deployment_status(
-                        resource_group=deployment["resource_group"],
-                        deployment_name=deployment["azure_deployment_id"]
-                    )
-                    
-                    # Update deployment status
-                    deployment["status"] = azure_status.get("status", deployment["status"])
-                    deployment["resources"] = azure_status.get("resources", [])
-                    deployment["outputs"] = azure_status.get("outputs", {})
-                    deployment["logs"] = azure_status.get("logs", [])
-                    deployment["updated_at"] = datetime.utcnow().isoformat()
-            except Exception as e:
-                logger.error(f"Error getting deployment status from Azure: {str(e)}")
-                # Don't fail the request if Azure status check fails
-                # Just return the cached data
-        
-        return deployment
-    except Exception as e:
-        logger.error(f"Error getting deployment: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.put("/deployments/{deployment_id}")
-def update_deployment(
-    deployment_id: str,
-    update_data: Dict[str, Any],
-    user: dict = Depends(check_permission("deployment:update"))
-):
-    try:
-        # Check if deployment exists
-        if deployment_id not in deployments:
-            raise HTTPException(status_code=404, detail="Deployment not found")
-        
-        # Check if user has access to this deployment
-        deployment = deployments[deployment_id]
-        if deployment["tenant_id"] != user["tenant_id"]:
-            raise HTTPException(status_code=403, detail="Access denied")
-        
-        # Extract update details
-        template = update_data.get("template")
-        parameters = update_data.get("parameters")
-        
-        # Get tenant-specific Azure deployer with fresh credentials
-        azure_deployer = credential_manager.create_azure_deployer_for_tenant(
-            user["tenant_id"]
-        )
-        
-        if not azure_deployer:
-            logger.error(f"Failed to get Azure credentials for tenant {user['tenant_id']}")
-            raise HTTPException(status_code=500, detail="Azure credentials not configured for this tenant")
-        
-        # Prepare template data
-        template_data = None
-        if template:
-            template_data = {}
-            if template.get("source") == "url" and template.get("url"):
-                template_data["template_url"] = template["url"]
-            elif template.get("source") == "code" and template.get("code"):
-                template_data["template_body"] = template["code"]
-        
-        # Update deployment in Azure
-        result = azure_deployer.update_deployment(
-            resource_group=deployment["resource_group"],
-            deployment_name=deployment["azure_deployment_id"],
-            template_data=template_data,
-            parameters=parameters
-        )
-        
-        # Update deployment status
-        deployment["status"] = result.get("status", deployment["status"])
-        deployment["updated_at"] = datetime.utcnow().isoformat()
-        
-        return {
-            "deployment_id": deployment_id,
-            "status": deployment["status"],
-            "message": result.get("message", "Deployment update initiated")
-        }
-    except Exception as e:
-        logger.error(f"Error updating deployment: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/deployments/{deployment_id}")
-def delete_deployment(
-    deployment_id: str,
-    user: dict = Depends(check_permission("deployment:delete"))
-):
-    try:
-        # Check if deployment exists
-        if deployment_id not in deployments:
-            raise HTTPException(status_code=404, detail="Deployment not found")
-        
-        # Check if user has access to this deployment
-        deployment = deployments[deployment_id]
-        if deployment["tenant_id"] != user["tenant_id"]:
-            raise HTTPException(status_code=403, detail="Access denied")
-        
-        # Get tenant-specific Azure deployer with fresh credentials
-        azure_deployer = credential_manager.create_azure_deployer_for_tenant(
-            user["tenant_id"]
-        )
-        
-        if not azure_deployer:
-            logger.error(f"Failed to get Azure credentials for tenant {user['tenant_id']}")
-            raise HTTPException(status_code=500, detail="Azure credentials not configured for this tenant")
-        
-        # Delete deployment from Azure
-        result = azure_deployer.delete_deployment(
-            resource_group=deployment["resource_group"],
-            deployment_name=deployment["azure_deployment_id"]
-        )
-        
-        # Update deployment status
-        deployment["status"] = "deleting"
-        deployment["updated_at"] = datetime.utcnow().isoformat()
-        
-        return {
-            "deployment_id": deployment_id,
-            "status": "deleting",
-            "message": result.get("message", "Deployment deletion initiated")
-        }
-    except Exception as e:
-        logger.error(f"Error deleting deployment: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=5000, log_level="info")
