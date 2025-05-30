@@ -656,6 +656,219 @@ def get_resource_details(
         logger.error(f"Error fetching resource details for {resource_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch resource details: {str(e)}")
 
+@app.get("/resources/providers", tags=["resources"])
+def list_resource_providers(
+    target_tenant_id: Optional[str] = None,
+    settings_id: Optional[str] = None,
+    user: dict = Depends(check_permission("deployment:read"))
+):
+    """
+    List all Azure resource providers available in the subscription.
+    
+    Args:
+        target_tenant_id (Optional[str]): Target tenant ID (admin/MSP only)
+        settings_id (Optional[str]): Specific settings ID to use for credentials
+    
+    Returns:
+        dict: List of all resource providers from Azure
+    """
+    try:
+        # Determine which tenant to use
+        tenant_id = user["tenant_id"]
+        
+        # If target_tenant_id is provided, check if user has permission to access other tenants
+        if target_tenant_id and target_tenant_id != user["tenant_id"]:
+            # Only admin or MSP users can access other tenants
+            if user.get("role") not in ["admin", "msp"]:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Not authorized to access resources for other tenants"
+                )
+            tenant_id = target_tenant_id
+        
+        logger.info(f"Listing resource providers for tenant: {tenant_id}")
+        
+        # Get tenant-specific Azure deployer with fresh credentials
+        azure_deployer = credential_manager.create_azure_deployer_for_tenant(
+            tenant_id, 
+            settings_id=settings_id
+        )
+        
+        if not azure_deployer:
+            logger.error(f"Failed to get Azure credentials for tenant {tenant_id}")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure credentials not configured for this tenant"
+            )
+        
+        # Verify credentials are configured
+        cred_status = azure_deployer.get_credential_status()
+        if not cred_status.get("configured", False):
+            logger.error("Azure credentials not properly configured")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure credentials not properly configured"
+            )
+        
+        # Ensure we have a resource client
+        if not azure_deployer.resource_client:
+            logger.info("ResourceManagementClient not available, attempting to ensure resource client")
+            try:
+                azure_deployer._ensure_resource_client()
+            except Exception as e:
+                logger.error(f"Failed to ensure resource client: {str(e)}")
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Failed to configure Azure resource client: {str(e)}"
+                )
+        
+        # Final check - ensure we have a resource client
+        if not azure_deployer.resource_client:
+            logger.error("ResourceManagementClient still not available after ensure_resource_client")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure resource client not configured"
+            )
+        
+        # List all resource providers using the providers.list() method
+        logger.info("Calling ResourceManagementClient.providers.list() for all resource providers")
+        providers = azure_deployer.resource_client.providers.list()
+        
+        # Convert the providers to a list of dictionaries
+        providers_list = []
+        for provider in providers:
+            provider_dict = {
+                "namespace": provider.namespace,
+                "registration_state": provider.registration_state,
+                "registration_policy": getattr(provider, 'registration_policy', None),
+                "resource_types": [
+                    {
+                        "resource_type": rt.resource_type,
+                        "locations": rt.locations,
+                        "api_versions": rt.api_versions,
+                        "capabilities": getattr(rt, 'capabilities', None),
+                        "properties": getattr(rt, 'properties', None)
+                    } for rt in (provider.resource_types or [])
+                ]
+            }
+            providers_list.append(provider_dict)
+        
+        logger.info(f"Successfully fetched {len(providers_list)} resource providers")
+        return {
+            "providers": providers_list,
+            "count": len(providers_list)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error listing resource providers: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/resources/providers/{namespace}", tags=["resources"])
+def get_resource_provider(
+    namespace: str,
+    target_tenant_id: Optional[str] = None,
+    settings_id: Optional[str] = None,
+    user: dict = Depends(check_permission("deployment:read"))
+):
+    """
+    Get details for a specific Azure resource provider by namespace.
+    
+    Args:
+        namespace (str): The resource provider namespace (e.g., "Microsoft.Batch")
+        target_tenant_id (Optional[str]): Target tenant ID (admin/MSP only)
+        settings_id (Optional[str]): Specific settings ID to use for credentials
+    
+    Returns:
+        dict: Resource provider details from Azure
+    """
+    try:
+        # Determine which tenant to use
+        tenant_id = user["tenant_id"]
+        
+        # If target_tenant_id is provided, check if user has permission to access other tenants
+        if target_tenant_id and target_tenant_id != user["tenant_id"]:
+            # Only admin or MSP users can access other tenants
+            if user.get("role") not in ["admin", "msp"]:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Not authorized to access resources for other tenants"
+                )
+            tenant_id = target_tenant_id
+        
+        logger.info(f"Fetching resource provider details for namespace: {namespace}, tenant: {tenant_id}")
+        
+        # Get tenant-specific Azure deployer with fresh credentials
+        azure_deployer = credential_manager.create_azure_deployer_for_tenant(
+            tenant_id, 
+            settings_id=settings_id
+        )
+        
+        if not azure_deployer:
+            logger.error(f"Failed to get Azure credentials for tenant {tenant_id}")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure credentials not configured for this tenant"
+            )
+        
+        # Verify credentials are configured
+        cred_status = azure_deployer.get_credential_status()
+        if not cred_status.get("configured", False):
+            logger.error("Azure credentials not properly configured")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure credentials not properly configured"
+            )
+        
+        # Ensure we have a resource client
+        if not azure_deployer.resource_client:
+            logger.info("ResourceManagementClient not available, attempting to ensure resource client")
+            try:
+                azure_deployer._ensure_resource_client()
+            except Exception as e:
+                logger.error(f"Failed to ensure resource client: {str(e)}")
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Failed to configure Azure resource client: {str(e)}"
+                )
+        
+        # Final check - ensure we have a resource client
+        if not azure_deployer.resource_client:
+            logger.error("ResourceManagementClient still not available after ensure_resource_client")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure resource client not configured"
+            )
+        
+        # Get specific resource provider using the providers.get() method
+        logger.info(f"Calling ResourceManagementClient.providers.get() for namespace: {namespace}")
+        provider = azure_deployer.resource_client.providers.get(resource_provider_namespace=namespace)
+        
+        # Convert the provider object to a dictionary
+        provider_dict = {
+            "namespace": provider.namespace,
+            "registration_state": provider.registration_state,
+            "registration_policy": getattr(provider, 'registration_policy', None),
+            "resource_types": [
+                {
+                    "resource_type": rt.resource_type,
+                    "locations": rt.locations,
+                    "api_versions": rt.api_versions,
+                    "capabilities": getattr(rt, 'capabilities', None),
+                    "properties": getattr(rt, 'properties', None)
+                } for rt in (provider.resource_types or [])
+            ]
+        }
+        
+        logger.info(f"Successfully fetched resource provider details for: {provider.namespace}")
+        return provider_dict
+        
+    except Exception as e:
+        logger.error(f"Error fetching resource provider details: {str(e)}", exc_info=True)
+        # Check if it's a 404 error (provider not found)
+        if "ResourceProviderNotFound" in str(e) or "NotFound" in str(e):
+            raise HTTPException(status_code=404, detail=f"Resource provider '{namespace}' not found")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/resourcegraph", tags=["resourcegraph"])
 def query_azure_resource_graph(
     query: str,
