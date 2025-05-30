@@ -36,7 +36,14 @@ interface Environment {
   description: string;
   provider: string;
   tenantId: string;
-  internal_id: number; // Add internal_id to the environment
+  internal_id: number;
+  cloud_accounts: Array<{
+    id: string;
+    name: string;
+    provider: string;
+    status: string;
+    settings_id?: string;
+  }>;
 }
 
 const TemplateDetails = () => {
@@ -71,6 +78,9 @@ const TemplateDetails = () => {
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [loadingResourceGroups, setLoadingResourceGroups] = useState(false);
   const [cloudAccounts, setCloudAccounts] = useState<any[]>([]);
+  const [selectedEnvironment, setSelectedEnvironment] = useState<string>("");
+  const [selectedCloudAccount, setSelectedCloudAccount] = useState<string>("");
+  const [availableCloudAccounts, setAvailableCloudAccounts] = useState<any[]>([]);
   
   // AI Assistant state
   const [aiChatMessages, setAiChatMessages] = useState<AIChatMessage[]>([
@@ -95,12 +105,42 @@ const TemplateDetails = () => {
     }
   };
   
-  const fetchLocations = async () => {
+  const handleEnvironmentChange = (environmentId: string) => {
+    setSelectedEnvironment(environmentId);
+    setSelectedCloudAccount(""); // Reset cloud account selection
+    setSelectedResourceGroup(""); // Reset resource group selection
+    setLocation(""); // Reset location
+    
+    // Find the selected environment and get its cloud accounts
+    const environment = environments.find(env => env.id === environmentId);
+    if (environment && environment.cloud_accounts) {
+      setAvailableCloudAccounts(environment.cloud_accounts);
+      
+      // Auto-select if only one cloud account
+      if (environment.cloud_accounts.length === 1) {
+        setSelectedCloudAccount(environment.cloud_accounts[0].id);
+      }
+    } else {
+      setAvailableCloudAccounts([]);
+    }
+  };
+  
+  const handleCloudAccountChange = (accountId: string) => {
+    setSelectedCloudAccount(accountId);
+    setSelectedResourceGroup(""); // Reset resource group selection
+    setLocation(""); // Reset location
+    
+    // Fetch locations and resource groups for this cloud account
+    fetchLocationsForAccount(accountId);
+    fetchResourceGroupsForAccount(accountId);
+  };
+  
+  const fetchLocationsForAccount = async (accountId: string) => {
     try {
       setLoadingLocations(true);
-      // Get the first connected cloud account's settings_id
-      const connectedAccount = cloudAccounts.find(account => account.status === 'connected');
-      const settingsId = connectedAccount?.settings_id;
+      // Find the settings_id for the selected cloud account
+      const account = availableCloudAccounts.find(acc => acc.id === accountId);
+      const settingsId = account?.settings_id;
       
       const response = await deploymentService.getSubscriptionLocations(currentTenant?.tenant_id, settingsId);
       if (response && response.locations) {
@@ -114,12 +154,12 @@ const TemplateDetails = () => {
     }
   };
   
-  const fetchResourceGroups = async () => {
+  const fetchResourceGroupsForAccount = async (accountId: string) => {
     try {
       setLoadingResourceGroups(true);
-      // Get the first connected cloud account's settings_id
-      const connectedAccount = cloudAccounts.find(account => account.status === 'connected');
-      const settingsId = connectedAccount?.settings_id;
+      // Find the settings_id for the selected cloud account
+      const account = availableCloudAccounts.find(acc => acc.id === accountId);
+      const settingsId = account?.settings_id;
       
       const query = "resourcecontainers | where type =~ 'microsoft.resources/subscriptions/resourcegroups' | project name, resourceGroup, location";
       const response = await deploymentService.queryResourceGraph(query, currentTenant?.tenant_id, settingsId);
@@ -210,11 +250,11 @@ const TemplateDetails = () => {
   }, [deployDialogOpen]);
   
   useEffect(() => {
-    if (cloudAccounts.length > 0) {
-      fetchLocations();
-      fetchResourceGroups();
+    if (selectedCloudAccount) {
+      fetchLocationsForAccount(selectedCloudAccount);
+      fetchResourceGroupsForAccount(selectedCloudAccount);
     }
-  }, [cloudAccounts]);
+  }, [selectedCloudAccount]);
   
   const fetchTemplate = async (templateId: string) => {
     try {
@@ -355,8 +395,19 @@ const TemplateDetails = () => {
   };
   
   const handleDeployTemplate = async () => {
-    if (!template || !deployEnv || !deployName) {
+    if (!template || !selectedEnvironment || !selectedCloudAccount || !deployName) {
       toast.error("Please provide all required deployment information");
+      return;
+    }
+    
+    // Validate resource group and location based on selection
+    if (useExistingResourceGroup && !selectedResourceGroup) {
+      toast.error("Please select a resource group");
+      return;
+    }
+    
+    if (!useExistingResourceGroup && (!resourceGroup || !location)) {
+      toast.error("Please provide resource group name and location");
       return;
     }
     
@@ -364,8 +415,8 @@ const TemplateDetails = () => {
       setDeploymentInProgress(true);
       
       // Find the selected environment to get its name and environment_id
-      const selectedEnvironment = environments.find(env => env.id === deployEnv);
-      if (!selectedEnvironment) {
+      const environment = environments.find(env => env.id === selectedEnvironment);
+      if (!environment) {
         toast.error("Selected environment not found");
         setDeploymentInProgress(false);
         return;
@@ -382,8 +433,9 @@ const TemplateDetails = () => {
         name: deployName,
         description: `Deployment of ${template.name}`,
         template_id: template.id, // Use the GUID template_id instead of the numeric id
-        environment_id: selectedEnvironment.internal_id, // Use the internal_id from the environment
-        environment_name: selectedEnvironment.name,
+        environment_id: environment.internal_id, // Use the internal_id from the environment
+        environment_name: environment.name,
+        cloud_account_id: selectedCloudAccount, // Add the selected cloud account
         provider: template.provider,
         deployment_type: backendDeploymentType,
         template_source: "code",
@@ -718,8 +770,8 @@ const TemplateDetails = () => {
             <div className="space-y-2">
               <Label htmlFor="deployEnv">Environment</Label>
               <Select 
-                value={deployEnv} 
-                onValueChange={setDeployEnv}
+                value={selectedEnvironment} 
+                onValueChange={handleEnvironmentChange}
                 disabled={deploymentInProgress}
               >
                 <SelectTrigger>
@@ -734,73 +786,109 @@ const TemplateDetails = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="resourceGroup">Resource Group</Label>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="useExistingResourceGroup"
-                    checked={useExistingResourceGroup}
-                    onCheckedChange={setUseExistingResourceGroup}
-                  />
-                  <Label htmlFor="useExistingResourceGroup">Use Existing Resource Group</Label>
-                </div>
-                
-                {useExistingResourceGroup ? (
-                  <Select 
-                    value={selectedResourceGroup} 
-                    onValueChange={handleResourceGroupChange}
-                    disabled={deploymentInProgress || loadingResourceGroups}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={loadingResourceGroups ? "Loading resource groups..." : "Select a resource group"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {resourceGroups.map((rg) => (
-                        <SelectItem key={rg.name} value={rg.name}>
-                          {rg.name} ({rg.location})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input 
-                    id="resourceGroup" 
-                    value={resourceGroup} 
-                    onChange={(e) => setResourceGroup(e.target.value)}
-                    placeholder="Enter new resource group name"
-                  />
-                )}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
-              {useExistingResourceGroup ? (
-                <Input 
-                  id="location" 
-                  value={location} 
-                  disabled={true}
-                  placeholder="Location will be set based on selected resource group"
-                />
-              ) : (
+            
+            {/* Cloud Account Selection */}
+            {selectedEnvironment && (
+              <div className="space-y-2">
+                <Label htmlFor="cloudAccount">Cloud Account</Label>
                 <Select 
-                  value={location} 
-                  onValueChange={setLocation}
-                  disabled={deploymentInProgress || loadingLocations}
+                  value={selectedCloudAccount} 
+                  onValueChange={handleCloudAccountChange}
+                  disabled={deploymentInProgress || availableCloudAccounts.length === 0}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={loadingLocations ? "Loading locations..." : "Select a location"} />
+                    <SelectValue placeholder={
+                      availableCloudAccounts.length === 0 
+                        ? "No cloud accounts available" 
+                        : "Select a cloud account"
+                    } />
                   </SelectTrigger>
                   <SelectContent>
-                    {locations.map((loc) => (
-                      <SelectItem key={loc.name} value={loc.name}>
-                        {loc.display_name || loc.name}
+                    {availableCloudAccounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name} ({account.provider})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              )}
-            </div>
+              </div>
+            )}
+            
+            {/* Resource Group Selection - only show when cloud account is selected */}
+            {/* Resource Group Selection - only show when cloud account is selected */}
+            {selectedCloudAccount && (
+              <div className="space-y-2">
+                <Label htmlFor="resourceGroup">Resource Group</Label>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="useExistingResourceGroup"
+                      checked={useExistingResourceGroup}
+                      onCheckedChange={setUseExistingResourceGroup}
+                    />
+                    <Label htmlFor="useExistingResourceGroup">Use Existing Resource Group</Label>
+                  </div>
+                  
+                  {useExistingResourceGroup ? (
+                    <Select 
+                      value={selectedResourceGroup} 
+                      onValueChange={handleResourceGroupChange}
+                      disabled={deploymentInProgress || loadingResourceGroups}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={loadingResourceGroups ? "Loading resource groups..." : "Select a resource group"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {resourceGroups.map((rg) => (
+                          <SelectItem key={rg.name} value={rg.name}>
+                            {rg.name} ({rg.location})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input 
+                      id="resourceGroup" 
+                      value={resourceGroup} 
+                      onChange={(e) => setResourceGroup(e.target.value)}
+                      placeholder="Enter new resource group name"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Location Selection - only show when cloud account is selected */}
+            {selectedCloudAccount && (
+              <div className="space-y-2">
+                <Label htmlFor="location">Location</Label>
+                {useExistingResourceGroup ? (
+                  <Input 
+                    id="location" 
+                    value={location} 
+                    disabled={true}
+                    placeholder="Location will be set based on selected resource group"
+                  />
+                ) : (
+                  <Select 
+                    value={location} 
+                    onValueChange={setLocation}
+                    disabled={deploymentInProgress || loadingLocations}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={loadingLocations ? "Loading locations..." : "Select a location"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locations.map((loc) => (
+                        <SelectItem key={loc.name} value={loc.name}>
+                          {loc.display_name || loc.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
             
             {/* Parameters section */}
             {Object.keys(parameters).length > 0 && (
