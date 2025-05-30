@@ -644,8 +644,6 @@ def get_resource_details(
             "properties": resource.properties,
             "tags": resource.tags,
             "identity": resource.identity.as_dict() if resource.identity else None,
-            "created_time": resource.created_time.isoformat() if resource.created_time else None,
-            "changed_time": resource.changed_time.isoformat() if resource.changed_time else None,
             "provisioning_state": getattr(resource, 'provisioning_state', None)
         }
         
