@@ -1201,7 +1201,7 @@ def delete_deployment(
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Delete a deployment
+    Delete a deployment and all related records
     """
     # Check if user has permission to delete deployments
     has_permission = any(p.name == "delete:deployments" for p in current_user.role.permissions)
@@ -1230,9 +1230,31 @@ def delete_deployment(
                     detail="Not authorized to delete this deployment"
                 )
         
-        # Delete deployment
+        # Delete related records in the correct order to maintain referential integrity
+        
+        # 1. Delete deployment history records
+        deployment_history_records = db.query(DeploymentHistory).filter(
+            DeploymentHistory.deployment_id == deployment.id
+        ).all()
+        
+        for history_record in deployment_history_records:
+            db.delete(history_record)
+        
+        # 2. Delete deployment details records
+        deployment_details_records = db.query(DeploymentDetails).filter(
+            DeploymentDetails.deployment_id == deployment.id
+        ).all()
+        
+        for details_record in deployment_details_records:
+            db.delete(details_record)
+        
+        # 3. Finally delete the main deployment record
         db.delete(deployment)
+        
+        # Commit all deletions in a single transaction
         db.commit()
+        
+        logger.info(f"Successfully deleted deployment {deployment_id} and all related records")
         
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     
@@ -1241,6 +1263,7 @@ def delete_deployment(
         raise
     except Exception as e:
         db.rollback()
+        logger.error(f"Error deleting deployment {deployment_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting deployment: {str(e)}"
