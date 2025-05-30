@@ -1,12 +1,25 @@
 import axios from 'axios';
 import { CloudDeployment, CloudAccount, CloudTemplate, DeploymentLog } from '@/types/cloud';
 
-// API base URL
-const API_URL = 'http://localhost:5000/api';
+// API base URL for backend services
+const API_URL = 'http://localhost:8000/api';
 
-// Create axios instance with default config
+// Deployment engine URL for specific endpoints
+const DEPLOYMENT_ENGINE_URL = 'http://localhost:5000';
+
+// Create axios instance with default config for backend
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  withCredentials: false
+});
+
+// Create axios instance for deployment engine
+const deploymentEngineApi = axios.create({
+  baseURL: DEPLOYMENT_ENGINE_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
@@ -213,7 +226,7 @@ export class DeploymentService {
         params.settings_id = settingsId;
       }
 
-      const response = await api.get('/resources/subscription_locations', {
+      const response = await deploymentEngineApi.get('/resources/subscription_locations', {
         headers: {
           Authorization: `Bearer ${token}`
         },
@@ -244,7 +257,7 @@ export class DeploymentService {
         params.settings_id = settingsId;
       }
 
-      const response = await api.get('/resourcegraph', {
+      const response = await deploymentEngineApi.get('/resourcegraph', {
         headers: {
           Authorization: `Bearer ${token}`
         },
