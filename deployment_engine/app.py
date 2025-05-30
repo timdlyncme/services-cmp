@@ -661,6 +661,8 @@ def get_resource_details(
 @app.get("/resourcegraph", tags=["resourcegraph"])
 def query_azure_resource_graph(
     query: str,
+    target_tenant_id: Optional[str] = None,
+    settings_id: Optional[str] = None,
     user: dict = Depends(check_permission("deployment:read"))
 ):
     """
@@ -668,20 +670,33 @@ def query_azure_resource_graph(
     
     Args:
         query (str): The Azure Resource Graph query to execute
+        target_tenant_id (Optional[str]): Target tenant ID (admin/MSP only)
+        settings_id (Optional[str]): Specific settings ID to use for credentials
     
     Returns:
-        list: Query results from Azure Resource Graph
+        dict: Query results from Azure Resource Graph
     """
     try:
         # Determine which tenant to use
         tenant_id = user["tenant_id"]
+        
+        # If target_tenant_id is provided, check if user has permission to access other tenants
+        if target_tenant_id and target_tenant_id != user["tenant_id"]:
+            # Only admin or MSP users can access other tenants
+            if user.get("role") not in ["admin", "msp"]:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Not authorized to access resources for other tenants"
+                )
+            tenant_id = target_tenant_id
         
         logger.info(f"Executing Azure Resource Graph query for tenant: {tenant_id}")
         logger.info(f"Query: {query}")
         
         # Get tenant-specific Azure deployer with fresh credentials
         azure_deployer = credential_manager.create_azure_deployer_for_tenant(
-            tenant_id
+            tenant_id,
+            settings_id=settings_id
         )
         
         if not azure_deployer:
