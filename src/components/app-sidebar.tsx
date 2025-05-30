@@ -16,7 +16,7 @@ import {
   Brain,
   ChevronLeft,
   ChevronRight,
-  LogOut,
+  CheckSquare,
   User,
   type LucideIcon,
 } from "lucide-react";
@@ -145,6 +145,7 @@ export function AppSidebar() {
               <NavItem to="/" icon={Activity} label="Dashboard" collapsed={collapsed} permission="view:dashboard" />
               <NavItem to="/catalog" icon={FileCode} label="Template Catalog" collapsed={collapsed} permission="view:catalog" />
               <NavItem to="/deployments" icon={Database} label="Deployments" collapsed={collapsed} permission="view:deployments" />
+              <NavItem to="/approvals" icon={CheckSquare} label="Approvals" collapsed={collapsed} />
               </div>
           </SidebarSection>
 
