@@ -173,6 +173,27 @@ export class DeploymentService {
       throw error;
     }
   }
+
+  /**
+   * Delete a deployment
+   */
+  async deleteDeployment(deploymentId: string): Promise<void> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      await api.delete(`/deployments/${deploymentId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+    } catch (error) {
+      console.error(`Delete deployment ${deploymentId} error:`, error);
+      throw error;
+    }
+  }
 }
 
 // Create a singleton instance

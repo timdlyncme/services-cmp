@@ -172,7 +172,7 @@ const DeploymentDetails = () => {
     };
   }, [refreshInterval, deploymentId]);
   
-  const handleAction = (action: string) => {
+  const handleAction = async (action: string) => {
     toast.success(`${action} action initiated`);
     
     if (action === "restart") {
@@ -225,11 +225,27 @@ const DeploymentDetails = () => {
       
       setStatusMessage("Deployment deletion in progress");
       
-      // Simulate deletion and navigate back after 3 seconds
-      setTimeout(() => {
+      try {
+        // Actually delete the deployment via API
+        await deploymentService.deleteDeployment(deploymentId!);
+        
         toast.success("Deployment deleted successfully");
         navigate("/deployments");
-      }, 3000);
+      } catch (error) {
+        console.error("Error deleting deployment:", error);
+        toast.error("Failed to delete deployment. Please try again.");
+        
+        // Revert the status if deletion failed
+        setDeployment({
+          ...deployment!,
+          status: deployment!.status // Revert to original status
+        });
+        setStatusMessage("Deployment deletion failed");
+        
+        // Add error log
+        const errorLog = `${new Date().toISOString()} [ERROR] Deployment deletion failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        setLogs([...logs, newLog, errorLog]);
+      }
     }
   };
   
