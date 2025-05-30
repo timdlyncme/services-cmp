@@ -11,6 +11,8 @@ import { ProtectedRoute } from "@/components/protected-route";
 import Dashboard from "@/pages/Dashboard";
 import Catalog from "@/pages/Catalog";
 import TemplateDetails from "@/pages/TemplateDetails";
+import Approvals from "@/pages/Approvals";
+import ApprovalDetails from "@/pages/ApprovalDetails";
 import Deployments from "@/pages/Deployments";
 import DeploymentDetails from "@/pages/DeploymentDetails";
 import ResourceDetails from "@/pages/ResourceDetails";
@@ -47,6 +49,8 @@ const App = () => (
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/catalog" element={<Catalog />} />
                 <Route path="/catalog/:templateId" element={<TemplateDetails />} />
+                <Route path="/approvals" element={<Approvals />} />
+                <Route path="/approvals/:approvalId" element={<ApprovalDetails />} />
                 <Route path="/deployments" element={<Deployments />} />
                 <Route path="/deployments/:deploymentId" element={<DeploymentDetails />} />
                 <Route path="/deployments/:deploymentId/resources/:resourceId" element={<ResourceDetails />} />
