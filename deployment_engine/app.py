@@ -451,12 +451,30 @@ def create_deployment(
         cred_status = azure_deployer.get_credential_status()
         if not cred_status.get("configured", False):
             logger.error("Azure credentials not properly configured")
-            raise ValueError("Azure credentials not properly configured")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure credentials not properly configured"
+            )
         
-        # Set subscription if provided and not already set
-        if subscription_id and azure_deployer.subscription_id != subscription_id:
-            logger.info(f"Setting subscription ID: {subscription_id}")
-            azure_deployer.set_subscription(subscription_id)
+        # Ensure we have a resource client
+        if not azure_deployer.resource_client:
+            logger.info("ResourceManagementClient not available, attempting to ensure resource client")
+            try:
+                azure_deployer._ensure_resource_client()
+            except Exception as e:
+                logger.error(f"Failed to ensure resource client: {str(e)}")
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Failed to configure Azure resource client: {str(e)}"
+                )
+        
+        # Final check - ensure we have a resource client
+        if not azure_deployer.resource_client:
+            logger.error("ResourceManagementClient still not available after ensure_resource_client")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure resource client not configured"
+            )
         
         # Prepare template data
         template_data = {}
