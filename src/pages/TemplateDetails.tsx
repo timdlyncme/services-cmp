@@ -106,21 +106,28 @@ const TemplateDetails = () => {
   };
   
   const handleEnvironmentChange = (environmentId: string) => {
+    console.log("handleEnvironmentChange - environmentId:", environmentId);
+    
     setSelectedEnvironment(environmentId);
     setSelectedCloudAccount(""); // Reset cloud account selection
     setSelectedResourceGroup(""); // Reset resource group selection
     setLocation(""); // Reset location
     
-    // Find the selected environment and get its cloud accounts
+    // Find the environment and set available cloud accounts
     const environment = environments.find(env => env.id === environmentId);
+    console.log("handleEnvironmentChange - environment:", environment);
+    
     if (environment && environment.cloud_accounts) {
+      console.log("handleEnvironmentChange - cloud_accounts:", environment.cloud_accounts);
       setAvailableCloudAccounts(environment.cloud_accounts);
       
-      // Auto-select if only one cloud account
+      // If there's only one cloud account, auto-select it
       if (environment.cloud_accounts.length === 1) {
+        console.log("handleEnvironmentChange - auto-selecting single cloud account:", environment.cloud_accounts[0]);
         setSelectedCloudAccount(environment.cloud_accounts[0].id);
       }
     } else {
+      console.log("handleEnvironmentChange - no cloud accounts found");
       setAvailableCloudAccounts([]);
     }
   };
@@ -142,6 +149,11 @@ const TemplateDetails = () => {
       const account = availableCloudAccounts.find(acc => acc.id === accountId);
       const settingsId = account?.settings_id;
       
+      console.log("fetchLocationsForAccount - accountId:", accountId);
+      console.log("fetchLocationsForAccount - account:", account);
+      console.log("fetchLocationsForAccount - settingsId:", settingsId);
+      console.log("fetchLocationsForAccount - tenantId:", currentTenant?.tenant_id);
+      
       const response = await deploymentService.getSubscriptionLocations(currentTenant?.tenant_id, settingsId);
       if (response && response.locations) {
         setLocations(response.locations);
@@ -160,6 +172,11 @@ const TemplateDetails = () => {
       // Find the settings_id for the selected cloud account
       const account = availableCloudAccounts.find(acc => acc.id === accountId);
       const settingsId = account?.settings_id;
+      
+      console.log("fetchResourceGroupsForAccount - accountId:", accountId);
+      console.log("fetchResourceGroupsForAccount - account:", account);
+      console.log("fetchResourceGroupsForAccount - settingsId:", settingsId);
+      console.log("fetchResourceGroupsForAccount - tenantId:", currentTenant?.tenant_id);
       
       const query = "resourcecontainers | where type =~ 'microsoft.resources/subscriptions/resourcegroups' | project name, resourceGroup, location";
       const response = await deploymentService.queryResourceGraph(query, currentTenant?.tenant_id, settingsId);

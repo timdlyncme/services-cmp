@@ -2,7 +2,7 @@ import axios from 'axios';
 import { CloudDeployment, CloudAccount, CloudTemplate, DeploymentLog } from '@/types/cloud';
 
 // API base URL
-const API_URL = 'http://localhost:8000/api';
+const API_URL = 'http://localhost:5000/api';
 
 // Create axios instance with default config
 const api = axios.create({
