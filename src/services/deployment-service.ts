@@ -194,6 +194,68 @@ export class DeploymentService {
       throw error;
     }
   }
+
+  /**
+   * Get subscription locations from Azure
+   */
+  async getSubscriptionLocations(tenantId?: string, settingsId?: string): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const params: any = {};
+      if (tenantId) {
+        params.target_tenant_id = formatTenantId(tenantId);
+      }
+      if (settingsId) {
+        params.settings_id = settingsId;
+      }
+
+      const response = await api.get('/resources/subscription_locations', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get subscription locations error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Query Azure Resource Graph
+   */
+  async queryResourceGraph(query: string, tenantId?: string, settingsId?: string): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const params: any = { query };
+      if (tenantId) {
+        params.target_tenant_id = formatTenantId(tenantId);
+      }
+      if (settingsId) {
+        params.settings_id = settingsId;
+      }
+
+      const response = await api.get('/resourcegraph', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Query resource graph error:', error);
+      throw error;
+    }
+  }
 }
 
 // Create a singleton instance

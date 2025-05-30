@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { cmpService } from "@/services/cmp-service";
 import { deploymentService } from "@/services/deployment-service";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAzureOpenAI } from "@/contexts/AzureOpenAIContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -62,6 +63,14 @@ const TemplateDetails = () => {
   const [showPasswordValues, setShowPasswordValues] = useState<Record<string, boolean>>({});
   const [deploymentInProgress, setDeploymentInProgress] = useState(false);
   
+  // New state for dynamic dropdowns
+  const [locations, setLocations] = useState<any[]>([]);
+  const [resourceGroups, setResourceGroups] = useState<any[]>([]);
+  const [useExistingResourceGroup, setUseExistingResourceGroup] = useState(true);
+  const [selectedResourceGroup, setSelectedResourceGroup] = useState("");
+  const [loadingLocations, setLoadingLocations] = useState(false);
+  const [loadingResourceGroups, setLoadingResourceGroups] = useState(false);
+  
   // AI Assistant state
   const [aiChatMessages, setAiChatMessages] = useState<AIChatMessage[]>([
     { role: "system", content: "You are an AI assistant that helps with understanding and modifying cloud templates. You have knowledge about Azure, AWS, and GCP resources and infrastructure as code." },
@@ -73,6 +82,47 @@ const TemplateDetails = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const { isConfigured, config } = useAzureOpenAI();
   const aiAssistantService = new AIAssistantService();
+  
+  const fetchLocations = async () => {
+    try {
+      setLoadingLocations(true);
+      const response = await deploymentService.getSubscriptionLocations();
+      if (response && response.locations) {
+        setLocations(response.locations);
+      }
+    } catch (err) {
+      console.error("Error fetching locations:", err);
+      toast.error("Failed to load locations");
+    } finally {
+      setLoadingLocations(false);
+    }
+  };
+  
+  const fetchResourceGroups = async () => {
+    try {
+      setLoadingResourceGroups(true);
+      const query = "resourcecontainers | where type =~ 'microsoft.resources/subscriptions/resourcegroups' | project name, resourceGroup, location";
+      const response = await deploymentService.queryResourceGraph(query);
+      if (response && response.data) {
+        setResourceGroups(response.data);
+      }
+    } catch (err) {
+      console.error("Error fetching resource groups:", err);
+      toast.error("Failed to load resource groups");
+    } finally {
+      setLoadingResourceGroups(false);
+    }
+  };
+  
+  const handleResourceGroupChange = (resourceGroupName: string) => {
+    setSelectedResourceGroup(resourceGroupName);
+    
+    // Find the selected resource group and update location
+    const selectedRG = resourceGroups.find(rg => rg.name === resourceGroupName);
+    if (selectedRG) {
+      setLocation(selectedRG.location);
+    }
+  };
   
   const fetchVersions = async (templateId: string) => {
     try {
@@ -133,6 +183,13 @@ const TemplateDetails = () => {
     }
   }, [templateId]);
   
+  useEffect(() => {
+    if (deployDialogOpen) {
+      fetchLocations();
+      fetchResourceGroups();
+    }
+  }, [deployDialogOpen]);
+  
   const fetchTemplate = async (templateId: string) => {
     try {
       setLoading(true);
@@ -185,6 +242,14 @@ const TemplateDetails = () => {
       chatEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [aiChatMessages]);
+
+  // Load locations and resource groups when deploy dialog opens
+  useEffect(() => {
+    if (deployDialogOpen) {
+      fetchLocations();
+      fetchResourceGroups();
+    }
+  }, [deployDialogOpen]);
   
   const handleSaveTemplate = async () => {
     if (!template) return;
@@ -306,7 +371,7 @@ const TemplateDetails = () => {
         template_code: templateCode,
         parameters: parameters || {},
         template_version: template.currentVersion, // Add the template version to the deployment data
-        resource_group: resourceGroup || undefined, // Add resource group if provided
+        resource_group: useExistingResourceGroup ? selectedResourceGroup : resourceGroup, // Use selected or new resource group
         location: location || undefined // Add location if provided
       };
       
@@ -652,19 +717,70 @@ const TemplateDetails = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="resourceGroup">Resource Group</Label>
-              <Input 
-                id="resourceGroup" 
-                value={resourceGroup} 
-                onChange={(e) => setResourceGroup(e.target.value)}
-              />
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="useExistingResourceGroup"
+                    checked={useExistingResourceGroup}
+                    onCheckedChange={setUseExistingResourceGroup}
+                  />
+                  <Label htmlFor="useExistingResourceGroup">Use Existing Resource Group</Label>
+                </div>
+                
+                {useExistingResourceGroup ? (
+                  <Select 
+                    value={selectedResourceGroup} 
+                    onValueChange={handleResourceGroupChange}
+                    disabled={deploymentInProgress || loadingResourceGroups}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={loadingResourceGroups ? "Loading resource groups..." : "Select a resource group"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {resourceGroups.map((rg) => (
+                        <SelectItem key={rg.name} value={rg.name}>
+                          {rg.name} ({rg.location})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input 
+                    id="resourceGroup" 
+                    value={resourceGroup} 
+                    onChange={(e) => setResourceGroup(e.target.value)}
+                    placeholder="Enter new resource group name"
+                  />
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="location">Location</Label>
-              <Input 
-                id="location" 
-                value={location} 
-                onChange={(e) => setLocation(e.target.value)}
-              />
+              {useExistingResourceGroup ? (
+                <Input 
+                  id="location" 
+                  value={location} 
+                  disabled={true}
+                  placeholder="Location will be set based on selected resource group"
+                />
+              ) : (
+                <Select 
+                  value={location} 
+                  onValueChange={setLocation}
+                  disabled={deploymentInProgress || loadingLocations}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={loadingLocations ? "Loading locations..." : "Select a location"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locations.map((loc) => (
+                      <SelectItem key={loc.name} value={loc.name}>
+                        {loc.display_name || loc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             
             {/* Parameters section */}
