@@ -70,6 +70,7 @@ const TemplateDetails = () => {
   const [selectedResourceGroup, setSelectedResourceGroup] = useState("");
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [loadingResourceGroups, setLoadingResourceGroups] = useState(false);
+  const [cloudAccounts, setCloudAccounts] = useState<any[]>([]);
   
   // AI Assistant state
   const [aiChatMessages, setAiChatMessages] = useState<AIChatMessage[]>([
@@ -83,10 +84,25 @@ const TemplateDetails = () => {
   const { isConfigured, config } = useAzureOpenAI();
   const aiAssistantService = new AIAssistantService();
   
+  const fetchCloudAccounts = async () => {
+    try {
+      if (currentTenant?.tenant_id) {
+        const accounts = await deploymentService.getCloudAccounts(currentTenant.tenant_id);
+        setCloudAccounts(accounts);
+      }
+    } catch (err) {
+      console.error("Error fetching cloud accounts:", err);
+    }
+  };
+  
   const fetchLocations = async () => {
     try {
       setLoadingLocations(true);
-      const response = await deploymentService.getSubscriptionLocations();
+      // Get the first connected cloud account's settings_id
+      const connectedAccount = cloudAccounts.find(account => account.status === 'connected');
+      const settingsId = connectedAccount?.settings_id;
+      
+      const response = await deploymentService.getSubscriptionLocations(currentTenant?.tenant_id, settingsId);
       if (response && response.locations) {
         setLocations(response.locations);
       }
@@ -101,8 +117,12 @@ const TemplateDetails = () => {
   const fetchResourceGroups = async () => {
     try {
       setLoadingResourceGroups(true);
+      // Get the first connected cloud account's settings_id
+      const connectedAccount = cloudAccounts.find(account => account.status === 'connected');
+      const settingsId = connectedAccount?.settings_id;
+      
       const query = "resourcecontainers | where type =~ 'microsoft.resources/subscriptions/resourcegroups' | project name, resourceGroup, location";
-      const response = await deploymentService.queryResourceGraph(query);
+      const response = await deploymentService.queryResourceGraph(query, currentTenant?.tenant_id, settingsId);
       if (response && response.data) {
         setResourceGroups(response.data);
       }
@@ -185,10 +205,16 @@ const TemplateDetails = () => {
   
   useEffect(() => {
     if (deployDialogOpen) {
+      fetchCloudAccounts();
+    }
+  }, [deployDialogOpen]);
+  
+  useEffect(() => {
+    if (cloudAccounts.length > 0) {
       fetchLocations();
       fetchResourceGroups();
     }
-  }, [deployDialogOpen]);
+  }, [cloudAccounts]);
   
   const fetchTemplate = async (templateId: string) => {
     try {
@@ -243,13 +269,6 @@ const TemplateDetails = () => {
     }
   }, [aiChatMessages]);
 
-  // Load locations and resource groups when deploy dialog opens
-  useEffect(() => {
-    if (deployDialogOpen) {
-      fetchLocations();
-      fetchResourceGroups();
-    }
-  }, [deployDialogOpen]);
   
   const handleSaveTemplate = async () => {
     if (!template) return;
