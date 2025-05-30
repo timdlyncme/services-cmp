@@ -961,6 +961,142 @@ def query_azure_resource_graph(
         logger.error(f"Error executing Azure Resource Graph query: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to execute query: {str(e)}")
 
+@app.get("/resources/subscription_locations", tags=["resources"])
+def get_subscription_locations(
+    target_tenant_id: Optional[str] = None,
+    settings_id: Optional[str] = None,
+    user: dict = Depends(check_permission("deployment:read"))
+):
+    """
+    Get all available locations for the Azure subscription.
+    
+    Args:
+        target_tenant_id (Optional[str]): Target tenant ID (admin/MSP only)
+        settings_id (Optional[str]): Specific settings ID to use for credentials
+    
+    Returns:
+        dict: Subscription details and all available locations
+    """
+    try:
+        # Determine which tenant to use
+        tenant_id = user["tenant_id"]
+        
+        # If target_tenant_id is provided, check if user has permission to access other tenants
+        if target_tenant_id and target_tenant_id != user["tenant_id"]:
+            # Only admin or MSP users can access other tenants
+            if user.get("role") not in ["admin", "msp"]:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Not authorized to access resources for other tenants"
+                )
+            tenant_id = target_tenant_id
+        
+        logger.info(f"Fetching subscription locations for tenant: {tenant_id}")
+        
+        # Get tenant-specific Azure deployer with fresh credentials
+        azure_deployer = credential_manager.create_azure_deployer_for_tenant(
+            tenant_id, 
+            settings_id=settings_id
+        )
+        
+        if not azure_deployer:
+            logger.error(f"Failed to get Azure credentials for tenant {tenant_id}")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure credentials not configured for this tenant"
+            )
+        
+        # Verify credentials are configured
+        cred_status = azure_deployer.get_credential_status()
+        if not cred_status.get("configured", False):
+            logger.error("Azure credentials not properly configured")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure credentials not properly configured"
+            )
+        
+        # Ensure we have a resource client to get the subscription_id
+        if not azure_deployer.resource_client:
+            logger.info("ResourceManagementClient not available, attempting to ensure resource client")
+            try:
+                azure_deployer._ensure_resource_client()
+            except Exception as e:
+                logger.error(f"Failed to ensure resource client: {str(e)}")
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Failed to configure Azure resource client: {str(e)}"
+                )
+        
+        # Final check - ensure we have a resource client and subscription_id
+        if not azure_deployer.resource_client or not azure_deployer.subscription_id:
+            logger.error("ResourceManagementClient or subscription_id not available")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure resource client or subscription not configured"
+            )
+        
+        # Import and create subscription client
+        from azure.mgmt.subscription import SubscriptionClient
+        
+        logger.info(f"Creating SubscriptionClient for subscription: {azure_deployer.subscription_id}")
+        subscription_client = SubscriptionClient(azure_deployer.credential)
+        
+        # Get subscription locations using list_locations method
+        logger.info(f"Calling SubscriptionClient.subscriptions.list_locations() for subscription: {azure_deployer.subscription_id}")
+        locations = list(subscription_client.subscriptions.list_locations(subscription_id=azure_deployer.subscription_id))
+        
+        # Convert locations to a list of dictionaries
+        locations_list = []
+        for location in locations:
+            location_dict = {
+                "id": getattr(location, 'id', None),
+                "name": location.name,
+                "display_name": location.display_name,
+                "latitude": getattr(location, 'latitude', None),
+                "longitude": getattr(location, 'longitude', None),
+                "geography": getattr(location, 'geography', None),
+                "geography_group": getattr(location, 'geography_group', None),
+                "physical_location": getattr(location, 'physical_location', None),
+                "region_type": getattr(location, 'region_type', None),
+                "region_category": getattr(location, 'region_category', None),
+                "availability_zone_mappings": getattr(location, 'availability_zone_mappings', None),
+                "paired_region": [
+                    {
+                        "name": pr.name,
+                        "id": getattr(pr, 'id', None)
+                    } for pr in (getattr(location, 'paired_region', None) or [])
+                ] if hasattr(location, 'paired_region') and location.paired_region else None
+            }
+            locations_list.append(location_dict)
+        
+        # Get subscription details for context
+        subscription_info = {
+            "subscription_id": azure_deployer.subscription_id,
+            "tenant_id": azure_deployer.tenant_id
+        }
+        
+        # Try to get subscription display name if available
+        try:
+            subscriptions = azure_deployer.list_subscriptions()
+            for sub in subscriptions:
+                if sub["id"] == azure_deployer.subscription_id:
+                    subscription_info["display_name"] = sub["name"]
+                    subscription_info["state"] = sub["state"]
+                    break
+        except Exception as e:
+            logger.warning(f"Could not fetch subscription details: {str(e)}")
+        
+        logger.info(f"Successfully fetched {len(locations_list)} locations for subscription {azure_deployer.subscription_id}")
+        return {
+            "subscription": subscription_info,
+            "locations": locations_list,
+            "count": len(locations_list)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching subscription locations: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=5000, log_level="info")
