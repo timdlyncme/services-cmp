@@ -604,7 +604,19 @@ def get_resource_details(
         
         # Ensure we have a resource client
         if not azure_deployer.resource_client:
-            logger.error("ResourceManagementClient not available")
+            logger.info("ResourceManagementClient not available, attempting to ensure resource client")
+            try:
+                azure_deployer._ensure_resource_client()
+            except Exception as e:
+                logger.error(f"Failed to ensure resource client: {str(e)}")
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Failed to configure Azure resource client: {str(e)}"
+                )
+        
+        # Final check - ensure we have a resource client
+        if not azure_deployer.resource_client:
+            logger.error("ResourceManagementClient still not available after ensure_resource_client")
             raise HTTPException(
                 status_code=400, 
                 detail="Azure resource client not configured"
