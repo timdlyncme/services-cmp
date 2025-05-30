@@ -528,6 +528,104 @@ def create_deployment(
         logger.error(f"Error creating deployment: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/resources", tags=["resources"])
+def get_resource_details(
+    resource_id: str,
+    target_tenant_id: Optional[str] = None,
+    settings_id: Optional[str] = None,
+    user: dict = Depends(check_permission("deployment:read"))
+):
+    """
+    Get Azure resource details by resource ID.
+    
+    Args:
+        resource_id (str): The Azure resource ID to fetch details for
+        target_tenant_id (Optional[str]): Target tenant ID (admin/MSP only)
+        settings_id (Optional[str]): Specific settings ID to use for credentials
+    
+    Returns:
+        dict: Resource details from Azure
+    """
+    try:
+        # Determine which tenant to use
+        tenant_id = user["tenant_id"]
+        
+        # If target_tenant_id is provided, check if user has permission to access other tenants
+        if target_tenant_id and target_tenant_id != user["tenant_id"]:
+            # Only admin or MSP users can access other tenants
+            if user.get("role") not in ["admin", "msp"]:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Not authorized to access resources for other tenants"
+                )
+            tenant_id = target_tenant_id
+        
+        logger.info(f"Fetching resource details for resource_id: {resource_id}, tenant: {tenant_id}")
+        
+        # Get tenant-specific Azure deployer with fresh credentials
+        azure_deployer = credential_manager.create_azure_deployer_for_tenant(
+            tenant_id, 
+            settings_id=settings_id
+        )
+        
+        if not azure_deployer:
+            logger.error(f"Failed to get Azure credentials for tenant {tenant_id}")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure credentials not configured for this tenant"
+            )
+        
+        # Verify credentials are configured
+        cred_status = azure_deployer.get_credential_status()
+        if not cred_status.get("configured", False):
+            logger.error("Azure credentials not properly configured")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure credentials not properly configured"
+            )
+        
+        # Ensure we have a resource client
+        if not azure_deployer.resource_client:
+            logger.error("ResourceManagementClient not available")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure resource client not configured"
+            )
+        
+        # Fetch resource details using get_by_id method
+        logger.info(f"Calling ResourceManagementClient.get_by_id for resource: {resource_id}")
+        resource = azure_deployer.resource_client.resources.get_by_id(
+            resource_id=resource_id,
+            api_version="2021-04-01"  # Use a recent API version
+        )
+        
+        # Convert the resource object to a dictionary
+        resource_dict = {
+            "id": resource.id,
+            "name": resource.name,
+            "type": resource.type,
+            "location": resource.location,
+            "kind": getattr(resource, 'kind', None),
+            "managed_by": getattr(resource, 'managed_by', None),
+            "sku": resource.sku.as_dict() if resource.sku else None,
+            "plan": resource.plan.as_dict() if resource.plan else None,
+            "properties": resource.properties,
+            "tags": resource.tags,
+            "identity": resource.identity.as_dict() if resource.identity else None,
+            "created_time": resource.created_time.isoformat() if resource.created_time else None,
+            "changed_time": resource.changed_time.isoformat() if resource.changed_time else None,
+            "provisioning_state": getattr(resource, 'provisioning_state', None)
+        }
+        
+        logger.info(f"Successfully fetched resource details for: {resource.name} ({resource.type})")
+        return resource_dict
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching resource details for {resource_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch resource details: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=5000, log_level="info")
