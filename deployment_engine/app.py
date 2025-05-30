@@ -11,6 +11,8 @@ import threading
 import time
 from deploy.azure import AzureDeployer
 from credential_manager import credential_manager
+from azure.mgmt.resourcegraph import ResourceGraphClient
+from azure.mgmt.resourcegraph.models import QueryRequest
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -655,6 +657,83 @@ def get_resource_details(
     except Exception as e:
         logger.error(f"Error fetching resource details for {resource_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch resource details: {str(e)}")
+
+@app.get("/resourcegraph", tags=["resourcegraph"])
+def query_azure_resource_graph(
+    query: str,
+    user: dict = Depends(check_permission("deployment:read"))
+):
+    """
+    Query Azure Resource Graph.
+    
+    Args:
+        query (str): The Azure Resource Graph query to execute
+    
+    Returns:
+        list: Query results from Azure Resource Graph
+    """
+    try:
+        # Determine which tenant to use
+        tenant_id = user["tenant_id"]
+        
+        logger.info(f"Executing Azure Resource Graph query for tenant: {tenant_id}")
+        logger.info(f"Query: {query}")
+        
+        # Get tenant-specific Azure deployer with fresh credentials
+        azure_deployer = credential_manager.create_azure_deployer_for_tenant(
+            tenant_id
+        )
+        
+        if not azure_deployer:
+            logger.error(f"Failed to get Azure credentials for tenant {tenant_id}")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure credentials not configured for this tenant"
+            )
+        
+        # Verify credentials are configured
+        cred_status = azure_deployer.get_credential_status()
+        if not cred_status.get("configured", False):
+            logger.error("Azure credentials not properly configured")
+            raise HTTPException(
+                status_code=400, 
+                detail="Azure credentials not properly configured"
+            )
+        
+        # Create a Resource Graph client using the same credentials as the deployer
+        logger.info("Creating ResourceGraphClient")
+        resource_graph_client = ResourceGraphClient(azure_deployer.credentials)
+        
+        # Create the query request
+        query_request = QueryRequest(query=query)
+        
+        # Execute the query
+        logger.info("Executing Resource Graph query")
+        result = resource_graph_client.resources(query_request)
+        
+        # Convert the result to a list of dictionaries
+        results = []
+        if result.data:
+            for item in result.data:
+                # Convert each item to a dictionary
+                if hasattr(item, 'as_dict'):
+                    results.append(item.as_dict())
+                else:
+                    # Fallback for items that don't have as_dict method
+                    results.append(dict(item))
+        
+        logger.info(f"Successfully executed query, returned {len(results)} results")
+        return {
+            "data": results,
+            "count": len(results),
+            "query": query
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error executing Azure Resource Graph query: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to execute query: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
