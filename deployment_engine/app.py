@@ -717,7 +717,7 @@ def query_azure_resource_graph(
         
         # Create a Resource Graph client using the same credentials as the deployer
         logger.info("Creating ResourceGraphClient")
-        resource_graph_client = ResourceGraphClient(azure_deployer.credentials)
+        resource_graph_client = ResourceGraphClient(azure_deployer.credential)
         
         # Create the query request
         query_request = QueryRequest(query=query)
