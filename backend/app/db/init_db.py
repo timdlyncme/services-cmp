@@ -233,7 +233,6 @@ def init_db(db: Session) -> None:
                     full_name=user_data["full_name"],
                     hashed_password=get_password_hash(user_data["password"]),
                     role_id=role.id,
-                    tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
                     user_id=user_data.get("user_id")
                 )
                 db.add(user)
@@ -274,7 +273,6 @@ def create_sample_data(db: Session) -> None:
                 provider=provider,
                 status="connected",
                 description=f"Sample {provider.upper()} account for {tenant.name}",
-                tenant_id=tenant.tenant_id  # Use tenant_id (UUID) instead of id (Integer)
             )
             db.add(account)
             db.flush()
@@ -289,7 +287,6 @@ def create_sample_data(db: Session) -> None:
                         provider=provider,
                         status=["connected", "warning", "error"][j % 3],
                         description=f"Additional {provider.upper()} account {j+1} for {tenant.name}",
-                        tenant_id=tenant.tenant_id  # Use tenant_id (UUID) instead of id (Integer)
                     )
                     db.add(extra_account)
                     db.flush()
@@ -310,7 +307,6 @@ def create_sample_data(db: Session) -> None:
                 environment_id=generate_uuid(),
                 name=f"{env_type} Environment",
                 description=f"{env_type} environment for {tenant.name}",
-                tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
                 update_strategy="rolling" if env_type == "Production" else "blue-green",
                 scaling_policies={
                     "min_instances": 1,
@@ -722,7 +718,6 @@ resource "google_compute_instance" "example" {
                 category=template_data["category"],
                 provider=provider,
                 is_public=False,
-                tenant_id=tenant.tenant_id,
                 code=template_data["code"],
                 current_version="1.0.0",
                 created_at=datetime.utcnow() - timedelta(days=30 - j),
@@ -974,7 +969,6 @@ output storageAccountId string = storageAccount.id
                 is_published=template_data["is_published"],
                 author=user.username,
                 commit_id=generate_uuid(),
-                tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
                 created_by_id=user.id,
                 created_at=created_at,
                 updated_at=updated_at
@@ -1058,7 +1052,6 @@ output storageAccountId string = storageAccount.id
             description="Default dashboard with overview widgets",
             is_default=True,
             layout_config={"columns": 3, "gap": 16},
-            tenant_id=tenant.tenant_id,
             created_by_id=users_by_tenant[tenant.tenant_id][0].user_id  # Use first user as creator
         )
         db.add(default_dashboard)

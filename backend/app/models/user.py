@@ -66,7 +66,6 @@ class Tenant(Base):
     integration_configs = relationship("IntegrationConfig", back_populates="tenant")
     
     # Relationship with Dashboard
-    dashboards = relationship("Dashboard", back_populates="tenant")
 
 
 class User(Base):

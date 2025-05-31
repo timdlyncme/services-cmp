@@ -20,7 +20,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# Dashboard CRUD Operations
+# Widget Types - Must be before parameterized routes
+@router.get("/widget-types", response_model=List[WidgetTypeResponse])
+async def get_widget_types(
+    category: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get available widget types"""
+    query = db.query(WidgetType).filter(WidgetType.is_active == True)
+    
+    if category:
+        query = query.filter(WidgetType.category == category)
+    
+    return query.all()
+
+
+# Dashboard CRUD operations
 @router.get("/", response_model=List[DashboardListResponse])
 async def get_dashboards(
     skip: int = Query(0, ge=0),
@@ -31,7 +46,7 @@ async def get_dashboards(
     """Get all dashboards for the current user's tenant"""
     dashboards = db.query(Dashboard).filter(
         and_(
-            Dashboard.tenant_id == current_user.tenant_id,
+            Dashboard.created_by_id == current_user.user_id,
             Dashboard.is_active == True
         )
     ).offset(skip).limit(limit).all()
@@ -71,7 +86,7 @@ async def get_dashboard(
     dashboard = db.query(Dashboard).filter(
         and_(
             Dashboard.dashboard_id == dashboard_id,
-            Dashboard.tenant_id == current_user.tenant_id,
+            Dashboard.created_by_id == current_user.user_id,
             Dashboard.is_active == True
         )
     ).first()
@@ -96,7 +111,7 @@ async def create_dashboard(
     if dashboard_data.is_default:
         db.query(Dashboard).filter(
             and_(
-                Dashboard.tenant_id == current_user.tenant_id,
+                Dashboard.created_by_id == current_user.user_id,
                 Dashboard.is_default == True
             )
         ).update({"is_default": False})
@@ -106,7 +121,7 @@ async def create_dashboard(
         description=dashboard_data.description,
         is_default=dashboard_data.is_default,
         layout_config=dashboard_data.layout_config,
-        tenant_id=current_user.tenant_id,
+        created_by_id=current_user.user_id,
         created_by_id=current_user.user_id
     )
     
@@ -128,7 +143,7 @@ async def update_dashboard(
     dashboard = db.query(Dashboard).filter(
         and_(
             Dashboard.dashboard_id == dashboard_id,
-            Dashboard.tenant_id == current_user.tenant_id
+            Dashboard.created_by_id == current_user.user_id
         )
     ).first()
     
@@ -142,7 +157,7 @@ async def update_dashboard(
     if dashboard_data.is_default:
         db.query(Dashboard).filter(
             and_(
-                Dashboard.tenant_id == current_user.tenant_id,
+                Dashboard.created_by_id == current_user.user_id,
                 Dashboard.is_default == True,
                 Dashboard.dashboard_id != dashboard_id
             )
@@ -170,7 +185,7 @@ async def delete_dashboard(
     dashboard = db.query(Dashboard).filter(
         and_(
             Dashboard.dashboard_id == dashboard_id,
-            Dashboard.tenant_id == current_user.tenant_id
+            Dashboard.created_by_id == current_user.user_id
         )
     ).first()
     
@@ -200,7 +215,7 @@ async def get_dashboard_widgets(
     dashboard = db.query(Dashboard).filter(
         and_(
             Dashboard.dashboard_id == dashboard_id,
-            Dashboard.tenant_id == current_user.tenant_id,
+            Dashboard.created_by_id == current_user.user_id,
             Dashboard.is_active == True
         )
     ).first()
@@ -233,7 +248,7 @@ async def create_widget(
     dashboard = db.query(Dashboard).filter(
         and_(
             Dashboard.dashboard_id == dashboard_id,
-            Dashboard.tenant_id == current_user.tenant_id,
+            Dashboard.created_by_id == current_user.user_id,
             Dashboard.is_active == True
         )
     ).first()
@@ -277,7 +292,7 @@ async def update_widget(
     dashboard = db.query(Dashboard).filter(
         and_(
             Dashboard.dashboard_id == dashboard_id,
-            Dashboard.tenant_id == current_user.tenant_id,
+            Dashboard.created_by_id == current_user.user_id,
             Dashboard.is_active == True
         )
     ).first()
@@ -325,7 +340,7 @@ async def delete_widget(
     dashboard = db.query(Dashboard).filter(
         and_(
             Dashboard.dashboard_id == dashboard_id,
-            Dashboard.tenant_id == current_user.tenant_id,
+            Dashboard.created_by_id == current_user.user_id,
             Dashboard.is_active == True
         )
     ).first()
@@ -357,21 +372,6 @@ async def delete_widget(
     return {"message": "Widget deleted successfully"}
 
 
-# Widget Types
-@router.get("/widget-types", response_model=List[WidgetTypeResponse])
-async def get_widget_types(
-    category: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
-):
-    """Get available widget types"""
-    query = db.query(WidgetType).filter(WidgetType.is_active == True)
-    
-    if category:
-        query = query.filter(WidgetType.category == category)
-    
-    return query.all()
-
-
 # Widget Data
 @router.post("/widget-data", response_model=WidgetDataResponse)
 async def get_widget_data(
@@ -380,26 +380,30 @@ async def get_widget_data(
     db: Session = Depends(get_db)
 ):
     """Get data for a specific widget"""
-    # Verify tenant access
-    if request.tenant_id != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+    widget_tenant_id = request.tenant_id if request.tenant_id else current_user.tenant_id
+    
+    # Check if user has permission to view data for this tenant
+    if widget_tenant_id != current_user.tenant_id:
+        # Only admin or MSP users can view data for other tenants
+        if not current_user.role or current_user.role.name not in ["admin", "msp"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
     
     try:
         data = await _fetch_widget_data(
             request.widget_type,
             request.data_source,
             request.configuration or {},
-            request.tenant_id,
+            widget_tenant_id,
             db
         )
         
         return WidgetDataResponse(
             data=data,
-            last_updated=datetime.utcnow(),
-            next_refresh=datetime.utcnow() + timedelta(minutes=5)
+            last_updated=datetime.utcnow().isoformat()
         )
     except Exception as e:
         logger.error(f"Error fetching widget data: {str(e)}")

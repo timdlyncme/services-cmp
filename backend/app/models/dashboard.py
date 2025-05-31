@@ -20,11 +20,9 @@ class Dashboard(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Foreign Keys
-    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"), nullable=False)
     created_by_id = Column(UUID(as_uuid=False), ForeignKey("users.user_id"), nullable=False)
     
     # Relationships
-    tenant = relationship("Tenant", back_populates="dashboards")
     created_by = relationship("User", back_populates="dashboards")
     widgets = relationship("DashboardWidget", back_populates="dashboard", cascade="all, delete-orphan")
 
@@ -68,4 +66,3 @@ class WidgetType(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-

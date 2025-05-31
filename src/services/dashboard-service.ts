@@ -31,7 +31,6 @@ export interface Dashboard {
   is_default: boolean;
   is_active: boolean;
   layout_config?: any;
-  tenant_id: string;
   created_by_id: string;
   created_at: string;
   updated_at: string;
@@ -132,7 +131,6 @@ export interface WidgetDataRequest {
   widget_type: string;
   data_source: string;
   configuration?: any;
-  tenant_id: string;
 }
 
 class DashboardService {
