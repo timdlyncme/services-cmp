@@ -115,6 +115,8 @@ const TemplateDetails = () => {
     setSelectedCloudAccount(""); // Reset cloud account selection
     setSelectedResourceGroup(""); // Reset resource group selection
     setLocation(""); // Reset location
+    setSelectedSubscription(""); // Reset subscription selection
+    setAvailableSubscriptions([]); // Reset available subscriptions
     
     // Find the environment and set available cloud accounts
     const environment = environments.find(env => env.id === environmentId);
@@ -127,7 +129,24 @@ const TemplateDetails = () => {
       // If there's only one cloud account, auto-select it
       if (environment.cloud_accounts.length === 1) {
         console.log("handleEnvironmentChange - auto-selecting single cloud account:", environment.cloud_accounts[0]);
-        setSelectedCloudAccount(environment.cloud_accounts[0].id);
+        const accountId = environment.cloud_accounts[0].id;
+        setSelectedCloudAccount(accountId);
+        
+        // Also trigger the cloud account change logic
+        const account = environment.cloud_accounts[0];
+        if (account && account.cloud_ids) {
+          console.log("handleEnvironmentChange - auto-selected account cloud_ids:", account.cloud_ids);
+          setAvailableSubscriptions(account.cloud_ids);
+          
+          // If there's only one subscription, auto-select it too
+          if (account.cloud_ids.length === 1) {
+            const subscriptionId = account.cloud_ids[0];
+            setSelectedSubscription(subscriptionId);
+            // Fetch data for the auto-selected subscription
+            fetchLocationsForAccount(accountId, subscriptionId);
+            fetchResourceGroupsForAccount(accountId, subscriptionId);
+          }
+        }
       }
     } else {
       console.log("handleEnvironmentChange - no cloud accounts found");
@@ -136,6 +155,9 @@ const TemplateDetails = () => {
   };
   
   const handleCloudAccountChange = (accountId: string) => {
+    console.log("handleCloudAccountChange - accountId:", accountId);
+    console.log("handleCloudAccountChange - availableCloudAccounts:", availableCloudAccounts);
+    
     setSelectedCloudAccount(accountId);
     setSelectedResourceGroup(""); // Reset resource group selection
     setLocation(""); // Reset location
@@ -143,7 +165,10 @@ const TemplateDetails = () => {
     
     // Find the selected cloud account and set available subscriptions
     const account = availableCloudAccounts.find(acc => acc.id === accountId);
+    console.log("handleCloudAccountChange - found account:", account);
+    
     if (account && account.cloud_ids) {
+      console.log("handleCloudAccountChange - cloud_ids:", account.cloud_ids);
       setAvailableSubscriptions(account.cloud_ids);
       
       // If there's only one subscription, auto-select it and fetch data
@@ -155,6 +180,7 @@ const TemplateDetails = () => {
         fetchResourceGroupsForAccount(accountId, subscriptionId);
       }
     } else {
+      console.log("handleCloudAccountChange - no cloud_ids found, setting empty array");
       setAvailableSubscriptions([]);
     }
   };
@@ -265,19 +291,13 @@ const TemplateDetails = () => {
       
       if (response.ok) {
         const data = await response.json();
+        console.log("fetchEnvironments - API response:", data);
         setEnvironments(data);
-        
-        // Set default environment if available
-        if (data.length > 0) {
-          setDeployEnv(data[0].id);
-        }
       } else {
         console.error("Failed to fetch environments");
-        toast.error("Failed to load environments");
       }
     } catch (err) {
       console.error("Error fetching environments:", err);
-      toast.error("Error loading environments");
     } finally {
       setLoadingEnvironments(false);
     }
