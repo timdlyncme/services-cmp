@@ -61,7 +61,12 @@ def get_environments(
                     "id": account.account_id,  # Use account_id as id
                     "name": account.name,
                     "provider": account.provider,
-                    "status": account.status
+                    "status": account.status,
+                    "description": account.description,
+                    "tenant_id": account.tenant_id,
+                    "created_at": account.created_at,
+                    "updated_at": account.updated_at,
+                    "cloud_ids": account.cloud_ids or []
                 })
             
             result.append({
@@ -249,7 +254,12 @@ def create_environment(
                 "id": account.account_id,  # Use account_id as id
                 "name": account.name,
                 "provider": account.provider,
-                "status": account.status
+                "status": account.status,
+                "description": account.description,
+                "tenant_id": account.tenant_id,
+                "created_at": account.created_at,
+                "updated_at": account.updated_at,
+                "cloud_ids": account.cloud_ids or []
             })
         
         return {
