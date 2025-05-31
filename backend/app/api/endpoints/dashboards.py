@@ -379,7 +379,7 @@ async def get_widget_data(
     db: Session = Depends(get_db)
 ):
     """Get data for a specific widget"""
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+    # Use the current user's tenant
     widget_tenant_id = current_user.tenant.tenant_id
     
     # Check if user has permission to view data for this tenant
