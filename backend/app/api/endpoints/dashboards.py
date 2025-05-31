@@ -122,7 +122,6 @@ async def create_dashboard(
         is_default=dashboard_data.is_default,
         layout_config=dashboard_data.layout_config,
         created_by_id=current_user.user_id,
-        created_by_id=current_user.user_id
     )
     
     db.add(dashboard)
