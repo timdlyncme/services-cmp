@@ -1,328 +1,353 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { CloudDeployment, CloudAccount } from "@/types/cloud";
-import { deploymentService } from "@/services/deployment-service";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { 
+  RefreshCw,
+  Plus,
+  Settings,
+  ChevronDown,
+  LayoutDashboard
+} from "lucide-react";
 import { toast } from "sonner";
 import { 
-  Activity, 
-  Server, 
-  Database, 
-  CloudCog, 
-  AlertCircle, 
-  CheckCircle2, 
-  Clock, 
-  RefreshCw 
-} from "lucide-react";
+  Dashboard as DashboardType, 
+  UserWidget, 
+  DashboardWidget as DashboardWidgetType,
+  dashboardService,
+  CreateUserWidgetRequest
+} from "@/services/dashboard-service";
+import DashboardWidget from "@/components/dashboard/DashboardWidget";
+import WidgetSelector from "@/components/dashboard/WidgetSelector";
+import DashboardManager from "@/components/dashboard/DashboardManager";
 
 export default function Dashboard() {
   const { user, currentTenant } = useAuth();
-  const [deployments, setDeployments] = useState<CloudDeployment[]>([]);
-  const [cloudAccounts, setCloudAccounts] = useState<CloudAccount[]>([]);
+  const [dashboards, setDashboards] = useState<DashboardType[]>([]);
+  const [currentDashboard, setCurrentDashboard] = useState<DashboardType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showWidgetSelector, setShowWidgetSelector] = useState(false);
+  const [showDashboardManager, setShowDashboardManager] = useState(false);
 
-  const fetchDashboardData = async () => {
-    if (!currentTenant) return;
-    
+  // Load dashboards and set current dashboard
+  const loadDashboards = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
-      // Fetch deployments and cloud accounts in parallel
-      const [deploymentsData, cloudAccountsData] = await Promise.all([
-        deploymentService.getDeployments(currentTenant.tenant_id),
-        deploymentService.getCloudAccounts(currentTenant.tenant_id)
-      ]);
+      const userDashboards = await dashboardService.getUserDashboards();
+      setDashboards(userDashboards);
       
-      setDeployments(deploymentsData);
-      setCloudAccounts(cloudAccountsData);
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error);
-      setError("Failed to load dashboard data. Please try again.");
-      
-      if (error instanceof Error) {
-        toast.error(error.message);
+      // Set current dashboard (default or first available)
+      if (userDashboards.length > 0) {
+        const defaultDashboard = userDashboards.find(d => d.is_default) || userDashboards[0];
+        setCurrentDashboard(defaultDashboard);
       } else {
-        toast.error("Failed to load dashboard data");
+        // Create a default dashboard if none exist
+        await createDefaultDashboard();
       }
-      
-      // Fallback to mock data for development
-      try {
-        const { mockDeployments, mockCloudAccounts } = await import("@/data/mock-data");
-        
-        const tenantDeployments = mockDeployments.filter(
-          deployment => deployment.tenantId === currentTenant.tenant_id
-        );
-        const tenantCloudAccounts = mockCloudAccounts.filter(
-          account => account.tenantId === currentTenant.tenant_id
-        );
-        
-        setDeployments(tenantDeployments);
-        setCloudAccounts(tenantCloudAccounts);
-      } catch (mockError) {
-        console.error("Error loading mock data:", mockError);
-      }
+    } catch (error) {
+      console.error("Error loading dashboards:", error);
+      setError("Failed to load dashboards. Please try again.");
+      toast.error("Failed to load dashboards");
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (currentTenant) {
-      fetchDashboardData();
+  // Create a default dashboard with some basic widgets
+  const createDefaultDashboard = async () => {
+    try {
+      const defaultDashboard = await dashboardService.createDashboard({
+        name: "My Dashboard",
+        description: "Your personalized dashboard",
+        is_default: true
+      });
+      
+      setDashboards([defaultDashboard]);
+      setCurrentDashboard(defaultDashboard);
+      
+      // Add some default widgets
+      const availableWidgets = await dashboardService.getAvailableWidgets();
+      const defaultWidgets = availableWidgets.slice(0, 4); // Add first 4 widgets
+      
+      for (let i = 0; i < defaultWidgets.length; i++) {
+        const widget = defaultWidgets[i];
+        await dashboardService.addWidgetToDashboard(defaultDashboard.dashboard_id, {
+          dashboard_widget_id: widget.id,
+          position_x: (i % 2) * 6,
+          position_y: Math.floor(i / 2) * 4,
+          width: 6,
+          height: 4
+        });
+      }
+      
+      // Reload the dashboard to get the widgets
+      const updatedDashboard = await dashboardService.getDashboard(defaultDashboard.dashboard_id);
+      setCurrentDashboard(updatedDashboard);
+      
+    } catch (error) {
+      console.error("Error creating default dashboard:", error);
+      toast.error("Failed to create default dashboard");
     }
-  }, [currentTenant]);
-
-  const handleRefresh = () => {
-    fetchDashboardData();
-    toast.success("Refreshing dashboard data...");
   };
 
-  // Calculate deployment statistics
-  const runningDeployments = deployments.filter(d => d.status === "running").length;
-  const failedDeployments = deployments.filter(d => d.status === "failed").length;
-  const pendingDeployments = deployments.filter(d => d.status === "pending").length;
-  
-  // Calculate cloud account statistics
-  const connectedAccounts = cloudAccounts.filter(a => a.status === "connected").length;
-  const warningAccounts = cloudAccounts.filter(a => a.status === "warning").length;
-  const errorAccounts = cloudAccounts.filter(a => a.status === "error").length;
-  
-  // Group deployments by provider
-  const deploymentsByProvider = deployments.reduce((acc, deployment) => {
-    acc[deployment.provider] = (acc[deployment.provider] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  
-  // Get recent deployments (last 5)
-  const recentDeployments = [...deployments]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 5);
+  useEffect(() => {
+    if (user) {
+      loadDashboards();
+    }
+  }, [user]);
+
+  const handleRefreshDashboard = async () => {
+    if (!currentDashboard) return;
+    
+    try {
+      const refreshedDashboard = await dashboardService.getDashboard(currentDashboard.dashboard_id);
+      setCurrentDashboard(refreshedDashboard);
+      toast.success("Dashboard refreshed successfully");
+    } catch (error) {
+      console.error("Error refreshing dashboard:", error);
+      toast.error("Failed to refresh dashboard");
+    }
+  };
+
+  const handleDashboardChange = async (dashboardId: string) => {
+    const dashboard = dashboards.find(d => d.dashboard_id === dashboardId);
+    if (dashboard) {
+      try {
+        const fullDashboard = await dashboardService.getDashboard(dashboard.dashboard_id);
+        setCurrentDashboard(fullDashboard);
+      } catch (error) {
+        console.error("Error loading dashboard:", error);
+        toast.error("Failed to load dashboard");
+      }
+    }
+  };
+
+  const handleAddWidget = async (widget: DashboardWidgetType) => {
+    if (!currentDashboard) return;
+    
+    try {
+      // Find a good position for the new widget
+      const existingWidgets = currentDashboard.user_widgets;
+      let position_x = 0;
+      let position_y = 0;
+      
+      // Simple grid placement logic
+      if (existingWidgets.length > 0) {
+        const maxY = Math.max(...existingWidgets.map(w => w.position_y + w.height));
+        position_y = maxY;
+      }
+      
+      const newUserWidget = await dashboardService.addWidgetToDashboard(
+        currentDashboard.dashboard_id,
+        {
+          dashboard_widget_id: widget.id,
+          position_x,
+          position_y,
+          width: 6,
+          height: 4
+        }
+      );
+      
+      // Update current dashboard
+      setCurrentDashboard({
+        ...currentDashboard,
+        user_widgets: [...currentDashboard.user_widgets, newUserWidget]
+      });
+      
+      toast.success(`Added ${widget.name} to dashboard`);
+    } catch (error) {
+      console.error("Error adding widget:", error);
+      toast.error("Failed to add widget");
+    }
+  };
+
+  const handleUpdateWidget = async (updatedWidget: UserWidget) => {
+    if (!currentDashboard) return;
+    
+    setCurrentDashboard({
+      ...currentDashboard,
+      user_widgets: currentDashboard.user_widgets.map(w => 
+        w.id === updatedWidget.id ? updatedWidget : w
+      )
+    });
+  };
+
+  const handleRemoveWidget = async (userWidgetId: string) => {
+    if (!currentDashboard) return;
+    
+    try {
+      await dashboardService.removeWidgetFromDashboard(currentDashboard.dashboard_id, userWidgetId);
+      
+      setCurrentDashboard({
+        ...currentDashboard,
+        user_widgets: currentDashboard.user_widgets.filter(w => w.user_widget_id !== userWidgetId)
+      });
+      
+      toast.success("Widget removed from dashboard");
+    } catch (error) {
+      console.error("Error removing widget:", error);
+      toast.error("Failed to remove widget");
+    }
+  };
+
+  const handleEditWidget = (userWidget: UserWidget) => {
+    // TODO: Implement widget editing dialog
+    toast.info("Widget editing coming soon!");
+  };
+
+  const handleDashboardSelect = (dashboard: DashboardType) => {
+    setCurrentDashboard(dashboard);
+    // Update dashboards list if it was modified
+    loadDashboards();
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center">
+        <h3 className="text-lg font-medium mb-2">Error loading dashboard</h3>
+        <p className="text-muted-foreground mb-4">{error}</p>
+        <Button variant="outline" onClick={loadDashboards}>
+          Try Again
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Dashboard Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Welcome back, {user?.name}
-          </p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground">
+              Welcome back, {user?.name}
+            </p>
+          </div>
+          
+          {/* Dashboard Selector */}
+          {dashboards.length > 1 && (
+            <Select 
+              value={currentDashboard?.dashboard_id || ""} 
+              onValueChange={handleDashboardChange}
+            >
+              <SelectTrigger className="w-[200px]">
+                <LayoutDashboard className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Select dashboard" />
+              </SelectTrigger>
+              <SelectContent>
+                {dashboards.map((dashboard) => (
+                  <SelectItem key={dashboard.dashboard_id} value={dashboard.dashboard_id}>
+                    <div className="flex items-center gap-2">
+                      <span>{dashboard.name}</span>
+                      {dashboard.is_default && (
+                        <span className="text-xs text-muted-foreground">(Default)</span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
-        <Button variant="outline" size="icon" onClick={handleRefresh}>
-          <RefreshCw className="h-4 w-4" />
-        </Button>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={handleRefreshDashboard}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" onClick={() => setShowWidgetSelector(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Widget
+          </Button>
+          <Button variant="outline" onClick={() => setShowDashboardManager(true)}>
+            <Settings className="h-4 w-4 mr-2" />
+            Manage
+          </Button>
+        </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : error ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-10">
-            <AlertCircle className="h-10 w-10 text-destructive mb-2" />
-            <h3 className="text-lg font-medium">Error loading dashboard</h3>
-            <p className="text-muted-foreground">{error}</p>
-            <Button variant="outline" className="mt-4" onClick={fetchDashboardData}>
-              Try Again
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Total Deployments
-                </CardTitle>
-                <Database className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{deployments.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  Across {Object.keys(deploymentsByProvider).length} cloud providers
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Running Deployments
-                </CardTitle>
-                <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{runningDeployments}</div>
-                <p className="text-xs text-muted-foreground">
-                  {Math.round((runningDeployments / deployments.length) * 100) || 0}% of total deployments
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Cloud Accounts
-                </CardTitle>
-                <CloudCog className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{cloudAccounts.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  {connectedAccounts} connected, {warningAccounts + errorAccounts} with issues
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Failed Deployments
-                </CardTitle>
-                <AlertCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{failedDeployments}</div>
-                <p className="text-xs text-muted-foreground">
-                  {pendingDeployments} pending resolution
-                </p>
-              </CardContent>
-            </Card>
+      {/* Dashboard Content */}
+      {currentDashboard ? (
+        currentDashboard.user_widgets.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {currentDashboard.user_widgets
+              .filter(widget => widget.is_visible)
+              .map((userWidget) => (
+                <div
+                  key={userWidget.id}
+                  className={`col-span-1`}
+                  style={{
+                    gridColumn: `span ${Math.min(userWidget.width / 3, 4)}`,
+                  }}
+                >
+                  <DashboardWidget
+                    userWidget={userWidget}
+                    onUpdate={handleUpdateWidget}
+                    onRemove={handleRemoveWidget}
+                    onEdit={handleEditWidget}
+                  />
+                </div>
+              ))}
           </div>
-
-          <Tabs defaultValue="recent" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="recent">Recent Deployments</TabsTrigger>
-              <TabsTrigger value="providers">Cloud Providers</TabsTrigger>
-            </TabsList>
-            <TabsContent value="recent" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Deployments</CardTitle>
-                  <CardDescription>
-                    Your most recent infrastructure deployments
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {recentDeployments.length > 0 ? (
-                      recentDeployments.map((deployment) => (
-                        <div
-                          key={deployment.id}
-                          className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className={`p-2 rounded-full ${
-                              deployment.status === "running" ? "bg-green-100" :
-                              deployment.status === "failed" ? "bg-red-100" :
-                              "bg-gray-100"
-                            }`}>
-                              {deployment.status === "running" ? (
-                                <Activity className="h-4 w-4 text-green-600" />
-                              ) : deployment.status === "failed" ? (
-                                <AlertCircle className="h-4 w-4 text-red-600" />
-                              ) : (
-                                <Clock className="h-4 w-4 text-gray-600" />
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium">{deployment.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {deployment.templateName} • {deployment.environment}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className={`px-2 py-1 rounded-full text-xs ${
-                              deployment.provider === "azure" ? "bg-blue-100 text-blue-800" :
-                              deployment.provider === "aws" ? "bg-yellow-100 text-yellow-800" :
-                              "bg-green-100 text-green-800"
-                            }`}>
-                              {deployment.provider.toUpperCase()}
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(deployment.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-6">
-                        <Server className="h-8 w-8 text-muted-foreground mb-2" />
-                        <h3 className="text-lg font-medium">No deployments yet</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Start by creating a new deployment from the template catalog
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="providers" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Cloud Providers</CardTitle>
-                  <CardDescription>
-                    Your connected cloud provider accounts
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {cloudAccounts.length > 0 ? (
-                      cloudAccounts.map((account) => (
-                        <div
-                          key={account.id}
-                          className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className={`p-2 rounded-full ${
-                              account.status === "connected" ? "bg-green-100" :
-                              account.status === "warning" ? "bg-yellow-100" :
-                              "bg-red-100"
-                            }`}>
-                              <CloudCog className={`h-4 w-4 ${
-                                account.status === "connected" ? "text-green-600" :
-                                account.status === "warning" ? "text-yellow-600" :
-                                "text-red-600"
-                              }`} />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium">{account.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {account.provider.toUpperCase()}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className={`px-2 py-1 rounded-full text-xs ${
-                              account.status === "connected" ? "bg-green-100 text-green-800" :
-                              account.status === "warning" ? "bg-yellow-100 text-yellow-800" :
-                              "bg-red-100 text-red-800"
-                            }`}>
-                              {account.status.toUpperCase()}
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-6">
-                        <CloudCog className="h-8 w-8 text-muted-foreground mb-2" />
-                        <h3 className="text-lg font-medium">No cloud accounts connected</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Connect your cloud provider accounts to start deploying
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-64 text-center border-2 border-dashed border-muted-foreground/25 rounded-lg">
+            <LayoutDashboard className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">Your dashboard is empty</h3>
+            <p className="text-muted-foreground mb-4">
+              Add widgets to customize your dashboard and track what matters most to you.
+            </p>
+            <Button onClick={() => setShowWidgetSelector(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Your First Widget
+            </Button>
+          </div>
+        )
+      ) : (
+        <div className="flex flex-col items-center justify-center h-64 text-center">
+          <LayoutDashboard className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium mb-2">No dashboard selected</h3>
+          <p className="text-muted-foreground mb-4">
+            Create or select a dashboard to get started.
+          </p>
+          <Button onClick={() => setShowDashboardManager(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Dashboard
+          </Button>
+        </div>
       )}
+
+      {/* Dialogs */}
+      <WidgetSelector
+        open={showWidgetSelector}
+        onOpenChange={setShowWidgetSelector}
+        onWidgetSelect={handleAddWidget}
+      />
+
+      <DashboardManager
+        open={showDashboardManager}
+        onOpenChange={setShowDashboardManager}
+        onDashboardSelect={handleDashboardSelect}
+        currentDashboard={currentDashboard || undefined}
+      />
     </div>
   );
 }
+
