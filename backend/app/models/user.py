@@ -64,6 +64,9 @@ class Tenant(Base):
     
     # Relationship with IntegrationConfig
     integration_configs = relationship("IntegrationConfig", back_populates="tenant")
+    
+    # Relationship with Dashboard
+    dashboards = relationship("Dashboard", back_populates="tenant")
 
 
 class User(Base):
@@ -89,3 +92,6 @@ class User(Base):
     
     # Relationship with TemplateFoundry
     template_foundry_items = relationship("TemplateFoundry", back_populates="created_by")
+    
+    # Relationship with Dashboard
+    dashboards = relationship("Dashboard", back_populates="created_by")
