@@ -75,7 +75,7 @@ const TemplateDetails = () => {
   // New state for dynamic dropdowns
   const [locations, setLocations] = useState<any[]>([]);
   const [resourceGroups, setResourceGroups] = useState<any[]>([]);
-  const [useExistingResourceGroup, setUseExistingResourceGroup] = useState(true);
+  const [useExistingResourceGroup, setUseExistingResourceGroup] = useState(false);
   const [selectedResourceGroup, setSelectedResourceGroup] = useState("");
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [loadingResourceGroups, setLoadingResourceGroups] = useState(false);
@@ -239,7 +239,17 @@ const TemplateDetails = () => {
       const query = "resourcecontainers | where type =~ 'microsoft.resources/subscriptions/resourcegroups' | project name, resourceGroup, location";
       const response = await deploymentService.queryResourceGraph(query, currentTenant?.tenant_id, settingsId, subscriptionId);
       if (response && response.data) {
-        setResourceGroups(response.data);
+        // Map location names to display names using the locations data
+        const enrichedResourceGroups = response.data.map((rg: any) => {
+          const locationInfo = locations.find(loc => loc.name === rg.location);
+          return {
+            ...rg,
+            locationDisplayName: locationInfo?.display_name || rg.location
+          };
+        });
+        console.log("fetchResourceGroupsForAccount - locations available:", locations.length);
+        console.log("fetchResourceGroupsForAccount - sample enriched RG:", enrichedResourceGroups[0]);
+        setResourceGroups(enrichedResourceGroups);
       }
     } catch (err) {
       console.error("Error fetching resource groups:", err);
@@ -255,6 +265,8 @@ const TemplateDetails = () => {
     // Find the selected resource group and update location
     const selectedRG = resourceGroups.find(rg => rg.name === resourceGroupName);
     if (selectedRG) {
+      console.log("Setting location from resource group:", selectedRG.location);
+      console.log("Available locations:", locations.map(loc => loc.name));
       setLocation(selectedRG.location);
     }
   };
@@ -325,6 +337,28 @@ const TemplateDetails = () => {
     }
   }, [selectedCloudAccount, selectedSubscription]);
   
+  // Re-enrich resource groups when locations are loaded
+  useEffect(() => {
+    if (locations.length > 0 && resourceGroups.length > 0) {
+      // Check if resource groups need enrichment (either no locationDisplayName or it equals the raw location)
+      const needsEnrichment = resourceGroups.some((rg: any) => 
+        !rg.locationDisplayName || rg.locationDisplayName === rg.location
+      );
+      console.log("Re-enrichment check - locations:", locations.length, "resourceGroups:", resourceGroups.length, "needsEnrichment:", needsEnrichment);
+      if (needsEnrichment) {
+        const enrichedResourceGroups = resourceGroups.map((rg: any) => {
+          const locationInfo = locations.find(loc => loc.name === rg.location);
+          return {
+            ...rg,
+            locationDisplayName: locationInfo?.display_name || rg.location
+          };
+        });
+        console.log("Re-enriching resource groups - sample:", enrichedResourceGroups[0]);
+        setResourceGroups(enrichedResourceGroups);
+      }
+    }
+  }, [locations]);
+
   const fetchTemplate = async (templateId: string) => {
     try {
       setLoading(true);
@@ -435,8 +469,8 @@ const TemplateDetails = () => {
           await fetchVersions(templateId);
         }
       }
-    } catch (err) {
-      console.error("Error creating new template version:", err);
+    } catch (error) {
+      console.error("Error creating new template version:", error);
       toast.error("Failed to create new template version");
     }
   };
@@ -846,6 +880,7 @@ const TemplateDetails = () => {
         resourceGroup={resourceGroup}
         onResourceGroupNameChange={setResourceGroup}
         loadingResourceGroups={loadingResourceGroups}
+        onRefreshResourceGroups={() => fetchResourceGroupsForAccount(selectedCloudAccount, selectedSubscription)}
         locations={locations}
         location={location}
         onLocationChange={setLocation}
