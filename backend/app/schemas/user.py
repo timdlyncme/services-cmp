@@ -43,7 +43,7 @@ class User(BaseModel):
     full_name: Optional[str] = None
     email: EmailStr
     role: str
-    tenantId: str
+    tenantId: Optional[str] = None
     permissions: List[str]
 
 

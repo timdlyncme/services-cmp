@@ -52,7 +52,7 @@ def login_for_access_token(
         full_name=user.full_name,
         email=user.email,
         role=user.role.name,
-        tenantId=user.tenant.tenant_id,
+        tenantId=user.tenant.tenant_id if user.tenant else None,
         permissions=permissions
     )
     
@@ -93,7 +93,7 @@ def read_users_me(current_user: User = Depends(get_current_user)) -> Any:
         full_name=current_user.full_name,
         email=current_user.email,
         role=current_user.role.name,
-        tenantId=current_user.tenant.tenant_id,
+        tenantId=current_user.tenant.tenant_id if current_user.tenant else None,
         permissions=permissions
     )
     
