@@ -380,15 +380,9 @@ async def get_widget_data(
 ):
     """Get data for a specific widget"""
     # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-    widget_tenant_id = request.tenant_id if request.tenant_id else current_user.tenant_id
+    widget_tenant_id = current_user.tenant.tenant_id
     
     # Check if user has permission to view data for this tenant
-    if widget_tenant_id != current_user.tenant_id:
-        # Only admin or MSP users can view data for other tenants
-        if not current_user.role or current_user.role.name not in ["admin", "msp"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied"
             )
     
     try:
@@ -402,7 +396,7 @@ async def get_widget_data(
         
         return WidgetDataResponse(
             data=data,
-            last_updated=datetime.utcnow().isoformat()
+            last_updated=datetime.utcnow()
         )
     except Exception as e:
         logger.error(f"Error fetching widget data: {str(e)}")

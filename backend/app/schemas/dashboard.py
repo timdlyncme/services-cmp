@@ -93,7 +93,6 @@ class DashboardUpdate(BaseModel):
 class DashboardResponse(DashboardBase):
     id: int
     dashboard_id: str
-    tenant_id: str
     created_by_id: str
     is_active: bool
     created_at: datetime
@@ -124,7 +123,6 @@ class WidgetDataRequest(BaseModel):
     widget_type: str
     data_source: str
     configuration: Optional[Dict[str, Any]] = None
-    tenant_id: str
 
 
 class WidgetDataResponse(BaseModel):
