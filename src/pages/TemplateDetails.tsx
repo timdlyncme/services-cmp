@@ -338,8 +338,10 @@ const TemplateDetails = () => {
   // Re-enrich resource groups when locations are loaded
   useEffect(() => {
     if (locations.length > 0 && resourceGroups.length > 0) {
-      // Check if resource groups are already enriched to avoid infinite loop
-      const needsEnrichment = resourceGroups.some((rg: any) => !rg.locationDisplayName);
+      // Check if resource groups need enrichment (either no locationDisplayName or it equals the raw location)
+      const needsEnrichment = resourceGroups.some((rg: any) => 
+        !rg.locationDisplayName || rg.locationDisplayName === rg.location
+      );
       console.log("Re-enrichment check - locations:", locations.length, "resourceGroups:", resourceGroups.length, "needsEnrichment:", needsEnrichment);
       if (needsEnrichment) {
         const enrichedResourceGroups = resourceGroups.map((rg: any) => {
