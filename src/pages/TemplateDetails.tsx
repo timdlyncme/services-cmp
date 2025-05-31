@@ -75,7 +75,7 @@ const TemplateDetails = () => {
   // New state for dynamic dropdowns
   const [locations, setLocations] = useState<any[]>([]);
   const [resourceGroups, setResourceGroups] = useState<any[]>([]);
-  const [useExistingResourceGroup, setUseExistingResourceGroup] = useState(true);
+  const [useExistingResourceGroup, setUseExistingResourceGroup] = useState(false);
   const [selectedResourceGroup, setSelectedResourceGroup] = useState("");
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [loadingResourceGroups, setLoadingResourceGroups] = useState(false);
@@ -239,7 +239,15 @@ const TemplateDetails = () => {
       const query = "resourcecontainers | where type =~ 'microsoft.resources/subscriptions/resourcegroups' | project name, resourceGroup, location";
       const response = await deploymentService.queryResourceGraph(query, currentTenant?.tenant_id, settingsId, subscriptionId);
       if (response && response.data) {
-        setResourceGroups(response.data);
+        // Map location names to display names using the locations data
+        const enrichedResourceGroups = response.data.map((rg: any) => {
+          const locationInfo = locations.find(loc => loc.name === rg.location);
+          return {
+            ...rg,
+            locationDisplayName: locationInfo?.display_name || rg.location
+          };
+        });
+        setResourceGroups(enrichedResourceGroups);
       }
     } catch (err) {
       console.error("Error fetching resource groups:", err);

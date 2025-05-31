@@ -269,7 +269,7 @@ export const DeploymentWizard: React.FC<DeploymentWizardProps> = ({
                       <Combobox
                         options={resourceGroups.map((rg) => ({
                           value: rg.name,
-                          label: `${rg.name} (${rg.location})`
+                          label: `${rg.name} (${rg.locationDisplayName || rg.location})`
                         }))}
                         value={selectedResourceGroup}
                         onValueChange={onResourceGroupChange}
