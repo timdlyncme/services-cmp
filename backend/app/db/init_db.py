@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models.user import User, Role, Permission, Tenant
 from app.models.deployment import CloudAccount, Environment, Template, Deployment, TemplateVersion
+from app.models.dashboard import Dashboard, DashboardWidget, WidgetType
 
 logger = logging.getLogger(__name__)
 
@@ -971,3 +972,63 @@ output storageAccountId string = storageAccount.id
     # Commit all changes
     db.commit()
     logger.info("Comprehensive sample data created successfully")
+
+    # Initialize default widget types
+    logger.info("Creating default widget types...")
+    
+    default_widget_types = [
+        {
+            "type_name": "metric",
+            "display_name": "Metric Widget",
+            "description": "Display key metrics and numbers",
+            "icon": "bar-chart",
+            "category": "metrics",
+            "default_config": {"chart_type": "number"},
+            "data_sources": ["deployments", "cloud_accounts", "templates", "environments"]
+        },
+        {
+            "type_name": "list",
+            "display_name": "List Widget",
+            "description": "Show items in a list format",
+            "icon": "list",
+            "category": "data",
+            "default_config": {"max_items": 10},
+            "data_sources": ["deployments", "cloud_accounts", "templates", "environments"]
+        },
+        {
+            "type_name": "chart",
+            "display_name": "Chart Widget",
+            "description": "Display data in charts and graphs",
+            "icon": "pie-chart",
+            "category": "visualization",
+            "default_config": {"chart_type": "pie"},
+            "data_sources": ["deployments", "cloud_accounts", "templates"]
+        },
+        {
+            "type_name": "table",
+            "display_name": "Table Widget",
+            "description": "Display data in a table format",
+            "icon": "table",
+            "category": "data",
+            "default_config": {"page_size": 10},
+            "data_sources": ["deployments", "cloud_accounts", "templates", "environments"]
+        },
+        {
+            "type_name": "status",
+            "display_name": "Status Widget",
+            "description": "Show system status and health",
+            "icon": "activity",
+            "category": "monitoring",
+            "default_config": {"show_details": True},
+            "data_sources": ["deployments", "cloud_accounts"]
+        }
+    ]
+    
+    for widget_type_data in default_widget_types:
+        existing_type = db.query(WidgetType).filter_by(type_name=widget_type_data["type_name"]).first()
+        if not existing_type:
+            widget_type = WidgetType(**widget_type_data)
+            db.add(widget_type)
+    
+    db.commit()
+    logger.info("Default widget types created successfully")
