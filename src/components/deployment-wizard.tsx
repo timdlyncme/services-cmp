@@ -9,7 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { StepWizard } from "@/components/ui/step-wizard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Play, Eye, EyeOff, ChevronLeft, ChevronRight } from "lucide-react";
+import { Combobox } from "@/components/ui/combobox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Loader2, Play, Eye, EyeOff, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { TemplateParameter } from "@/types/cloud";
 
 interface Environment {
@@ -55,6 +57,7 @@ interface DeploymentWizardProps {
   resourceGroup: string;
   onResourceGroupNameChange: (value: string) => void;
   loadingResourceGroups: boolean;
+  onRefreshResourceGroups: () => void;
   locations: any[];
   location: string;
   onLocationChange: (value: string) => void;
@@ -114,6 +117,7 @@ export const DeploymentWizard: React.FC<DeploymentWizardProps> = ({
   resourceGroup,
   onResourceGroupNameChange,
   loadingResourceGroups,
+  onRefreshResourceGroups,
   locations,
   location,
   onLocationChange,
@@ -141,7 +145,9 @@ export const DeploymentWizard: React.FC<DeploymentWizardProps> = ({
   const canProceedToStep2 = selectedEnvironment && selectedCloudAccount && selectedSubscription;
   const canProceedToStep3 = canProceedToStep2 && 
     (useExistingResourceGroup ? selectedResourceGroup : resourceGroup) && 
-    location;
+    location &&
+    // Check that all parameters have values
+    Object.entries(parameters).every(([key, param]) => param.value && param.value.trim() !== "");
   const canProceedToStep4 = canProceedToStep3 && deployName;
 
   const handleNext = () => {
@@ -258,22 +264,32 @@ export const DeploymentWizard: React.FC<DeploymentWizardProps> = ({
                 </div>
                 
                 {useExistingResourceGroup ? (
-                  <Select 
-                    value={selectedResourceGroup} 
-                    onValueChange={onResourceGroupChange}
-                    disabled={deploymentInProgress || loadingResourceGroups}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={loadingResourceGroups ? "Loading resource groups..." : "Select a resource group"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {resourceGroups.map((rg) => (
-                        <SelectItem key={rg.name} value={rg.name}>
-                          {rg.name} ({rg.location})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center space-x-2">
+                    <div className="flex-1">
+                      <Combobox
+                        options={resourceGroups.map((rg) => ({
+                          value: rg.name,
+                          label: `${rg.name} (${rg.location})`
+                        }))}
+                        value={selectedResourceGroup}
+                        onValueChange={onResourceGroupChange}
+                        placeholder={loadingResourceGroups ? "Loading resource groups..." : "Select a resource group"}
+                        searchPlaceholder="Search resource groups..."
+                        emptyText="No resource groups found."
+                        disabled={deploymentInProgress || loadingResourceGroups}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={onRefreshResourceGroups}
+                      disabled={deploymentInProgress || loadingResourceGroups}
+                      title="Refresh resource groups"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${loadingResourceGroups ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
                 ) : (
                   <Input 
                     id="resourceGroup" 
@@ -318,56 +334,65 @@ export const DeploymentWizard: React.FC<DeploymentWizardProps> = ({
               <div className="space-y-2">
                 <h3 className="text-sm font-medium">Parameters</h3>
                 <div className="space-y-2">
-                  {Object.entries(parameters).map(([key, param]) => (
-                    <div key={key} className="grid grid-cols-12 gap-2 items-start">
-                      <div className="col-span-3">
-                        <Label>Name</Label>
-                        <Input 
-                          value={key}
-                          disabled={true}
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <Label>Type</Label>
-                        <Input
-                          value={param.type}
-                          disabled={true}
-                        />
-                      </div>
-                      <div className="col-span-6">
-                        <Label>Value</Label>
-                        {param.type === "password" ? (
-                          <div className="relative">
+                  {Object.entries(parameters).map(([key, param]) => {
+                    const isEmpty = !param.value || param.value.trim() === "";
+                    return (
+                      <div key={key} className="grid grid-cols-12 gap-2 items-start">
+                        <div className="col-span-3">
+                          <Label>Name</Label>
+                          <Input 
+                            value={key}
+                            disabled={true}
+                          />
+                        </div>
+                        <div className="col-span-3">
+                          <Label>Type</Label>
+                          <Input
+                            value={param.type}
+                            disabled={true}
+                          />
+                        </div>
+                        <div className="col-span-6">
+                          <Label>Value {isEmpty && <span className="text-red-500 text-xs">(required)</span>}</Label>
+                          {param.type === "password" ? (
+                            <div className="relative">
+                              <Input 
+                                type={showPasswordValues[key] ? "text" : "password"}
+                                value={param.value}
+                                onChange={(e) => onParameterChange(key, "value", e.target.value)}
+                                className={`pr-8 ${isEmpty ? 'border-red-500' : ''}`}
+                                placeholder="Enter value"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-0 top-0 h-full"
+                                onClick={() => onTogglePasswordVisibility(key)}
+                              >
+                                {showPasswordValues[key] ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          ) : (
                             <Input 
-                              type={showPasswordValues[key] ? "text" : "password"}
+                              type={param.type === "int" ? "number" : "text"}
                               value={param.value}
                               onChange={(e) => onParameterChange(key, "value", e.target.value)}
-                              className="pr-8"
+                              className={isEmpty ? 'border-red-500' : ''}
+                              placeholder="Enter value"
                             />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="absolute right-0 top-0 h-full"
-                              onClick={() => onTogglePasswordVisibility(key)}
-                            >
-                              {showPasswordValues[key] ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
-                                <Eye className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                        ) : (
-                          <Input 
-                            type={param.type === "int" ? "number" : "text"}
-                            value={param.value}
-                            onChange={(e) => onParameterChange(key, "value", e.target.value)}
-                          />
-                        )}
+                          )}
+                          {isEmpty && (
+                            <p className="text-red-500 text-xs mt-1">This parameter is required</p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -507,22 +532,30 @@ export const DeploymentWizard: React.FC<DeploymentWizardProps> = ({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent 
-        className="max-w-4xl max-h-[90vh] overflow-y-auto"
+        className="max-w-4xl max-h-[90vh] flex flex-col"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        <DialogHeader>
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Deploy Template</DialogTitle>
           <div className="mt-4">
             <StepWizard steps={steps} currentStep={currentStep} />
           </div>
         </DialogHeader>
         
-        <div className="py-6">
-          {renderStepContent()}
+        <div className="flex-1 overflow-hidden">
+          {currentStep === 4 ? (
+            <ScrollArea className="h-full py-6">
+              {renderStepContent()}
+            </ScrollArea>
+          ) : (
+            <div className="py-6">
+              {renderStepContent()}
+            </div>
+          )}
         </div>
         
-        <div className="flex justify-between">
+        <div className="flex justify-between flex-shrink-0 pt-4 border-t">
           <div>
             {currentStep > 1 && (
               <Button 
@@ -579,4 +612,3 @@ export const DeploymentWizard: React.FC<DeploymentWizardProps> = ({
     </Dialog>
   );
 };
-

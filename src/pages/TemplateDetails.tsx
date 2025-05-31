@@ -846,6 +846,7 @@ const TemplateDetails = () => {
         resourceGroup={resourceGroup}
         onResourceGroupNameChange={setResourceGroup}
         loadingResourceGroups={loadingResourceGroups}
+        onRefreshResourceGroups={() => fetchResourceGroupsForAccount(selectedCloudAccount, selectedSubscription)}
         locations={locations}
         location={location}
         onLocationChange={setLocation}
