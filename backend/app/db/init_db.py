@@ -232,6 +232,7 @@ def init_db(db: Session) -> None:
                     username=user_data["username"],
                     full_name=user_data["full_name"],
                     hashed_password=get_password_hash(user_data["password"]),
+                    tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
                     role_id=role.id,
                     user_id=user_data.get("user_id")
                 )
