@@ -1,12 +1,25 @@
 import axios from 'axios';
 import { CloudDeployment, CloudAccount, CloudTemplate, DeploymentLog } from '@/types/cloud';
 
-// API base URL
+// API base URL for backend services
 const API_URL = 'http://localhost:8000/api';
 
-// Create axios instance with default config
+// Deployment engine URL for specific endpoints
+const DEPLOYMENT_ENGINE_URL = 'http://localhost:5000';
+
+// Create axios instance with default config for backend
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  withCredentials: false
+});
+
+// Create axios instance for deployment engine
+const deploymentEngineApi = axios.create({
+  baseURL: DEPLOYMENT_ENGINE_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
@@ -191,6 +204,74 @@ export class DeploymentService {
       });
     } catch (error) {
       console.error(`Delete deployment ${deploymentId} error:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get subscription locations from Azure
+   */
+  async getSubscriptionLocations(tenantId?: string, settingsId?: string, subscriptionId?: string): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const params: any = {};
+      if (tenantId) {
+        params.target_tenant_id = formatTenantId(tenantId);
+      }
+      if (settingsId) {
+        params.settings_id = settingsId;
+      }
+      if (subscriptionId) {
+        params.subscription_id = subscriptionId;
+      }
+
+      const response = await deploymentEngineApi.get('/resources/subscription_locations', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get subscription locations error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Query Azure Resource Graph
+   */
+  async queryResourceGraph(query: string, tenantId?: string, settingsId?: string, subscriptionId?: string): Promise<any> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const params: any = { query };
+      if (tenantId) {
+        params.target_tenant_id = formatTenantId(tenantId);
+      }
+      if (settingsId) {
+        params.settings_id = settingsId;
+      }
+      if (subscriptionId) {
+        params.subscription_id = subscriptionId;
+      }
+
+      const response = await deploymentEngineApi.get('/resourcegraph', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Query resource graph error:', error);
       throw error;
     }
   }
