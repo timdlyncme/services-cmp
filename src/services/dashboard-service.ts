@@ -13,6 +13,15 @@ const api = axios.create({
   withCredentials: false
 });
 
+// Add request interceptor to include auth token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // Types
 export interface Dashboard {
   id: number;
@@ -272,4 +281,3 @@ class DashboardService {
 }
 
 export const dashboardService = new DashboardService();
-

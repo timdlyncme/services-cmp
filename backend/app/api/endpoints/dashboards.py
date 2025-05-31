@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import logging
 
 from app.db.session import get_db
-from app.api.endpoints.auth import get_current_user
+from app.api.deps import get_current_user
 from app.models.user import User
 from app.models.dashboard import Dashboard, DashboardWidget, WidgetType
 from app.models.deployment import Deployment, CloudAccount, Template, Environment
@@ -512,4 +512,3 @@ async def _fetch_widget_data(
     
     # Default empty data
     return {"message": "No data available for this widget configuration"}
-

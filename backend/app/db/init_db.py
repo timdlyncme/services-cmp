@@ -254,6 +254,9 @@ def create_sample_data(db: Session) -> None:
     # Get all users for later use
     users_by_tenant = {}
     for tenant in tenants:
+        # Skip if no users for this tenant
+        if tenant.tenant_id not in users_by_tenant or not users_by_tenant[tenant.tenant_id]:
+            continue
         tenant_users = db.query(User).filter(User.tenant_id == tenant.tenant_id).all()
         if tenant_users:
             users_by_tenant[tenant.tenant_id] = tenant_users
@@ -261,6 +264,9 @@ def create_sample_data(db: Session) -> None:
     # Create sample cloud accounts for each tenant
     cloud_accounts = []
     for tenant in tenants:
+        # Skip if no users for this tenant
+        if tenant.tenant_id not in users_by_tenant or not users_by_tenant[tenant.tenant_id]:
+            continue
         for i, provider in enumerate(["azure", "aws", "gcp"]):
             account = CloudAccount(
                 account_id=generate_uuid(),
@@ -292,6 +298,9 @@ def create_sample_data(db: Session) -> None:
     # Create sample environments for each tenant
     environments = []
     for tenant in tenants:
+        # Skip if no users for this tenant
+        if tenant.tenant_id not in users_by_tenant or not users_by_tenant[tenant.tenant_id]:
+            continue
         # Create multiple environments per tenant
         for i, env_type in enumerate(["Development", "Testing", "Staging", "Production"]):
             if i > 0 and tenant.name == "Cloud Ops":  # Fewer environments for Cloud Ops
@@ -938,6 +947,9 @@ output storageAccountId string = storageAccount.id
     
     # Create template foundry items for each tenant
     for tenant in tenants:
+        # Skip if no users for this tenant
+        if tenant.tenant_id not in users_by_tenant or not users_by_tenant[tenant.tenant_id]:
+            continue
         tenant_users = users_by_tenant.get(tenant.tenant_id, [])
         if not tenant_users:
             continue
@@ -1032,3 +1044,102 @@ output storageAccountId string = storageAccount.id
     
     db.commit()
     logger.info("Default widget types created successfully")
+
+    # Create default dashboards and widgets for each tenant
+    logger.info("Creating default dashboards and widgets...")
+    
+    for tenant in tenants:
+        # Skip if no users for this tenant
+        if tenant.tenant_id not in users_by_tenant or not users_by_tenant[tenant.tenant_id]:
+            continue
+        # Create a default dashboard for each tenant
+        default_dashboard = Dashboard(
+            name="Main Dashboard",
+            description="Default dashboard with overview widgets",
+            is_default=True,
+            layout_config={"columns": 3, "gap": 16},
+            tenant_id=tenant.tenant_id,
+            created_by_id=users_by_tenant[tenant.tenant_id][0].user_id  # Use first user as creator
+        )
+        db.add(default_dashboard)
+        db.flush()  # Get the dashboard ID
+        
+        # Create default widgets for the dashboard
+        default_widgets = [
+            {
+                "title": "Total Deployments",
+                "widget_type": "metric",
+                "data_source": "deployments",
+                "configuration": {"metric_type": "total"},
+                "position_x": 0,
+                "position_y": 0,
+                "width": 1,
+                "height": 1,
+                "refresh_interval": 300
+            },
+            {
+                "title": "Cloud Accounts",
+                "widget_type": "metric", 
+                "data_source": "cloud_accounts",
+                "configuration": {"metric_type": "total"},
+                "position_x": 1,
+                "position_y": 0,
+                "width": 1,
+                "height": 1,
+                "refresh_interval": 300
+            },
+            {
+                "title": "Templates",
+                "widget_type": "metric",
+                "data_source": "templates", 
+                "configuration": {"metric_type": "total"},
+                "position_x": 2,
+                "position_y": 0,
+                "width": 1,
+                "height": 1,
+                "refresh_interval": 300
+            },
+            {
+                "title": "Recent Deployments",
+                "widget_type": "list",
+                "data_source": "deployments",
+                "configuration": {"max_items": 5, "show_status": True},
+                "position_x": 0,
+                "position_y": 1,
+                "width": 2,
+                "height": 2,
+                "refresh_interval": 180
+            },
+            {
+                "title": "Deployment Status",
+                "widget_type": "chart",
+                "data_source": "deployments",
+                "configuration": {"chart_type": "pie", "group_by": "status"},
+                "position_x": 2,
+                "position_y": 1,
+                "width": 1,
+                "height": 2,
+                "refresh_interval": 300
+            },
+            {
+                "title": "Cloud Account Status",
+                "widget_type": "list",
+                "data_source": "cloud_accounts",
+                "configuration": {"max_items": 10, "show_status": True},
+                "position_x": 0,
+                "position_y": 3,
+                "width": 3,
+                "height": 1,
+                "refresh_interval": 300
+            }
+        ]
+        
+        for widget_data in default_widgets:
+            widget = DashboardWidget(
+                dashboard_id=default_dashboard.dashboard_id,
+                **widget_data
+            )
+            db.add(widget)
+    
+    db.commit()
+    logger.info("Default dashboards and widgets created successfully")
