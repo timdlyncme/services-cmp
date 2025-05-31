@@ -265,6 +265,8 @@ const TemplateDetails = () => {
     // Find the selected resource group and update location
     const selectedRG = resourceGroups.find(rg => rg.name === resourceGroupName);
     if (selectedRG) {
+      console.log("Setting location from resource group:", selectedRG.location);
+      console.log("Available locations:", locations.map(loc => loc.name));
       setLocation(selectedRG.location);
     }
   };
@@ -467,8 +469,8 @@ const TemplateDetails = () => {
           await fetchVersions(templateId);
         }
       }
-    } catch (err) {
-      console.error("Error creating new template version:", err);
+    } catch (error) {
+      console.error("Error creating new template version:", error);
       toast.error("Failed to create new template version");
     }
   };

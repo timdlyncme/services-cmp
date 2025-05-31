@@ -306,7 +306,7 @@ export const DeploymentWizard: React.FC<DeploymentWizardProps> = ({
               {useExistingResourceGroup ? (
                 <Input 
                   id="location" 
-                  value={location} 
+                  value={locations.find(loc => loc.name === location)?.display_name || location} 
                   disabled={true}
                   placeholder="Location will be set based on selected resource group"
                 />
