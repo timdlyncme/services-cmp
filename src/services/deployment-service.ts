@@ -211,7 +211,7 @@ export class DeploymentService {
   /**
    * Get subscription locations from Azure
    */
-  async getSubscriptionLocations(tenantId?: string, settingsId?: string): Promise<any> {
+  async getSubscriptionLocations(tenantId?: string, settingsId?: string, subscriptionId?: string): Promise<any> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -224,6 +224,9 @@ export class DeploymentService {
       }
       if (settingsId) {
         params.settings_id = settingsId;
+      }
+      if (subscriptionId) {
+        params.subscription_id = subscriptionId;
       }
 
       const response = await deploymentEngineApi.get('/resources/subscription_locations', {
@@ -242,7 +245,7 @@ export class DeploymentService {
   /**
    * Query Azure Resource Graph
    */
-  async queryResourceGraph(query: string, tenantId?: string, settingsId?: string): Promise<any> {
+  async queryResourceGraph(query: string, tenantId?: string, settingsId?: string, subscriptionId?: string): Promise<any> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -255,6 +258,9 @@ export class DeploymentService {
       }
       if (settingsId) {
         params.settings_id = settingsId;
+      }
+      if (subscriptionId) {
+        params.subscription_id = subscriptionId;
       }
 
       const response = await deploymentEngineApi.get('/resourcegraph', {

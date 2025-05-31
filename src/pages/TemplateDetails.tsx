@@ -43,6 +43,7 @@ interface Environment {
     provider: string;
     status: string;
     settings_id?: string;
+    cloud_ids?: string[]; // Array of subscription IDs
   }>;
 }
 
@@ -81,6 +82,8 @@ const TemplateDetails = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState<string>("");
   const [selectedCloudAccount, setSelectedCloudAccount] = useState<string>("");
   const [availableCloudAccounts, setAvailableCloudAccounts] = useState<any[]>([]);
+  const [selectedSubscription, setSelectedSubscription] = useState<string>("");
+  const [availableSubscriptions, setAvailableSubscriptions] = useState<string[]>([]);
   
   // AI Assistant state
   const [aiChatMessages, setAiChatMessages] = useState<AIChatMessage[]>([
@@ -136,13 +139,39 @@ const TemplateDetails = () => {
     setSelectedCloudAccount(accountId);
     setSelectedResourceGroup(""); // Reset resource group selection
     setLocation(""); // Reset location
+    setSelectedSubscription(""); // Reset subscription selection
     
-    // Fetch locations and resource groups for this cloud account
-    fetchLocationsForAccount(accountId);
-    fetchResourceGroupsForAccount(accountId);
+    // Find the selected cloud account and set available subscriptions
+    const account = availableCloudAccounts.find(acc => acc.id === accountId);
+    if (account && account.cloud_ids) {
+      setAvailableSubscriptions(account.cloud_ids);
+      
+      // If there's only one subscription, auto-select it and fetch data
+      if (account.cloud_ids.length === 1) {
+        const subscriptionId = account.cloud_ids[0];
+        setSelectedSubscription(subscriptionId);
+        // Fetch data for the auto-selected subscription
+        fetchLocationsForAccount(accountId, subscriptionId);
+        fetchResourceGroupsForAccount(accountId, subscriptionId);
+      }
+    } else {
+      setAvailableSubscriptions([]);
+    }
   };
   
-  const fetchLocationsForAccount = async (accountId: string) => {
+  const handleSubscriptionChange = (subscriptionId: string) => {
+    setSelectedSubscription(subscriptionId);
+    setSelectedResourceGroup(""); // Reset resource group selection
+    setLocation(""); // Reset location
+    
+    // Fetch locations and resource groups for this subscription
+    if (selectedCloudAccount) {
+      fetchLocationsForAccount(selectedCloudAccount, subscriptionId);
+      fetchResourceGroupsForAccount(selectedCloudAccount, subscriptionId);
+    }
+  };
+  
+  const fetchLocationsForAccount = async (accountId: string, subscriptionId?: string) => {
     try {
       setLoadingLocations(true);
       // Find the settings_id for the selected cloud account
@@ -152,9 +181,10 @@ const TemplateDetails = () => {
       console.log("fetchLocationsForAccount - accountId:", accountId);
       console.log("fetchLocationsForAccount - account:", account);
       console.log("fetchLocationsForAccount - settingsId:", settingsId);
+      console.log("fetchLocationsForAccount - subscriptionId:", subscriptionId);
       console.log("fetchLocationsForAccount - tenantId:", currentTenant?.tenant_id);
       
-      const response = await deploymentService.getSubscriptionLocations(currentTenant?.tenant_id, settingsId);
+      const response = await deploymentService.getSubscriptionLocations(currentTenant?.tenant_id, settingsId, subscriptionId);
       if (response && response.locations) {
         setLocations(response.locations);
       }
@@ -166,7 +196,7 @@ const TemplateDetails = () => {
     }
   };
   
-  const fetchResourceGroupsForAccount = async (accountId: string) => {
+  const fetchResourceGroupsForAccount = async (accountId: string, subscriptionId?: string) => {
     try {
       setLoadingResourceGroups(true);
       // Find the settings_id for the selected cloud account
@@ -176,10 +206,11 @@ const TemplateDetails = () => {
       console.log("fetchResourceGroupsForAccount - accountId:", accountId);
       console.log("fetchResourceGroupsForAccount - account:", account);
       console.log("fetchResourceGroupsForAccount - settingsId:", settingsId);
+      console.log("fetchResourceGroupsForAccount - subscriptionId:", subscriptionId);
       console.log("fetchResourceGroupsForAccount - tenantId:", currentTenant?.tenant_id);
       
       const query = "resourcecontainers | where type =~ 'microsoft.resources/subscriptions/resourcegroups' | project name, resourceGroup, location";
-      const response = await deploymentService.queryResourceGraph(query, currentTenant?.tenant_id, settingsId);
+      const response = await deploymentService.queryResourceGraph(query, currentTenant?.tenant_id, settingsId, subscriptionId);
       if (response && response.data) {
         setResourceGroups(response.data);
       }
@@ -267,11 +298,11 @@ const TemplateDetails = () => {
   }, [deployDialogOpen]);
   
   useEffect(() => {
-    if (selectedCloudAccount) {
-      fetchLocationsForAccount(selectedCloudAccount);
-      fetchResourceGroupsForAccount(selectedCloudAccount);
+    if (selectedCloudAccount && selectedSubscription) {
+      fetchLocationsForAccount(selectedCloudAccount, selectedSubscription);
+      fetchResourceGroupsForAccount(selectedCloudAccount, selectedSubscription);
     }
-  }, [selectedCloudAccount]);
+  }, [selectedCloudAccount, selectedSubscription]);
   
   const fetchTemplate = async (templateId: string) => {
     try {
@@ -412,7 +443,7 @@ const TemplateDetails = () => {
   };
   
   const handleDeployTemplate = async () => {
-    if (!template || !selectedEnvironment || !selectedCloudAccount || !deployName) {
+    if (!template || !selectedEnvironment || !selectedCloudAccount || !selectedSubscription || !deployName) {
       toast.error("Please provide all required deployment information");
       return;
     }
@@ -453,6 +484,7 @@ const TemplateDetails = () => {
         environment_id: environment.internal_id, // Use the internal_id from the environment
         environment_name: environment.name,
         cloud_account_id: selectedCloudAccount, // Add the selected cloud account
+        subscription_id: selectedSubscription, // Add the selected subscription
         provider: template.provider,
         deployment_type: backendDeploymentType,
         template_source: "code",
@@ -831,11 +863,38 @@ const TemplateDetails = () => {
               </div>
             )}
             
-            {/* Resource Group Selection - only show when cloud account is selected */}
-            {/* Resource Group Selection - only show when cloud account is selected */}
+            {/* Subscription Selection */}
             {selectedCloudAccount && (
               <div className="space-y-2">
+                <Label htmlFor="subscription">Subscription</Label>
+                <Select 
+                  value={selectedSubscription} 
+                  onValueChange={handleSubscriptionChange}
+                  disabled={deploymentInProgress || availableSubscriptions.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      availableSubscriptions.length === 0 
+                        ? "No subscriptions available" 
+                        : "Select a subscription"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableSubscriptions.map((subscription) => (
+                      <SelectItem key={subscription} value={subscription}>
+                        {subscription}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
+            {/* Resource Group Selection - only show when subscription is selected */}
+            {selectedCloudAccount && selectedSubscription && (
+              <div className="space-y-2">
                 <Label htmlFor="resourceGroup">Resource Group</Label>
+                
                 <div className="space-y-3">
                   <div className="flex items-center space-x-2">
                     <Switch
@@ -875,8 +934,8 @@ const TemplateDetails = () => {
               </div>
             )}
             
-            {/* Location Selection - only show when cloud account is selected */}
-            {selectedCloudAccount && (
+            {/* Location Selection - only show when subscription is selected */}
+            {selectedCloudAccount && selectedSubscription && (
               <div className="space-y-2">
                 <Label htmlFor="location">Location</Label>
                 {useExistingResourceGroup ? (
