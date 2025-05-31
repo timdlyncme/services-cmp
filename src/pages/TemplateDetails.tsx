@@ -247,6 +247,8 @@ const TemplateDetails = () => {
             locationDisplayName: locationInfo?.display_name || rg.location
           };
         });
+        console.log("fetchResourceGroupsForAccount - locations available:", locations.length);
+        console.log("fetchResourceGroupsForAccount - sample enriched RG:", enrichedResourceGroups[0]);
         setResourceGroups(enrichedResourceGroups);
       }
     } catch (err) {
@@ -333,6 +335,26 @@ const TemplateDetails = () => {
     }
   }, [selectedCloudAccount, selectedSubscription]);
   
+  // Re-enrich resource groups when locations are loaded
+  useEffect(() => {
+    if (locations.length > 0 && resourceGroups.length > 0) {
+      // Check if resource groups are already enriched to avoid infinite loop
+      const needsEnrichment = resourceGroups.some((rg: any) => !rg.locationDisplayName);
+      console.log("Re-enrichment check - locations:", locations.length, "resourceGroups:", resourceGroups.length, "needsEnrichment:", needsEnrichment);
+      if (needsEnrichment) {
+        const enrichedResourceGroups = resourceGroups.map((rg: any) => {
+          const locationInfo = locations.find(loc => loc.name === rg.location);
+          return {
+            ...rg,
+            locationDisplayName: locationInfo?.display_name || rg.location
+          };
+        });
+        console.log("Re-enriching resource groups - sample:", enrichedResourceGroups[0]);
+        setResourceGroups(enrichedResourceGroups);
+      }
+    }
+  }, [locations]);
+
   const fetchTemplate = async (templateId: string) => {
     try {
       setLoading(true);
