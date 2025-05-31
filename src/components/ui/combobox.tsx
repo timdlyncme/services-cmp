@@ -69,9 +69,15 @@ export function Combobox({
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
-                  value={option.value}
+                  value={option.label}
                   onSelect={(currentValue) => {
-                    onValueChange?.(currentValue === value ? "" : currentValue);
+                    // Find the option by label since Command normalizes the value
+                    const selectedOption = options.find(opt => 
+                      opt.label.toLowerCase() === currentValue.toLowerCase()
+                    );
+                    if (selectedOption) {
+                      onValueChange?.(selectedOption.value === value ? "" : selectedOption.value);
+                    }
                     setOpen(false);
                   }}
                 >
@@ -91,4 +97,3 @@ export function Combobox({
     </Popover>
   );
 }
-
