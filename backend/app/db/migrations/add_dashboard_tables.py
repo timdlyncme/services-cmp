@@ -16,6 +16,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from app.core.config import settings
 from app.models.base_models import Base
+# Import all models to ensure they are registered with SQLAlchemy
+from app.models import *  # This imports all models including CloudSettings
 from app.models.dashboard import Dashboard, DashboardWidget, UserWidget
 
 
@@ -270,4 +272,3 @@ def run_migration():
 
 if __name__ == "__main__":
     run_migration()
-
