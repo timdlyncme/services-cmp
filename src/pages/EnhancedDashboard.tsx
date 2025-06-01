@@ -80,13 +80,15 @@ interface SortableWidgetProps {
   style?: React.CSSProperties;
   onConfigure: () => void;
   onDelete: () => void;
+  isEditing: boolean;
 }
 
 function SortableWidget({ 
   userWidget, 
   style,
   onConfigure,
-  onDelete 
+  onDelete,
+  isEditing
 }: SortableWidgetProps) {
   const {
     attributes,
@@ -109,15 +111,15 @@ function SortableWidget({
       ref={setNodeRef}
       style={styleWithTransform}
       {...attributes}
-      {...listeners}
-      className="cursor-grab active:cursor-grabbing"
+      {...(isEditing ? listeners : {})}
+      className={isEditing ? "cursor-grab active:cursor-grabbing" : ""}
     >
       <BaseWidget
         userWidget={userWidget}
         onUpdate={() => {}}
         onRemove={onDelete}
         onConfigureWidget={onConfigure}
-        isEditing={false}
+        isEditing={isEditing}
         className={isDragging ? 'border-dashed border-2 border-primary/20' : ''}
       />
     </div>
@@ -414,26 +416,73 @@ export default function EnhancedDashboard() {
   };
 
   const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event;
+    const { active, over, delta } = event;
     
-    if (!over || active.id === over.id) return;
+    if (!over || active.id === over.id || !currentDashboard) return;
 
-    const activeIndex = sortableItems.findIndex(item => item.id === active.id);
-    const overIndex = sortableItems.findIndex(item => item.id === over.id);
+    const draggedWidget = currentDashboard.user_widgets.find(w => w.user_widget_id === active.id);
+    if (!draggedWidget) return;
 
-    if (activeIndex === -1 || overIndex === -1) return;
+    // Calculate new position based on drag delta
+    const currentPixelPosition = newGridToPixels({
+      x: draggedWidget.position_x,
+      y: draggedWidget.position_y,
+      width: draggedWidget.width,
+      height: draggedWidget.height
+    });
 
-    // Real-time reordering during drag
-    const newItems = customArrayMove(sortableItems, activeIndex, overIndex);
-    setSortableItems(newItems);
+    const newPixelPosition = {
+      x: currentPixelPosition.left + delta.x,
+      y: currentPixelPosition.top + delta.y
+    };
 
-    // Convert back to widgets with new positions
-    const updatedWidgets = sortableArrayToWidgets(newItems);
+    // Convert to grid position
+    const newGridPosition = newPixelsToGrid(newPixelPosition.x, newPixelPosition.y);
     
+    // Only update if position actually changed
+    if (newGridPosition.x === draggedWidget.position_x && newGridPosition.y === draggedWidget.position_y) {
+      return;
+    }
+
+    // Create current grid layout
+    const currentLayout = createGridLayout(currentDashboard.user_widgets);
+
+    // Find best drop position
+    const bestPosition = findBestDropPosition(
+      draggedWidget,
+      newPixelPosition.x,
+      newPixelPosition.y,
+      currentLayout
+    );
+
+    // Get displaced widgets
+    const displacedWidgets = getDisplacedWidgets(
+      bestPosition,
+      currentDashboard.user_widgets,
+      draggedWidget.user_widget_id
+    );
+
+    // Create new layout with the moved widget
+    const updatedWidgets = currentDashboard.user_widgets.map(widget => 
+      widget.user_widget_id === draggedWidget.user_widget_id
+        ? { ...widget, position_x: bestPosition.x, position_y: bestPosition.y }
+        : widget
+    );
+
+    // Reposition displaced widgets
+    const newLayout = createGridLayout(updatedWidgets);
+    const repositionedWidgets = repositionDisplacedWidgets(displacedWidgets, newLayout);
+
+    // Apply all changes for real-time feedback
+    const finalWidgets = updatedWidgets.map(widget => {
+      const repositioned = repositionedWidgets.find(rw => rw.user_widget_id === widget.user_widget_id);
+      return repositioned || widget;
+    });
+
     // Update dashboard state for real-time visual feedback
     setCurrentDashboard(prev => prev ? {
       ...prev,
-      user_widgets: updatedWidgets
+      user_widgets: finalWidgets
     } : null);
   };
 
@@ -446,13 +495,10 @@ export default function EnhancedDashboard() {
     if (!over || active.id === over.id || !currentDashboard) return;
 
     try {
-      // The positions have already been updated in real-time during drag
-      // Now we need to persist them to the database
-      const finalWidgets = sortableArrayToWidgets(sortableItems);
-      
-      // Update all widget positions in the database
-      for (const widget of finalWidgets) {
-        const originalWidget = currentDashboard.user_widgets.find(w => w.user_widget_id === widget.user_widget_id);
+      // Persist the current widget positions to database
+      for (const widget of currentDashboard.user_widgets) {
+        // Find original position to check if it changed
+        const originalWidget = sortableItems.find(item => item.id === widget.user_widget_id)?.widget;
         if (originalWidget && 
             (originalWidget.position_x !== widget.position_x || originalWidget.position_y !== widget.position_y)) {
           await dashboardService.updateUserWidget(widget.user_widget_id, {
@@ -468,10 +514,12 @@ export default function EnhancedDashboard() {
       toast.error('Failed to save widget positions');
       
       // Revert to original positions on error
-      if (currentDashboard) {
-        const originalItems = widgetsToSortableArray(currentDashboard.user_widgets);
-        setSortableItems(originalItems);
-      }
+      const originalItems = widgetsToSortableArray(currentDashboard.user_widgets);
+      const originalWidgets = sortableArrayToWidgets(originalItems);
+      setCurrentDashboard(prev => prev ? {
+        ...prev,
+        user_widgets: originalWidgets
+      } : null);
     }
   };
 
@@ -632,33 +680,34 @@ export default function EnhancedDashboard() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={sortableItems.map(item => item.id)}
+            items={currentDashboard.user_widgets.map(w => w.user_widget_id)}
           >
             <div className="relative min-h-screen">
-              {sortableItems
-                .filter(item => item.widget.is_visible)
-                .map((item) => {
+              {currentDashboard.user_widgets
+                .filter(widget => widget.is_visible)
+                .map((widget) => {
                   const pixelPosition = newGridToPixels({
-                    x: item.widget.position_x,
-                    y: item.widget.position_y,
-                    width: item.widget.width,
-                    height: item.widget.height
+                    x: widget.position_x,
+                    y: widget.position_y,
+                    width: widget.width,
+                    height: widget.height
                   });
 
                   return (
                     <SortableWidget
-                      key={item.id}
-                      userWidget={item.widget}
+                      key={widget.user_widget_id}
+                      userWidget={widget}
                       style={{
                         position: 'absolute',
                         left: pixelPosition.left,
                         top: pixelPosition.top,
                         width: pixelPosition.width,
                         height: pixelPosition.height,
-                        transition: activeId === item.id ? 'none' : 'all 200ms ease',
+                        transition: activeId === widget.user_widget_id ? 'none' : 'all 200ms ease',
                       }}
-                      onConfigure={() => setConfigWidget(item.widget)}
-                      onDelete={() => handleDeleteWidget(item.widget.user_widget_id)}
+                      onConfigure={() => setConfigWidget(widget)}
+                      onDelete={() => handleDeleteWidget(widget.user_widget_id)}
+                      isEditing={isEditing}
                     />
                   );
                 })}
