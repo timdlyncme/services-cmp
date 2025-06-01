@@ -18,22 +18,10 @@ import {
   LayoutDashboard
 } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  useSortable,
-  rectSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { Responsive, WidthProvider } from 'react-grid-layout';
+import 'react-grid-layout/css/styles.css';
+import 'react-resizable/css/styles.css';
+import '../styles/dashboard.css';
 
 import BaseWidget from '@/components/dashboard/BaseWidget';
 import WidgetCatalog from '@/components/dashboard/WidgetCatalog';
@@ -46,54 +34,18 @@ import {
   dashboardService
 } from '../services/dashboard-service';
 
-interface SortableWidgetProps {
-  userWidget: UserWidget;
-  onUpdate: (userWidget: UserWidget) => void;
-  onRemove: (userWidgetId: string) => void;
-  onConfigureWidget: (userWidget: UserWidget) => void;
-  isEditing: boolean;
-}
+const ResponsiveGridLayout = WidthProvider(Responsive);
 
-function SortableWidget({ 
-  userWidget, 
-  onUpdate, 
-  onRemove, 
-  onConfigureWidget, 
-  isEditing 
-}: SortableWidgetProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: userWidget.user_widget_id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...(isEditing ? listeners : {})}
-      className={`${isEditing ? 'cursor-grab active:cursor-grabbing' : ''}`}
-    >
-      <BaseWidget
-        userWidget={userWidget}
-        onUpdate={onUpdate}
-        onRemove={onRemove}
-        onConfigureWidget={onConfigureWidget}
-        isEditing={isEditing}
-        className={isEditing ? 'border-dashed border-2 border-primary/20' : ''}
-      />
-    </div>
-  );
+interface GridLayoutItem {
+  i: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  minH?: number;
+  maxW?: number;
+  maxH?: number;
 }
 
 export default function EnhancedDashboard() {
@@ -106,16 +58,12 @@ export default function EnhancedDashboard() {
   const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
   const [showDashboardManager, setShowDashboardManager] = useState(false);
   const [configWidget, setConfigWidget] = useState<UserWidget | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [draggedWidget, setDraggedWidget] = useState<UserWidget | null>(null);
+  const [layouts, setLayouts] = useState<{ [key: string]: GridLayoutItem[] }>({});
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
+  // Grid layout configuration
+  const breakpoints = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 };
+  const cols = { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 };
+  const rowHeight = 120; // Increased from 60 to 120 for better content fit
 
   useEffect(() => {
     loadDashboards();
@@ -126,6 +74,36 @@ export default function EnhancedDashboard() {
       loadDashboard(currentDashboardId);
     }
   }, [currentDashboardId]);
+
+  // Convert UserWidget to GridLayoutItem
+  const convertToGridLayout = useCallback((userWidgets: UserWidget[]): GridLayoutItem[] => {
+    return userWidgets
+      .filter(widget => widget.is_visible)
+      .map(widget => ({
+        i: widget.user_widget_id,
+        x: widget.position_x,
+        y: widget.position_y,
+        w: Math.max(widget.width, widget.widget_template.min_width, 3), // Ensure minimum width of 3
+        h: Math.max(widget.height, widget.widget_template.min_height, 3), // Ensure minimum height of 3
+        minW: Math.max(widget.widget_template.min_width, 2), // Minimum 2 columns
+        minH: Math.max(widget.widget_template.min_height, 2), // Minimum 2 rows
+        // Remove maxW and maxH constraints to allow unlimited resizing
+      }));
+  }, []);
+
+  // Update layouts when dashboard changes
+  useEffect(() => {
+    if (currentDashboard) {
+      const gridLayout = convertToGridLayout(currentDashboard.user_widgets);
+      setLayouts({
+        lg: gridLayout,
+        md: gridLayout,
+        sm: gridLayout,
+        xs: gridLayout,
+        xxs: gridLayout,
+      });
+    }
+  }, [currentDashboard, convertToGridLayout]);
 
   const loadDashboards = async () => {
     try {
@@ -182,14 +160,18 @@ export default function EnhancedDashboard() {
     if (!currentDashboard) return;
     
     try {
+      // Find a good position for the new widget
+      const existingLayout = layouts.lg || [];
+      const newPosition = findNextAvailablePosition(existingLayout);
+      
       const newWidget = await dashboardService.addWidgetToDashboard(currentDashboard.dashboard_id, {
         dashboard_id: currentDashboard.dashboard_id,
         widget_id: widgetId,
         custom_name: customName,
-        position_x: 0,
-        position_y: 0,
-        width: 1,
-        height: 1,
+        position_x: newPosition.x,
+        position_y: newPosition.y,
+        width: newPosition.w,
+        height: newPosition.h,
         is_visible: true
       });
       
@@ -203,6 +185,47 @@ export default function EnhancedDashboard() {
       console.error('Error adding widget:', error);
       toast.error('Failed to add widget');
     }
+  };
+
+  // Find next available position for new widgets
+  const findNextAvailablePosition = (existingLayout: GridLayoutItem[]) => {
+    const defaultSize = { w: 4, h: 4 }; // Increased default size from 4x4 to better fit content
+    
+    // If no widgets exist, place at top-left
+    if (existingLayout.length === 0) {
+      return { x: 0, y: 0, ...defaultSize };
+    }
+
+    // Find the bottom-most widget and place below it
+    const maxY = Math.max(...existingLayout.map(item => item.y + item.h));
+    return { x: 0, y: maxY, ...defaultSize };
+  };
+
+  const handleLayoutChange = (layout: GridLayoutItem[], allLayouts: { [key: string]: GridLayoutItem[] }) => {
+    if (!isEditing || !currentDashboard) return;
+
+    // Update layouts state
+    setLayouts(allLayouts);
+
+    // Update the dashboard state with new positions
+    const updatedWidgets = currentDashboard.user_widgets.map(widget => {
+      const layoutItem = layout.find(item => item.i === widget.user_widget_id);
+      if (layoutItem) {
+        return {
+          ...widget,
+          position_x: layoutItem.x,
+          position_y: layoutItem.y,
+          width: layoutItem.w,
+          height: layoutItem.h,
+        };
+      }
+      return widget;
+    });
+
+    setCurrentDashboard(prev => prev ? {
+      ...prev,
+      user_widgets: updatedWidgets
+    } : null);
   };
 
   const handleUpdateWidget = async (userWidgetId: string, updates: Partial<UserWidget>) => {
@@ -280,7 +303,7 @@ export default function EnhancedDashboard() {
 
     try {
       const layoutUpdate = {
-        layout_config: currentDashboard.layout_config || {},
+        layout_config: layouts,
         widgets: currentDashboard.user_widgets.map(widget => ({
           user_widget_id: widget.user_widget_id,
           position_x: widget.position_x,
@@ -298,44 +321,6 @@ export default function EnhancedDashboard() {
       console.error('Error saving layout:', error);
       toast.error('Failed to save layout');
     }
-  };
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    setActiveId(active.id as string);
-    
-    const widget = currentDashboard?.user_widgets.find(w => w.user_widget_id === active.id);
-    setDraggedWidget(widget || null);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    if (active.id !== over?.id && currentDashboard) {
-      const oldIndex = currentDashboard.user_widgets.findIndex(w => w.user_widget_id === active.id);
-      const newIndex = currentDashboard.user_widgets.findIndex(w => w.user_widget_id === over?.id);
-      
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const newWidgets = [...currentDashboard.user_widgets];
-        const [movedWidget] = newWidgets.splice(oldIndex, 1);
-        newWidgets.splice(newIndex, 0, movedWidget);
-        
-        // Update positions based on new order
-        const updatedWidgets = newWidgets.map((widget, index) => ({
-          ...widget,
-          position_y: Math.floor(index / 3), // Assuming 3 columns
-          position_x: index % 3
-        }));
-        
-        setCurrentDashboard(prev => prev ? {
-          ...prev,
-          user_widgets: updatedWidgets
-        } : null);
-      }
-    }
-    
-    setActiveId(null);
-    setDraggedWidget(null);
   };
 
   const handleCreateDashboard = async () => {
@@ -487,52 +472,39 @@ export default function EnhancedDashboard() {
           </Button>
         </div>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={currentDashboard.user_widgets.map(w => w.user_widget_id)}
-            strategy={rectSortingStrategy}
+        <div className="dashboard-container">
+          <ResponsiveGridLayout
+            className="layout"
+            layouts={layouts}
+            breakpoints={breakpoints}
+            cols={cols}
+            rowHeight={rowHeight}
+            onLayoutChange={handleLayoutChange}
+            isDraggable={isEditing}
+            isResizable={isEditing}
+            compactType="vertical"
+            preventCollision={false}
+            margin={[16, 16]}
+            containerPadding={[0, 0]}
+            maxRows={Infinity} // Allow unlimited rows
+            autoSize={true} // Auto-size the container
           >
-            <div className="relative min-h-screen">
-              {currentDashboard.user_widgets
-                .filter(widget => widget.is_visible)
-                .map((userWidget) => (
-                  <div
-                    key={userWidget.user_widget_id}
-                    className="absolute"
-                    style={{
-                      left: `${userWidget.position_x * 320}px`, // 320px = widget width + gap
-                      top: `${userWidget.position_y * 240}px`,  // 240px = widget height + gap
-                      width: `${userWidget.width * 320 - 16}px`,
-                      height: `${userWidget.height * 240 - 16}px`,
-                    }}
-                  >
-                    <SortableWidget
-                      userWidget={userWidget}
-                      onUpdate={handleUpdateWidget}
-                      onRemove={handleRemoveWidget}
-                      onConfigureWidget={handleConfigureWidget}
-                      isEditing={isEditing}
-                    />
-                  </div>
-                ))}
-            </div>
-          </SortableContext>
-
-          <DragOverlay>
-            {activeId && draggedWidget ? (
-              <BaseWidget
-                userWidget={draggedWidget}
-                isEditing={false}
-                className="opacity-90 rotate-3 shadow-lg"
-              />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+            {currentDashboard.user_widgets
+              .filter(widget => widget.is_visible)
+              .map((userWidget) => (
+                <div key={userWidget.user_widget_id}>
+                  <BaseWidget
+                    userWidget={userWidget}
+                    onUpdate={handleUpdateWidget}
+                    onRemove={handleRemoveWidget}
+                    onConfigureWidget={handleConfigureWidget}
+                    isEditing={isEditing}
+                    className={isEditing ? 'border-dashed border-2 border-primary/20' : ''}
+                  />
+                </div>
+              ))}
+          </ResponsiveGridLayout>
+        </div>
       )}
 
       {/* Dialogs */}
