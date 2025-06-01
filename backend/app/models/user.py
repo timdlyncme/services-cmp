@@ -89,3 +89,6 @@ class User(Base):
     
     # Relationship with TemplateFoundry
     template_foundry_items = relationship("TemplateFoundry", back_populates="created_by")
+    
+    # Relationship with Dashboard
+    dashboards = relationship("Dashboard", back_populates="user")
