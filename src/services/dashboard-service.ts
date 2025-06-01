@@ -37,6 +37,7 @@ export interface UserWidget {
   position_y: number;
   width: number;
   height: number;
+  color?: string;
   custom_config?: any;
   is_visible: boolean;
   dashboard_id: string;
@@ -88,6 +89,7 @@ export interface UpdateUserWidgetRequest {
   position_y?: number;
   width?: number;
   height?: number;
+  color?: string;
   custom_config?: any;
   is_visible?: boolean;
 }
@@ -214,4 +216,3 @@ class DashboardService {
 }
 
 export const dashboardService = new DashboardService();
-

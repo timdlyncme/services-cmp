@@ -152,7 +152,15 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Preview
             </label>
-            <div className={`p-4 rounded-lg border-2 ${selectedColor}`}>
+            <div 
+              className={`p-4 rounded-lg border-2 ${selectedColor}`}
+              style={{
+                width: `${selectedSize.width * 100}px`,
+                height: `${selectedSize.height * 80}px`,
+                minWidth: '100px',
+                minHeight: '80px'
+              }}
+            >
               <div className="font-medium text-sm">
                 {customName.trim() || userWidget.widget_template.name}
               </div>

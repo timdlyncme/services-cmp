@@ -45,6 +45,13 @@ import {
   UserWidget,
   dashboardService
 } from '../services/dashboard-service';
+import { 
+  findNextAvailablePosition, 
+  checkCollision, 
+  gridToPixels, 
+  pixelsToGrid,
+  GridPosition 
+} from '../utils/grid-utils';
 
 interface SortableWidgetProps {
   userWidget: UserWidget;
@@ -182,14 +189,20 @@ export default function EnhancedDashboard() {
     if (!currentDashboard) return;
     
     try {
+      // Find the next available position for a 1x1 widget
+      const position = findNextAvailablePosition(
+        { width: 1, height: 1 },
+        currentDashboard.user_widgets
+      );
+
       const newWidget = await dashboardService.addWidgetToDashboard(currentDashboard.dashboard_id, {
         dashboard_id: currentDashboard.dashboard_id,
         widget_id: widgetId,
         custom_name: customName,
-        position_x: 0,
-        position_y: 0,
-        width: 1,
-        height: 1,
+        position_x: position.x,
+        position_y: position.y,
+        width: position.width,
+        height: position.height,
         is_visible: true
       });
       
@@ -246,9 +259,27 @@ export default function EnhancedDashboard() {
   };
 
   const handleSaveWidgetConfig = async (updates: Partial<UserWidget>) => {
-    if (!configWidget) return;
+    if (!configWidget || !currentDashboard) return;
 
     try {
+      // If size is being changed, check for collisions
+      if ((updates.width !== undefined && updates.width !== configWidget.width) ||
+          (updates.height !== undefined && updates.height !== configWidget.height)) {
+        
+        const newPosition: GridPosition = {
+          x: configWidget.position_x,
+          y: configWidget.position_y,
+          width: updates.width ?? configWidget.width,
+          height: updates.height ?? configWidget.height
+        };
+
+        // Check if the new size would cause collisions
+        if (checkCollision(newPosition, currentDashboard.user_widgets, configWidget.user_widget_id)) {
+          toast.error('Cannot resize widget: would overlap with other widgets');
+          return;
+        }
+      }
+
       await dashboardService.updateUserWidget(configWidget.user_widget_id, updates);
       
       // Update the local state
@@ -312,21 +343,38 @@ export default function EnhancedDashboard() {
     const { active, over } = event;
     
     if (active.id !== over?.id && currentDashboard) {
-      const oldIndex = currentDashboard.user_widgets.findIndex(w => w.user_widget_id === active.id);
-      const newIndex = currentDashboard.user_widgets.findIndex(w => w.user_widget_id === over?.id);
+      const draggedWidget = currentDashboard.user_widgets.find(w => w.user_widget_id === active.id);
+      const targetWidget = currentDashboard.user_widgets.find(w => w.user_widget_id === over?.id);
       
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const newWidgets = [...currentDashboard.user_widgets];
-        const [movedWidget] = newWidgets.splice(oldIndex, 1);
-        newWidgets.splice(newIndex, 0, movedWidget);
-        
-        // Update positions based on new order
-        const updatedWidgets = newWidgets.map((widget, index) => ({
-          ...widget,
-          position_y: Math.floor(index / 3), // Assuming 3 columns
-          position_x: index % 3
-        }));
-        
+      if (draggedWidget && targetWidget) {
+        // Calculate new position based on target widget position
+        const newPosition: GridPosition = {
+          x: targetWidget.position_x,
+          y: targetWidget.position_y,
+          width: draggedWidget.width,
+          height: draggedWidget.height
+        };
+
+        // Check if the new position would cause collisions
+        if (checkCollision(newPosition, currentDashboard.user_widgets, draggedWidget.user_widget_id)) {
+          toast.error('Cannot move widget: would overlap with other widgets');
+          setActiveId(null);
+          setDraggedWidget(null);
+          return;
+        }
+
+        // Update the dragged widget's position
+        const updatedWidgets = currentDashboard.user_widgets.map(widget => {
+          if (widget.user_widget_id === draggedWidget.user_widget_id) {
+            return {
+              ...widget,
+              position_x: newPosition.x,
+              position_y: newPosition.y
+            };
+          }
+          return widget;
+        });
+
         setCurrentDashboard(prev => prev ? {
           ...prev,
           user_widgets: updatedWidgets
@@ -500,26 +548,35 @@ export default function EnhancedDashboard() {
             <div className="relative min-h-screen">
               {currentDashboard.user_widgets
                 .filter(widget => widget.is_visible)
-                .map((userWidget) => (
-                  <div
-                    key={userWidget.user_widget_id}
-                    className="absolute"
-                    style={{
-                      left: `${userWidget.position_x * 320}px`, // 320px = widget width + gap
-                      top: `${userWidget.position_y * 240}px`,  // 240px = widget height + gap
-                      width: `${userWidget.width * 320 - 16}px`,
-                      height: `${userWidget.height * 240 - 16}px`,
-                    }}
-                  >
-                    <SortableWidget
-                      userWidget={userWidget}
-                      onUpdate={handleUpdateWidget}
-                      onRemove={handleRemoveWidget}
-                      onConfigureWidget={handleConfigureWidget}
-                      isEditing={isEditing}
-                    />
-                  </div>
-                ))}
+                .map((userWidget) => {
+                  const pixelPosition = gridToPixels({
+                    x: userWidget.position_x,
+                    y: userWidget.position_y,
+                    width: userWidget.width,
+                    height: userWidget.height
+                  });
+
+                  return (
+                    <div
+                      key={userWidget.user_widget_id}
+                      className="absolute"
+                      style={{
+                        left: `${pixelPosition.left}px`,
+                        top: `${pixelPosition.top}px`,
+                        width: `${pixelPosition.width}px`,
+                        height: `${pixelPosition.height}px`,
+                      }}
+                    >
+                      <SortableWidget
+                        userWidget={userWidget}
+                        onUpdate={handleUpdateWidget}
+                        onRemove={handleRemoveWidget}
+                        onConfigureWidget={handleConfigureWidget}
+                        isEditing={isEditing}
+                      />
+                    </div>
+                  );
+                })}
             </div>
           </SortableContext>
 

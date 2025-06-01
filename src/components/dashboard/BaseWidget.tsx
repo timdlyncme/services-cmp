@@ -303,7 +303,7 @@ export default function BaseWidget({
   };
 
   return (
-    <Card className={`relative ${className} ${!userWidget.is_visible ? 'opacity-50' : ''}`}>
+    <Card className={`relative ${className} ${!userWidget.is_visible ? 'opacity-50' : ''} ${userWidget.color || ''}`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="flex-1 min-w-0">
           <CardTitle className="text-sm font-medium truncate">
