@@ -11,14 +11,15 @@ import {
   GridLayout
 } from '@/types/dashboard';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+// API base URL
+const API_BASE = '/api/dashboards';
 
 class DashboardService {
   private getAuthHeaders() {
     const token = localStorage.getItem('token');
     return {
       headers: {
-        Authorization: `Bearer ${token}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     };
@@ -26,37 +27,37 @@ class DashboardService {
 
   // Dashboard operations
   async getDashboards(): Promise<Dashboard[]> {
-    const response = await axios.get(`${API_BASE_URL}/dashboards/dashboards`, this.getAuthHeaders());
+    const response = await axios.get(`${API_BASE}`, this.getAuthHeaders());
     return response.data;
   }
 
   async getDashboard(dashboardId: string): Promise<Dashboard> {
-    const response = await axios.get(`${API_BASE_URL}/dashboards/dashboards/${dashboardId}`, this.getAuthHeaders());
+    const response = await axios.get(`${API_BASE}/${dashboardId}`, this.getAuthHeaders());
     return response.data;
   }
 
   async createDashboard(data: DashboardCreateRequest): Promise<Dashboard> {
-    const response = await axios.post(`${API_BASE_URL}/dashboards/dashboards`, data, this.getAuthHeaders());
+    const response = await axios.post(`${API_BASE}`, data, this.getAuthHeaders());
     return response.data;
   }
 
   async updateDashboard(dashboardId: string, data: DashboardUpdateRequest): Promise<Dashboard> {
-    const response = await axios.put(`${API_BASE_URL}/dashboards/dashboards/${dashboardId}`, data, this.getAuthHeaders());
+    const response = await axios.put(`${API_BASE}/${dashboardId}`, data, this.getAuthHeaders());
     return response.data;
   }
 
   async deleteDashboard(dashboardId: string): Promise<void> {
-    await axios.delete(`${API_BASE_URL}/dashboards/dashboards/${dashboardId}`, this.getAuthHeaders());
+    await axios.delete(`${API_BASE}/${dashboardId}`, this.getAuthHeaders());
   }
 
   async updateDashboardLayout(dashboardId: string, layout: GridLayout[]): Promise<void> {
-    await axios.post(`${API_BASE_URL}/dashboards/dashboards/${dashboardId}/layout`, layout, this.getAuthHeaders());
+    await axios.post(`${API_BASE}/${dashboardId}/layout`, layout, this.getAuthHeaders());
   }
 
   // Widget catalog operations
   async getWidgetCatalog(category?: string): Promise<DashboardWidget[]> {
     const params = category ? { category } : {};
-    const response = await axios.get(`${API_BASE_URL}/dashboards/widget-catalog`, {
+    const response = await axios.get(`${API_BASE}/widget-catalog`, {
       ...this.getAuthHeaders(),
       params,
     });
@@ -65,23 +66,23 @@ class DashboardService {
 
   // User widget operations
   async addWidgetToDashboard(dashboardId: string, data: UserWidgetCreateRequest): Promise<UserWidget> {
-    const response = await axios.post(`${API_BASE_URL}/dashboards/dashboards/${dashboardId}/widgets`, data, this.getAuthHeaders());
+    const response = await axios.post(`${API_BASE}/${dashboardId}/widgets`, data, this.getAuthHeaders());
     return response.data;
   }
 
   async updateUserWidget(userWidgetId: string, data: UserWidgetUpdateRequest): Promise<UserWidget> {
-    const response = await axios.put(`${API_BASE_URL}/dashboards/user-widgets/${userWidgetId}`, data, this.getAuthHeaders());
+    const response = await axios.put(`${API_BASE}/user-widgets/${userWidgetId}`, data, this.getAuthHeaders());
     return response.data;
   }
 
   async removeUserWidget(userWidgetId: string): Promise<void> {
-    await axios.delete(`${API_BASE_URL}/dashboards/user-widgets/${userWidgetId}`, this.getAuthHeaders());
+    await axios.delete(`${API_BASE}/user-widgets/${userWidgetId}`, this.getAuthHeaders());
   }
 
   // Widget data operations
   async getWidgetData(dataSource: string, filters?: Record<string, any>): Promise<WidgetData> {
     const params = filters ? { filters: JSON.stringify(filters) } : {};
-    const response = await axios.get(`${API_BASE_URL}/dashboards/widget-data/${dataSource}`, {
+    const response = await axios.get(`${API_BASE}/widget-data/${dataSource}`, {
       ...this.getAuthHeaders(),
       params,
     });
@@ -128,4 +129,3 @@ class DashboardService {
 }
 
 export const dashboardService = new DashboardService();
-

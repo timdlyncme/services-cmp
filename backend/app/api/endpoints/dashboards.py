@@ -98,7 +98,7 @@ class UserWidgetResponse(BaseModel):
         from_attributes = True
 
 
-@router.get("/dashboards", response_model=List[DashboardResponse])
+@router.get("/", response_model=List[DashboardResponse])
 async def get_user_dashboards(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -108,7 +108,7 @@ async def get_user_dashboards(
     return service.get_user_dashboards(current_user.id)
 
 
-@router.post("/dashboards", response_model=DashboardResponse)
+@router.post("/", response_model=DashboardResponse)
 async def create_dashboard(
     dashboard_data: DashboardCreate,
     current_user: User = Depends(get_current_user),
@@ -119,7 +119,7 @@ async def create_dashboard(
     return service.create_dashboard(current_user.id, dashboard_data.dict())
 
 
-@router.get("/dashboards/{dashboard_id}", response_model=DashboardResponse)
+@router.get("/{dashboard_id}", response_model=DashboardResponse)
 async def get_dashboard(
     dashboard_id: str,
     current_user: User = Depends(get_current_user),
@@ -136,7 +136,7 @@ async def get_dashboard(
     return dashboard
 
 
-@router.put("/dashboards/{dashboard_id}", response_model=DashboardResponse)
+@router.put("/{dashboard_id}", response_model=DashboardResponse)
 async def update_dashboard(
     dashboard_id: str,
     dashboard_data: DashboardUpdate,
@@ -154,7 +154,7 @@ async def update_dashboard(
     return dashboard
 
 
-@router.delete("/dashboards/{dashboard_id}")
+@router.delete("/{dashboard_id}")
 async def delete_dashboard(
     dashboard_id: str,
     current_user: User = Depends(get_current_user),
@@ -181,7 +181,7 @@ async def get_widget_catalog(
     return service.get_widget_catalog(category)
 
 
-@router.post("/dashboards/{dashboard_id}/widgets", response_model=UserWidgetResponse)
+@router.post("/{dashboard_id}/widgets", response_model=UserWidgetResponse)
 async def add_widget_to_dashboard(
     dashboard_id: str,
     widget_data: UserWidgetCreate,
@@ -240,7 +240,7 @@ async def remove_user_widget(
     return {"message": "Widget removed successfully"}
 
 
-@router.post("/dashboards/{dashboard_id}/layout")
+@router.post("/{dashboard_id}/layout")
 async def update_dashboard_layout(
     dashboard_id: str,
     layout_data: dict,
@@ -278,4 +278,3 @@ async def get_widget_data(
             pass
     
     return service.get_widget_data(data_source, current_user, filter_dict)
-
