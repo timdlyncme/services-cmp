@@ -21,17 +21,22 @@ import { toast } from 'sonner';
 import {
   DndContext,
   DragEndEvent,
-  DragOverlay,
+  DragOverEvent,
   DragStartEvent,
-  PointerSensor,
+  DragOverlay,
   useSensor,
   useSensors,
+  PointerSensor,
+  KeyboardSensor,
   closestCenter,
+  rectIntersection,
+  getFirstCollision,
+  pointerWithin
 } from '@dnd-kit/core';
 import {
-  SortableContext,
   useSortable,
-  rectSortingStrategy,
+  SortableContext,
+  sortableKeyboardCoordinates
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -53,6 +58,15 @@ import {
   pixelsToGrid,
   GridPosition 
 } from '../utils/grid-utils';
+import {
+  createGridLayout,
+  findBestDropPosition,
+  getDisplacedWidgets,
+  repositionDisplacedWidgets,
+  gridToPixels as newGridToPixels,
+  pixelsToGrid as newPixelsToGrid,
+  GridPosition as NewGridPosition
+} from '../utils/grid-layout';
 
 interface SortableWidgetProps {
   userWidget: UserWidget;
@@ -122,6 +136,9 @@ export default function EnhancedDashboard() {
       activationConstraint: {
         distance: 8,
       },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
     })
   );
 
@@ -269,17 +286,37 @@ export default function EnhancedDashboard() {
       if ((updates.width !== undefined && updates.width !== configWidget.width) ||
           (updates.height !== undefined && updates.height !== configWidget.height)) {
         
-        const result = findNextAvailablePositionWithReposition(
-          { 
-            width: updates.width ?? configWidget.width, 
-            height: updates.height ?? configWidget.height 
-          },
-          { x: configWidget.position_x, y: configWidget.position_y },
+        const newSize = {
+          width: updates.width ?? configWidget.width,
+          height: updates.height ?? configWidget.height
+        };
+
+        const newPosition = {
+          x: configWidget.position_x,
+          y: configWidget.position_y,
+          ...newSize
+        };
+
+        // Create current layout
+        const currentLayout = createGridLayout(currentDashboard.user_widgets);
+
+        // Get displaced widgets
+        const displacedWidgets = getDisplacedWidgets(
+          newPosition,
           currentDashboard.user_widgets,
           configWidget.user_widget_id
         );
 
-        repositionedWidgets = result.repositionedWidgets;
+        // Create new layout with the resized widget
+        const updatedWidgets = currentDashboard.user_widgets.map(widget => 
+          widget.user_widget_id === configWidget.user_widget_id
+            ? { ...widget, ...updates }
+            : widget
+        );
+
+        // Reposition displaced widgets
+        const newLayout = createGridLayout(updatedWidgets);
+        repositionedWidgets = repositionDisplacedWidgets(displacedWidgets, newLayout);
       }
 
       // Update the main widget
@@ -356,61 +393,85 @@ export default function EnhancedDashboard() {
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
-    setActiveId(active.id as string);
+    setActiveId(active.id);
     
     const widget = currentDashboard?.user_widgets.find(w => w.user_widget_id === active.id);
     setDraggedWidget(widget || null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    if (active.id !== over?.id && currentDashboard) {
-      const draggedWidget = currentDashboard.user_widgets.find(w => w.user_widget_id === active.id);
-      const targetWidget = currentDashboard.user_widgets.find(w => w.user_widget_id === over?.id);
-      
-      if (draggedWidget && targetWidget) {
-        // Use repositioning logic instead of blocking
-        const result = findNextAvailablePositionWithReposition(
-          { width: draggedWidget.width, height: draggedWidget.height },
-          { x: targetWidget.position_x, y: targetWidget.position_y },
-          currentDashboard.user_widgets,
-          draggedWidget.user_widget_id
-        );
-
-        // Update all affected widgets
-        const updatedWidgets = currentDashboard.user_widgets.map(widget => {
-          if (widget.user_widget_id === draggedWidget.user_widget_id) {
-            return {
-              ...widget,
-              position_x: result.position.x,
-              position_y: result.position.y
-            };
-          }
-          
-          // Update repositioned widgets
-          const repositioned = result.repositionedWidgets.find(rw => rw.user_widget_id === widget.user_widget_id);
-          if (repositioned) {
-            return { ...widget, position_x: repositioned.position_x, position_y: repositioned.position_y };
-          }
-          
-          return widget;
-        });
-
-        setCurrentDashboard(prev => prev ? {
-          ...prev,
-          user_widgets: updatedWidgets
-        } : null);
-
-        // Show feedback to user
-        if (result.repositionedWidgets.length > 0) {
-          toast.success(`Widget moved! ${result.repositionedWidgets.length} other widget(s) repositioned.`);
-        }
-      }
-    }
+    const { active, over, delta } = event;
     
     setActiveId(null);
     setDraggedWidget(null);
+
+    if (!currentDashboard || !active.id) return;
+
+    const draggedWidget = currentDashboard.user_widgets.find(w => w.user_widget_id === active.id);
+    if (!draggedWidget) return;
+
+    // Calculate drop position from delta
+    const currentPixelPosition = newGridToPixels({
+      x: draggedWidget.position_x,
+      y: draggedWidget.position_y,
+      width: draggedWidget.width,
+      height: draggedWidget.height
+    });
+
+    const newPixelPosition = {
+      x: currentPixelPosition.left + delta.x,
+      y: currentPixelPosition.top + delta.y
+    };
+
+    // Create current grid layout
+    const currentLayout = createGridLayout(currentDashboard.user_widgets);
+
+    // Find best drop position
+    const bestPosition = findBestDropPosition(
+      draggedWidget,
+      newPixelPosition.x,
+      newPixelPosition.y,
+      currentLayout
+    );
+
+    // Check if position actually changed
+    if (bestPosition.x === draggedWidget.position_x && bestPosition.y === draggedWidget.position_y) {
+      return; // No change needed
+    }
+
+    // Get displaced widgets
+    const displacedWidgets = getDisplacedWidgets(
+      bestPosition,
+      currentDashboard.user_widgets,
+      draggedWidget.user_widget_id
+    );
+
+    // Create new layout with the moved widget
+    const updatedWidgets = currentDashboard.user_widgets.map(widget => 
+      widget.user_widget_id === draggedWidget.user_widget_id
+        ? { ...widget, position_x: bestPosition.x, position_y: bestPosition.y }
+        : widget
+    );
+
+    // Reposition displaced widgets
+    const newLayout = createGridLayout(updatedWidgets);
+    const repositionedWidgets = repositionDisplacedWidgets(displacedWidgets, newLayout);
+
+    // Apply all changes
+    const finalWidgets = updatedWidgets.map(widget => {
+      const repositioned = repositionedWidgets.find(rw => rw.user_widget_id === widget.user_widget_id);
+      return repositioned || widget;
+    });
+
+    setCurrentDashboard(prev => prev ? {
+      ...prev,
+      user_widgets: finalWidgets
+    } : null);
+
+    // Show feedback
+    if (repositionedWidgets.length > 0) {
+      toast.success(`Widget moved! ${repositionedWidgets.length} other widget(s) repositioned.`);
+    }
   };
 
   const handleCreateDashboard = async () => {
@@ -570,13 +631,12 @@ export default function EnhancedDashboard() {
         >
           <SortableContext
             items={currentDashboard.user_widgets.map(w => w.user_widget_id)}
-            strategy={rectSortingStrategy}
           >
             <div className="relative min-h-screen">
               {currentDashboard.user_widgets
                 .filter(widget => widget.is_visible)
                 .map((userWidget) => {
-                  const pixelPosition = gridToPixels({
+                  const pixelPosition = newGridToPixels({
                     x: userWidget.position_x,
                     y: userWidget.position_y,
                     width: userWidget.width,
