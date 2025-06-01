@@ -43,6 +43,26 @@ def get_widget_data(
             data = get_cloud_account_status(db, tenant_id, request.config)
         elif request.data_source == "static":
             data = get_static_widget_data(request.config)
+        elif request.widget_type == "cloud_accounts_status":
+            accounts = db.query(CloudAccount).filter(
+                CloudAccount.tenant_id == current_user.tenant.tenant_id
+            ).all()
+            
+            account_data = []
+            for account in accounts:
+                account_data.append({
+                    "id": account.account_id,  # Use account_id instead of cloud_account_id
+                    "name": account.name,
+                    "provider": account.provider,
+                    "status": account.status,
+                    "description": account.description
+                })
+            
+            return WidgetDataResponse(
+                widget_type=request.widget_type,
+                data={"accounts": account_data},
+                last_updated=datetime.utcnow()
+            )
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -63,60 +83,34 @@ def get_widget_data(
 
 
 def get_deployment_stats(db: Session, tenant_id: str, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Get deployment statistics"""
+    """Get deployment statistics for widgets"""
     
-    query = db.query(Deployment).filter(Deployment.tenant_id == tenant_id)
+    # Base query for deployments in the tenant
+    base_query = db.query(Deployment).filter(Deployment.tenant_id == tenant_id)
     
-    # Apply filters from config
-    if config and "filter" in config:
-        filter_str = config["filter"]
-        if "status:" in filter_str:
-            status_filter = filter_str.split("status:")[1]
-            query = query.filter(Deployment.status == status_filter)
+    # Apply filters if specified in config
+    filter_type = config.get("filter", "") if config else ""
+    if filter_type == "status:running":
+        query = base_query.filter(Deployment.status == "running")
+    elif filter_type == "status:failed":
+        query = base_query.filter(Deployment.status == "failed")
+    elif filter_type == "status:completed":
+        query = base_query.filter(Deployment.status == "completed")
+    else:
+        query = base_query
     
-    total_count = query.count()
+    count = query.count()
     
-    # Get status breakdown
-    status_counts = db.query(
-        Deployment.status,
-        func.count(Deployment.id)
-    ).filter(Deployment.tenant_id == tenant_id).group_by(Deployment.status).all()
-    
-    return {
-        "total": total_count,
-        "status_breakdown": {status: count for status, count in status_counts},
-        "running": next((count for status, count in status_counts if status == "running"), 0),
-        "failed": next((count for status, count in status_counts if status == "failed"), 0),
-        "pending": next((count for status, count in status_counts if status == "pending"), 0)
-    }
+    return {"count": count}
 
 
 def get_cloud_account_stats(db: Session, tenant_id: str, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Get cloud account statistics"""
+    """Get cloud account statistics for count widgets"""
     
     query = db.query(CloudAccount).filter(CloudAccount.tenant_id == tenant_id)
     total_count = query.count()
     
-    # Get status breakdown
-    status_counts = db.query(
-        CloudAccount.status,
-        func.count(CloudAccount.id)
-    ).filter(CloudAccount.tenant_id == tenant_id).group_by(CloudAccount.status).all()
-    
-    # Get provider breakdown
-    provider_counts = db.query(
-        CloudAccount.provider,
-        func.count(CloudAccount.id)
-    ).filter(CloudAccount.tenant_id == tenant_id).group_by(CloudAccount.provider).all()
-    
-    return {
-        "total": total_count,
-        "status_breakdown": {status: count for status, count in status_counts},
-        "provider_breakdown": {provider: count for provider, count in provider_counts},
-        "connected": next((count for status, count in status_counts if status == "connected"), 0),
-        "warning": next((count for status, count in status_counts if status == "warning"), 0),
-        "error": next((count for status, count in status_counts if status == "error"), 0)
-    }
+    return {"count": total_count}
 
 
 def get_template_stats(db: Session, tenant_id: str, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -140,17 +134,28 @@ def get_template_stats(db: Session, tenant_id: str, config: Optional[Dict[str, A
 def get_deployments_by_provider(db: Session, tenant_id: str, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Get deployment distribution by cloud provider"""
     
-    provider_counts = db.query(
-        Deployment.provider,
-        func.count(Deployment.id)
-    ).filter(Deployment.tenant_id == tenant_id).group_by(Deployment.provider).all()
+    # Get deployments with their environment and cloud account relationships
+    deployments = db.query(Deployment).filter(
+        Deployment.tenant_id == tenant_id
+    ).all()
+    
+    provider_counts = {}
+    for deployment in deployments:
+        provider = "unknown"
+        if deployment.environment and deployment.environment.cloud_accounts:
+            provider = deployment.environment.cloud_accounts[0].provider
+        
+        provider_counts[provider] = provider_counts.get(provider, 0) + 1
+    
+    # Format for chart visualization
+    chart_data = [
+        {"name": provider, "value": count}
+        for provider, count in provider_counts.items()
+    ]
     
     return {
-        "chart_data": [
-            {"name": provider.upper(), "value": count}
-            for provider, count in provider_counts
-        ],
-        "total": sum(count for _, count in provider_counts)
+        "chart_data": chart_data,
+        "provider_counts": provider_counts
     }
 
 
@@ -202,58 +207,52 @@ def get_deployment_timeline(db: Session, tenant_id: str, config: Optional[Dict[s
 
 
 def get_recent_deployments(db: Session, tenant_id: str, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Get recent deployments"""
+    """Get recent deployments for status widgets"""
     
     limit = config.get("limit", 5) if config else 5
     
-    recent_deployments = db.query(Deployment).filter(
+    # Get recent deployments with environment and cloud account info
+    deployments = db.query(Deployment).filter(
         Deployment.tenant_id == tenant_id
     ).order_by(Deployment.created_at.desc()).limit(limit).all()
     
-    return {
-        "deployments": [
-            {
-                "id": deployment.deployment_id,
-                "name": deployment.name,
-                "status": deployment.status,
-                "provider": deployment.provider,
-                "environment": deployment.environment,
-                "template_name": deployment.template_name,
-                "created_at": deployment.created_at.isoformat(),
-                "updated_at": deployment.updated_at.isoformat() if deployment.updated_at else None
-            }
-            for deployment in recent_deployments
-        ],
-        "total": len(recent_deployments)
-    }
+    deployment_data = []
+    for deployment in deployments:
+        # Get provider from environment's cloud accounts
+        provider = "unknown"
+        if deployment.environment and deployment.environment.cloud_accounts:
+            provider = deployment.environment.cloud_accounts[0].provider
+        
+        deployment_data.append({
+            "id": deployment.deployment_id,
+            "name": deployment.name,
+            "status": deployment.status,
+            "environment": deployment.environment.name if deployment.environment else "Unknown",
+            "provider": provider,
+            "created_at": deployment.created_at.isoformat() if deployment.created_at else None
+        })
+    
+    return {"deployments": deployment_data}
 
 
 def get_cloud_account_status(db: Session, tenant_id: str, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Get cloud account status overview"""
+    """Get cloud account status information for status widgets"""
     
-    cloud_accounts = db.query(CloudAccount).filter(
+    accounts = db.query(CloudAccount).filter(
         CloudAccount.tenant_id == tenant_id
-    ).order_by(CloudAccount.name).all()
+    ).all()
     
-    return {
-        "accounts": [
-            {
-                "id": account.cloud_account_id,
-                "name": account.name,
-                "provider": account.provider,
-                "status": account.status,
-                "created_at": account.created_at.isoformat(),
-                "updated_at": account.updated_at.isoformat() if account.updated_at else None
-            }
-            for account in cloud_accounts
-        ],
-        "total": len(cloud_accounts),
-        "status_summary": {
-            "connected": len([a for a in cloud_accounts if a.status == "connected"]),
-            "warning": len([a for a in cloud_accounts if a.status == "warning"]),
-            "error": len([a for a in cloud_accounts if a.status == "error"])
-        }
-    }
+    account_data = []
+    for account in accounts:
+        account_data.append({
+            "id": account.account_id,  # Use account_id instead of cloud_account_id
+            "name": account.name,
+            "provider": account.provider,
+            "status": account.status,
+            "description": account.description
+        })
+    
+    return {"accounts": account_data}
 
 
 def get_static_widget_data(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -280,4 +279,3 @@ def get_static_widget_data(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             "content": config.get("content", "Static content"),
             "type": "static"
         }
-

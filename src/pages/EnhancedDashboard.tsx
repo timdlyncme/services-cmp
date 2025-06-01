@@ -36,15 +36,17 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 import BaseWidget from '@/components/dashboard/BaseWidget';
-import WidgetCatalog from '@/components/dashboard/WidgetCatalog';
-import DashboardManager from '@/components/dashboard/DashboardManager';
 import { 
   Dashboard, 
   DashboardWithWidgets, 
-  UserWidget, 
-  dashboardService,
-  CreateUserWidgetRequest 
-} from '@/services/dashboard-service';
+  UserWidget,
+  createDashboard,
+  getDashboards,
+  addWidgetToDashboard,
+  updateUserWidget,
+  removeUserWidget,
+  updateDashboard
+} from '../services/dashboard-service';
 
 interface SortableWidgetProps {
   userWidget: UserWidget;
@@ -103,9 +105,9 @@ export default function EnhancedDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
-  const [showDashboardManager, setShowDashboardManager] = useState(false);
+  const [configWidget, setConfigWidget] = useState<UserWidget | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [draggedWidget, setDraggedWidget] = useState<UserWidget | null>(null);
+  const [currentDashboardId, setCurrentDashboardId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -124,7 +126,7 @@ export default function EnhancedDashboard() {
   const loadDashboards = async () => {
     try {
       setIsLoading(true);
-      const userDashboards = await dashboardService.getDashboards();
+      const userDashboards = await getDashboards();
       setDashboards(userDashboards);
       
       // Load the default dashboard or the first one
@@ -150,12 +152,13 @@ export default function EnhancedDashboard() {
     }
   };
 
-  const handleDashboardChange = (dashboardId: string) => {
-    loadDashboard(dashboardId);
-  };
-
-  const handleDashboardSelect = (dashboard: Dashboard) => {
-    loadDashboard(dashboard.dashboard_id);
+  const handleDashboardSelect = async (dashboardId: string) => {
+    if (dashboardId === 'create-new') {
+      await handleCreateDashboard();
+      return;
+    }
+    
+    setCurrentDashboardId(dashboardId);
   };
 
   const handleAddWidget = async (widgetId: string, customName?: string) => {
@@ -220,8 +223,30 @@ export default function EnhancedDashboard() {
   };
 
   const handleConfigureWidget = (userWidget: UserWidget) => {
-    // TODO: Implement widget configuration dialog
-    toast.info('Widget configuration coming soon!');
+    setConfigWidget(userWidget);
+  };
+
+  const handleSaveWidgetConfig = async (updates: Partial<UserWidget>) => {
+    if (!configWidget) return;
+
+    try {
+      await updateUserWidget(configWidget.user_widget_id, updates);
+      
+      // Update the local state
+      setDashboards(prev => prev.map(dashboard => ({
+        ...dashboard,
+        user_widgets: dashboard.user_widgets.map(widget =>
+          widget.user_widget_id === configWidget.user_widget_id
+            ? { ...widget, ...updates }
+            : widget
+        )
+      })));
+
+      toast.success('Widget configuration saved!');
+    } catch (error) {
+      console.error('Error saving widget configuration:', error);
+      toast.error('Failed to save widget configuration');
+    }
   };
 
   const handleRefreshDashboard = () => {
@@ -294,6 +319,29 @@ export default function EnhancedDashboard() {
     setDraggedWidget(null);
   };
 
+  const handleCreateDashboard = async () => {
+    const name = prompt('Enter dashboard name:');
+    if (!name?.trim()) return;
+
+    try {
+      const newDashboard = await createDashboard({
+        name: name.trim(),
+        description: `Custom dashboard: ${name.trim()}`
+      });
+
+      // Refresh the dashboards list to include the new dashboard
+      await loadDashboards();
+      
+      // Set the new dashboard as current
+      setCurrentDashboardId(newDashboard.dashboard_id);
+      
+      toast.success('Dashboard created successfully!');
+    } catch (error) {
+      console.error('Error creating dashboard:', error);
+      toast.error('Failed to create dashboard');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -316,24 +364,23 @@ export default function EnhancedDashboard() {
           
           {/* Dashboard Selector */}
           {dashboards.length > 0 && (
-            <Select
-              value={currentDashboard?.dashboard_id || ''}
-              onValueChange={handleDashboardChange}
+            <Select 
+              value={currentDashboard?.dashboard_id || ''} 
+              onValueChange={handleDashboardSelect}
             >
               <SelectTrigger className="w-64">
-                <SelectValue placeholder="Select dashboard" />
+                <SelectValue placeholder="Select a dashboard" />
               </SelectTrigger>
               <SelectContent>
                 {dashboards.map((dashboard) => (
                   <SelectItem key={dashboard.dashboard_id} value={dashboard.dashboard_id}>
-                    <div className="flex items-center gap-2">
-                      <span>{dashboard.name}</span>
-                      {dashboard.is_default && (
-                        <span className="text-xs text-muted-foreground">(Default)</span>
-                      )}
-                    </div>
+                    {dashboard.name}
                   </SelectItem>
                 ))}
+                <SelectItem value="create-new" className="text-blue-600 font-medium">
+                  <Plus className="w-4 h-4 mr-2 inline" />
+                  Create New Dashboard
+                </SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -431,18 +478,28 @@ export default function EnhancedDashboard() {
             items={currentDashboard.user_widgets.map(w => w.user_widget_id)}
             strategy={rectSortingStrategy}
           >
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="relative min-h-screen">
               {currentDashboard.user_widgets
                 .filter(widget => widget.is_visible)
                 .map((userWidget) => (
-                  <SortableWidget
+                  <div
                     key={userWidget.user_widget_id}
-                    userWidget={userWidget}
-                    onUpdate={handleUpdateWidget}
-                    onRemove={handleRemoveWidget}
-                    onConfigureWidget={handleConfigureWidget}
-                    isEditing={isEditing}
-                  />
+                    className="absolute"
+                    style={{
+                      left: `${userWidget.position_x * 320}px`, // 320px = widget width + gap
+                      top: `${userWidget.position_y * 240}px`,  // 240px = widget height + gap
+                      width: `${userWidget.width * 320 - 16}px`,
+                      height: `${userWidget.height * 240 - 16}px`,
+                    }}
+                  >
+                    <SortableWidget
+                      userWidget={userWidget}
+                      onUpdate={handleUpdateWidget}
+                      onRemove={handleRemoveWidget}
+                      onConfigureWidget={handleConfigureWidget}
+                      isEditing={isEditing}
+                    />
+                  </div>
                 ))}
             </div>
           </SortableContext>
@@ -465,6 +522,15 @@ export default function EnhancedDashboard() {
         onClose={() => setShowWidgetCatalog(false)}
         onAddWidget={handleAddWidget}
       />
+
+      {configWidget && (
+        <WidgetConfigModal
+          isOpen={true}
+          onClose={() => setConfigWidget(null)}
+          userWidget={configWidget}
+          onSave={handleSaveWidgetConfig}
+        />
+      )}
 
       <DashboardManager
         isOpen={showDashboardManager}
