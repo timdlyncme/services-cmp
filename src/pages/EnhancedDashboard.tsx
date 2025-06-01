@@ -18,233 +18,112 @@ import {
   LayoutDashboard
 } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverEvent,
-  DragStartEvent,
-  DragOverlay,
-  useSensor,
-  useSensors,
-  PointerSensor,
-  KeyboardSensor,
-  closestCenter,
-  rectIntersection,
-  getFirstCollision,
-  pointerWithin
-} from '@dnd-kit/core';
-import {
-  useSortable,
-  SortableContext,
-  sortableKeyboardCoordinates
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-
-import BaseWidget from '@/components/dashboard/BaseWidget';
+import GridLayoutDashboard from '@/components/dashboard/GridLayoutDashboard';
 import WidgetCatalog from '@/components/dashboard/WidgetCatalog';
 import DashboardManager from '@/components/dashboard/DashboardManager';
 import { WidgetConfigModal } from '@/components/dashboard/WidgetConfigModal';
-import { 
-  Dashboard, 
-  DashboardWithWidgets, 
-  UserWidget,
-  dashboardService
-} from '../services/dashboard-service';
-import { 
-  findNextAvailablePosition, 
-  findNextAvailablePositionWithReposition,
-  checkCollision, 
-  gridToPixels, 
-  pixelsToGrid,
-  GridPosition 
-} from '../utils/grid-utils';
-import {
-  createGridLayout,
-  findBestDropPosition,
-  getDisplacedWidgets,
-  repositionDisplacedWidgets,
-  gridToPixels as newGridToPixels,
-  pixelsToGrid as newPixelsToGrid,
-  GridPosition as NewGridPosition
-} from '../utils/grid-layout';
-import {
-  widgetsToSortableArray,
-  sortableArrayToWidgets,
-  getInsertionIndex,
-  arrayMove as customArrayMove,
-  GridItem
-} from '../utils/sortable-grid';
-
-interface SortableWidgetProps {
-  userWidget: UserWidget;
-  style?: React.CSSProperties;
-  onConfigure: () => void;
-  onDelete: () => void;
-  isEditing: boolean;
-}
-
-function SortableWidget({ 
-  userWidget, 
-  style,
-  onConfigure,
-  onDelete,
-  isEditing
-}: SortableWidgetProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: userWidget.user_widget_id });
-
-  const styleWithTransform = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    ...style,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={styleWithTransform}
-      {...attributes}
-      {...(isEditing ? listeners : {})}
-      className={isEditing ? "cursor-grab active:cursor-grabbing" : ""}
-    >
-      <BaseWidget
-        userWidget={userWidget}
-        onUpdate={() => {}}
-        onRemove={onDelete}
-        onConfigureWidget={onConfigure}
-        isEditing={isEditing}
-        className={isDragging ? 'border-dashed border-2 border-primary/20' : ''}
-      />
-    </div>
-  );
-}
+import { dashboardService } from '@/services/dashboardService';
+import { widgetService } from '@/services/widgetService';
+import { Dashboard, UserWidget, Widget } from '@/types/dashboard';
 
 export default function EnhancedDashboard() {
-  const { user, currentTenant } = useAuth();
+  const { user } = useAuth();
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
-  const [currentDashboard, setCurrentDashboard] = useState<DashboardWithWidgets | null>(null);
-  const [currentDashboardId, setCurrentDashboardId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [currentDashboard, setCurrentDashboard] = useState<Dashboard | null>(null);
+  const [widgets, setWidgets] = useState<UserWidget[]>([]);
+  const [availableWidgets, setAvailableWidgets] = useState<Widget[]>([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
   const [showDashboardManager, setShowDashboardManager] = useState(false);
   const [configWidget, setConfigWidget] = useState<UserWidget | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [draggedWidget, setDraggedWidget] = useState<UserWidget | null>(null);
-  const [sortableItems, setSortableItems] = useState<GridItem[]>([]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  useEffect(() => {
-    loadDashboards();
-  }, []);
-
-  useEffect(() => {
-    if (currentDashboardId) {
-      loadDashboard(currentDashboardId);
-    }
-  }, [currentDashboardId]);
-
-  useEffect(() => {
-    if (currentDashboard?.user_widgets) {
-      const items = widgetsToSortableArray(currentDashboard.user_widgets);
-      setSortableItems(items);
-    }
-  }, [currentDashboard?.user_widgets]);
-
-  const loadDashboards = async () => {
+  // Load dashboards
+  const loadDashboards = useCallback(async () => {
+    if (!user?.organization_id) return;
+    
     try {
-      setIsLoading(true);
-      const userDashboards = await dashboardService.getDashboards();
-      setDashboards(userDashboards);
+      const dashboardsData = await dashboardService.getDashboards(user.organization_id);
+      setDashboards(dashboardsData);
       
-      // Load the default dashboard or the first one
-      if (userDashboards.length > 0) {
-        const defaultDashboard = userDashboards.find(d => d.is_default) || userDashboards[0];
-        setCurrentDashboardId(defaultDashboard.dashboard_id);
+      if (dashboardsData.length > 0 && !currentDashboard) {
+        setCurrentDashboard(dashboardsData[0]);
       }
     } catch (error) {
       console.error('Error loading dashboards:', error);
       toast.error('Failed to load dashboards');
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [user?.organization_id, currentDashboard]);
 
-  const loadDashboard = async (dashboardId: string) => {
-    try {
-      setIsLoading(true);
-      const dashboard = await dashboardService.getDashboard(dashboardId);
-      setCurrentDashboard(dashboard);
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
-      toast.error('Failed to load dashboard');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDashboardSelect = async (dashboard: Dashboard) => {
-    try {
-      setCurrentDashboardId(dashboard.dashboard_id);
-      setShowDashboardManager(false);
-      toast.success(`Switched to ${dashboard.name}`);
-    } catch (error) {
-      console.error('Error selecting dashboard:', error);
-      toast.error('Failed to switch dashboard');
-    }
-  };
-
-  const handleDashboardChange = (dashboardId: string) => {
-    if (dashboardId === 'create-new') {
-      setShowDashboardManager(true);
-      return;
-    }
-    setCurrentDashboardId(dashboardId);
-  };
-
-  const handleAddWidget = async (widgetId: string, customName?: string) => {
+  // Load widgets for current dashboard
+  const loadWidgets = useCallback(async () => {
     if (!currentDashboard) return;
     
     try {
-      // Find the next available position for a 1x1 widget
-      const position = findNextAvailablePosition(
-        { width: 1, height: 1 },
-        currentDashboard.user_widgets
+      setIsLoading(true);
+      const widgetsData = await dashboardService.getDashboardWidgets(currentDashboard.dashboard_id);
+      setWidgets(widgetsData);
+    } catch (error) {
+      console.error('Error loading widgets:', error);
+      toast.error('Failed to load widgets');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentDashboard]);
+
+  // Load available widgets
+  const loadAvailableWidgets = useCallback(async () => {
+    try {
+      const availableWidgetsData = await widgetService.getWidgets();
+      setAvailableWidgets(availableWidgetsData);
+    } catch (error) {
+      console.error('Error loading available widgets:', error);
+      toast.error('Failed to load available widgets');
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadDashboards();
+    loadAvailableWidgets();
+  }, [loadDashboards, loadAvailableWidgets]);
+
+  // Load widgets when dashboard changes
+  useEffect(() => {
+    loadWidgets();
+  }, [loadWidgets]);
+
+  // Handle dashboard selection
+  const handleDashboardChange = (dashboardId: string) => {
+    const dashboard = dashboards.find(d => d.dashboard_id === dashboardId);
+    if (dashboard) {
+      setCurrentDashboard(dashboard);
+      setIsEditing(false);
+    }
+  };
+
+  // Handle adding widget
+  const handleAddWidget = async (widgetId: string, config: any) => {
+    if (!currentDashboard) return;
+
+    try {
+      // Find next available position
+      const maxY = Math.max(...widgets.map(w => w.position_y + w.height), 0);
+      
+      const newWidget = await dashboardService.addWidgetToDashboard(
+        currentDashboard.dashboard_id,
+        widgetId,
+        {
+          position_x: 0,
+          position_y: maxY,
+          width: 2,
+          height: 2,
+          ...config
+        }
       );
 
-      const newWidget = await dashboardService.addWidgetToDashboard(currentDashboard.dashboard_id, {
-        dashboard_id: currentDashboard.dashboard_id,
-        widget_id: widgetId,
-        custom_name: customName,
-        position_x: position.x,
-        position_y: position.y,
-        width: position.width,
-        height: position.height,
-        is_visible: true
-      });
-      
-      setCurrentDashboard(prev => prev ? {
-        ...prev,
-        user_widgets: [...prev.user_widgets, newWidget]
-      } : null);
-      
+      setWidgets(prev => [...prev, newWidget]);
+      setShowWidgetCatalog(false);
       toast.success('Widget added successfully!');
     } catch (error) {
       console.error('Error adding widget:', error);
@@ -252,35 +131,11 @@ export default function EnhancedDashboard() {
     }
   };
 
-  const handleUpdateWidget = async (userWidgetId: string, updates: Partial<UserWidget>) => {
+  // Handle deleting widget
+  const handleDeleteWidget = async (widgetId: string) => {
     try {
-      await dashboardService.updateUserWidget(userWidgetId, updates);
-      
-      // Update the local state
-      setCurrentDashboard(prev => prev ? {
-        ...prev,
-        user_widgets: prev.user_widgets.map(widget =>
-          widget.user_widget_id === userWidgetId
-            ? { ...widget, ...updates }
-            : widget
-        )
-      } : null);
-    } catch (error) {
-      console.error('Error updating widget:', error);
-      toast.error('Failed to update widget');
-    }
-  };
-
-  const handleRemoveWidget = async (userWidgetId: string) => {
-    try {
-      await dashboardService.removeWidgetFromDashboard(userWidgetId);
-      
-      // Update the local state
-      setCurrentDashboard(prev => prev ? {
-        ...prev,
-        user_widgets: prev.user_widgets.filter(widget => widget.user_widget_id !== userWidgetId)
-      } : null);
-
+      await dashboardService.removeWidgetFromDashboard(widgetId);
+      setWidgets(prev => prev.filter(w => w.user_widget_id !== widgetId));
       toast.success('Widget removed successfully!');
     } catch (error) {
       console.error('Error removing widget:', error);
@@ -288,257 +143,52 @@ export default function EnhancedDashboard() {
     }
   };
 
-  const handleConfigureWidget = (userWidget: UserWidget) => {
-    setConfigWidget(userWidget);
+  // Handle updating widgets (from grid layout changes)
+  const handleUpdateWidgets = (updatedWidgets: UserWidget[]) => {
+    setWidgets(updatedWidgets);
   };
 
-  const handleSaveWidgetConfig = async (updates: Partial<UserWidget>) => {
-    if (!configWidget || !currentDashboard) return;
+  // Handle widget configuration
+  const handleConfigureWidget = (widget: UserWidget) => {
+    setConfigWidget(widget);
+  };
+
+  // Handle saving widget configuration
+  const handleSaveWidgetConfig = async (config: any) => {
+    if (!configWidget) return;
 
     try {
-      let repositionedWidgets: UserWidget[] = [];
-
-      // If size is being changed, check for collisions and reposition if needed
-      if ((updates.width !== undefined && updates.width !== configWidget.width) ||
-          (updates.height !== undefined && updates.height !== configWidget.height)) {
-        
-        const newSize = {
-          width: updates.width ?? configWidget.width,
-          height: updates.height ?? configWidget.height
-        };
-
-        const newPosition = {
-          x: configWidget.position_x,
-          y: configWidget.position_y,
-          ...newSize
-        };
-
-        // Create current layout
-        const currentLayout = createGridLayout(currentDashboard.user_widgets);
-
-        // Get displaced widgets
-        const displacedWidgets = getDisplacedWidgets(
-          newPosition,
-          currentDashboard.user_widgets,
-          configWidget.user_widget_id
-        );
-
-        // Create new layout with the resized widget
-        const updatedWidgets = currentDashboard.user_widgets.map(widget => 
-          widget.user_widget_id === configWidget.user_widget_id
-            ? { ...widget, ...updates }
-            : widget
-        );
-
-        // Reposition displaced widgets
-        const newLayout = createGridLayout(updatedWidgets);
-        repositionedWidgets = repositionDisplacedWidgets(displacedWidgets, newLayout);
-      }
-
-      // Update the main widget
-      await dashboardService.updateUserWidget(configWidget.user_widget_id, updates);
+      await dashboardService.updateUserWidget(configWidget.user_widget_id, config);
       
-      // Update repositioned widgets
-      for (const widget of repositionedWidgets) {
-        await dashboardService.updateUserWidget(widget.user_widget_id, {
-          position_x: widget.position_x,
-          position_y: widget.position_y
-        });
-      }
-
-      // Update the local state
-      setCurrentDashboard(prev => prev ? {
-        ...prev,
-        user_widgets: prev.user_widgets.map(widget => {
-          if (widget.user_widget_id === configWidget.user_widget_id) {
-            return { ...widget, ...updates };
-          }
-          
-          // Update repositioned widgets
-          const repositioned = repositionedWidgets.find(rw => rw.user_widget_id === widget.user_widget_id);
-          if (repositioned) {
-            return { ...widget, position_x: repositioned.position_x, position_y: repositioned.position_y };
-          }
-          
-          return widget;
-        })
-      } : null);
-
-      if (repositionedWidgets.length > 0) {
-        toast.success(`Widget resized! ${repositionedWidgets.length} other widget(s) repositioned.`);
-      } else {
-        toast.success('Widget configuration saved!');
-      }
+      setWidgets(prev => prev.map(w => 
+        w.user_widget_id === configWidget.user_widget_id 
+          ? { ...w, ...config }
+          : w
+      ));
+      
+      setConfigWidget(null);
+      toast.success('Widget configuration saved!');
     } catch (error) {
-      console.error('Error saving widget configuration:', error);
+      console.error('Error saving widget config:', error);
       toast.error('Failed to save widget configuration');
     }
   };
 
-  const handleRefreshDashboard = () => {
-    if (currentDashboard) {
-      loadDashboard(currentDashboard.dashboard_id);
-      toast.success('Dashboard refreshed');
-    }
-  };
-
-  const handleSaveLayout = async () => {
-    if (!currentDashboard) return;
-
-    try {
-      const layoutUpdate = {
-        layout_config: currentDashboard.layout_config || {},
-        widgets: currentDashboard.user_widgets.map(widget => ({
-          user_widget_id: widget.user_widget_id,
-          position_x: widget.position_x,
-          position_y: widget.position_y,
-          width: widget.width,
-          height: widget.height,
-          is_visible: widget.is_visible
-        }))
-      };
-
-      await dashboardService.updateDashboardLayout(currentDashboard.dashboard_id, layoutUpdate);
-      setIsEditing(false);
-      toast.success('Dashboard layout saved');
-    } catch (error) {
-      console.error('Error saving layout:', error);
-      toast.error('Failed to save layout');
-    }
-  };
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    setActiveId(active.id);
-    
-    const item = sortableItems.find(item => item.id === active.id);
-    setDraggedWidget(item?.widget || null);
-  };
-
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over, delta } = event;
-    
-    if (!over || active.id === over.id || !currentDashboard) return;
-
-    const draggedWidget = currentDashboard.user_widgets.find(w => w.user_widget_id === active.id);
-    if (!draggedWidget) return;
-
-    // Calculate new position based on drag delta
-    const currentPixelPosition = newGridToPixels({
-      x: draggedWidget.position_x,
-      y: draggedWidget.position_y,
-      width: draggedWidget.width,
-      height: draggedWidget.height
-    });
-
-    const newPixelPosition = {
-      x: currentPixelPosition.left + delta.x,
-      y: currentPixelPosition.top + delta.y
-    };
-
-    // Convert to grid position
-    const newGridPosition = newPixelsToGrid(newPixelPosition.x, newPixelPosition.y);
-    
-    // Only update if position actually changed
-    if (newGridPosition.x === draggedWidget.position_x && newGridPosition.y === draggedWidget.position_y) {
-      return;
-    }
-
-    // Create current grid layout
-    const currentLayout = createGridLayout(currentDashboard.user_widgets);
-
-    // Find best drop position
-    const bestPosition = findBestDropPosition(
-      draggedWidget,
-      newPixelPosition.x,
-      newPixelPosition.y,
-      currentLayout
-    );
-
-    // Get displaced widgets
-    const displacedWidgets = getDisplacedWidgets(
-      bestPosition,
-      currentDashboard.user_widgets,
-      draggedWidget.user_widget_id
-    );
-
-    // Create new layout with the moved widget
-    const updatedWidgets = currentDashboard.user_widgets.map(widget => 
-      widget.user_widget_id === draggedWidget.user_widget_id
-        ? { ...widget, position_x: bestPosition.x, position_y: bestPosition.y }
-        : widget
-    );
-
-    // Reposition displaced widgets
-    const newLayout = createGridLayout(updatedWidgets);
-    const repositionedWidgets = repositionDisplacedWidgets(displacedWidgets, newLayout);
-
-    // Apply all changes for real-time feedback
-    const finalWidgets = updatedWidgets.map(widget => {
-      const repositioned = repositionedWidgets.find(rw => rw.user_widget_id === widget.user_widget_id);
-      return repositioned || widget;
-    });
-
-    // Update dashboard state for real-time visual feedback
-    setCurrentDashboard(prev => prev ? {
-      ...prev,
-      user_widgets: finalWidgets
-    } : null);
-  };
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    setActiveId(null);
-    setDraggedWidget(null);
-
-    if (!over || active.id === over.id || !currentDashboard) return;
-
-    try {
-      // Persist the current widget positions to database
-      for (const widget of currentDashboard.user_widgets) {
-        // Find original position to check if it changed
-        const originalWidget = sortableItems.find(item => item.id === widget.user_widget_id)?.widget;
-        if (originalWidget && 
-            (originalWidget.position_x !== widget.position_x || originalWidget.position_y !== widget.position_y)) {
-          await dashboardService.updateUserWidget(widget.user_widget_id, {
-            position_x: widget.position_x,
-            position_y: widget.position_y
-          });
-        }
-      }
-
-      toast.success('Widget positions saved!');
-    } catch (error) {
-      console.error('Error saving widget positions:', error);
-      toast.error('Failed to save widget positions');
-      
-      // Revert to original positions on error
-      const originalItems = widgetsToSortableArray(currentDashboard.user_widgets);
-      const originalWidgets = sortableArrayToWidgets(originalItems);
-      setCurrentDashboard(prev => prev ? {
-        ...prev,
-        user_widgets: originalWidgets
-      } : null);
-    }
-  };
-
-  const handleCreateDashboard = async () => {
-    const name = prompt('Enter dashboard name:');
-    if (!name?.trim()) return;
+  // Handle creating new dashboard
+  const handleCreateDashboard = async (name: string, description?: string) => {
+    if (!user?.organization_id) return;
 
     try {
       const newDashboard = await dashboardService.createDashboard({
-        name: name.trim(),
-        description: `Custom dashboard: ${name.trim()}`
+        name,
+        description: description || '',
+        organization_id: user.organization_id,
+        is_default: dashboards.length === 0
       });
 
-      // Refresh the dashboards list to include the new dashboard
-      await loadDashboards();
-      
-      // Set the new dashboard as current
-      setCurrentDashboardId(newDashboard.dashboard_id);
-      
+      setDashboards(prev => [...prev, newDashboard]);
+      setCurrentDashboard(newDashboard);
+      setShowDashboardManager(false);
       toast.success('Dashboard created successfully!');
     } catch (error) {
       console.error('Error creating dashboard:', error);
@@ -546,213 +196,158 @@ export default function EnhancedDashboard() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading && !currentDashboard) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p>Loading dashboard...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground">
-              Welcome back, {user?.name}
-            </p>
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <LayoutDashboard className="h-6 w-6 text-primary" />
+            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+            
+            {/* Dashboard Selector */}
+            {dashboards.length > 0 && (
+              <Select
+                value={currentDashboard?.dashboard_id || ''}
+                onValueChange={handleDashboardChange}
+              >
+                <SelectTrigger className="w-64">
+                  <SelectValue placeholder="Select dashboard" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dashboards.map(dashboard => (
+                    <SelectItem key={dashboard.dashboard_id} value={dashboard.dashboard_id}>
+                      {dashboard.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
-          
-          {/* Dashboard Selector */}
-          {dashboards.length > 0 && (
-            <Select 
-              value={currentDashboard?.dashboard_id || ''} 
-              onValueChange={handleDashboardChange}
+
+          {/* Actions */}
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDashboardManager(true)}
             >
-              <SelectTrigger className="w-64">
-                <SelectValue placeholder="Select a dashboard" />
-              </SelectTrigger>
-              <SelectContent>
-                {dashboards.map((dashboard) => (
-                  <SelectItem key={dashboard.dashboard_id} value={dashboard.dashboard_id}>
-                    {dashboard.name}
-                  </SelectItem>
-                ))}
-                <SelectItem value="create-new" className="text-blue-600 font-medium">
-                  <Plus className="w-4 h-4 mr-2 inline" />
-                  Create New Dashboard
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleRefreshDashboard}
-            disabled={!currentDashboard}
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          
-          <Button
-            variant="outline"
-            onClick={() => setShowDashboardManager(true)}
-          >
-            <LayoutDashboard className="h-4 w-4 mr-2" />
-            Manage
-          </Button>
-
-          {currentDashboard && (
-            <>
+              <Settings className="h-4 w-4 mr-2" />
+              Manage
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowWidgetCatalog(true)}
+              disabled={!currentDashboard}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Widget
+            </Button>
+            
+            <Button
+              variant={isEditing ? "default" : "outline"}
+              size="sm"
+              onClick={() => setIsEditing(!isEditing)}
+              disabled={!currentDashboard}
+            >
               {isEditing ? (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsEditing(false)}
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Cancel
-                  </Button>
-                  <Button onClick={handleSaveLayout}>
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Layout
-                  </Button>
-                </div>
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Layout
+                </>
               ) : (
-                <Button
-                  variant="outline"
-                  onClick={() => setIsEditing(true)}
-                >
+                <>
                   <Edit3 className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
+                  Edit Layout
+                </>
               )}
-
-              {isEditing && (
-                <Button onClick={() => setShowWidgetCatalog(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Widget
-                </Button>
-              )}
-            </>
-          )}
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Dashboard Content */}
-      {!currentDashboard ? (
-        <div className="flex flex-col items-center justify-center h-64 text-center">
-          <LayoutDashboard className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">No Dashboard Selected</h3>
-          <p className="text-muted-foreground mb-4">
-            Create your first dashboard to get started
-          </p>
-          <Button onClick={() => setShowDashboardManager(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Dashboard
-          </Button>
-        </div>
-      ) : currentDashboard.user_widgets.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-64 text-center">
-          <Plus className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">No Widgets Yet</h3>
-          <p className="text-muted-foreground mb-4">
-            Add widgets to customize your dashboard
-          </p>
-          <Button onClick={() => setShowWidgetCatalog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Your First Widget
-          </Button>
-        </div>
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={currentDashboard.user_widgets.map(w => w.user_widget_id)}
-          >
-            <div className="relative min-h-screen">
-              {currentDashboard.user_widgets
-                .filter(widget => widget.is_visible)
-                .map((widget) => {
-                  const pixelPosition = newGridToPixels({
-                    x: widget.position_x,
-                    y: widget.position_y,
-                    width: widget.width,
-                    height: widget.height
-                  });
-
-                  return (
-                    <SortableWidget
-                      key={widget.user_widget_id}
-                      userWidget={widget}
-                      style={{
-                        position: 'absolute',
-                        left: pixelPosition.left,
-                        top: pixelPosition.top,
-                        width: pixelPosition.width,
-                        height: pixelPosition.height,
-                        transition: activeId === widget.user_widget_id ? 'none' : 'all 200ms ease',
-                      }}
-                      onConfigure={() => setConfigWidget(widget)}
-                      onDelete={() => handleDeleteWidget(widget.user_widget_id)}
-                      isEditing={isEditing}
-                    />
-                  );
-                })}
+      <div className="p-6">
+        {currentDashboard ? (
+          <>
+            {/* Dashboard Info */}
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                {currentDashboard.name}
+              </h2>
+              {currentDashboard.description && (
+                <p className="text-gray-600">{currentDashboard.description}</p>
+              )}
+              {isEditing && (
+                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <Edit3 className="h-4 w-4 inline mr-1" />
+                    Edit mode: Drag widgets to reposition, resize by dragging corners, or use widget menus to configure.
+                  </p>
+                </div>
+              )}
             </div>
-          </SortableContext>
 
-          <DragOverlay>
-            {activeId && draggedWidget ? (
-              <div className="opacity-80 rotate-3 scale-105">
-                <BaseWidget
-                  userWidget={draggedWidget}
-                  onUpdate={() => {}}
-                  onRemove={() => {}}
-                  onConfigureWidget={() => {}}
-                  isEditing={false}
-                  className="border-2 border-primary shadow-lg"
-                />
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      )}
+            {/* Grid Layout Dashboard */}
+            <GridLayoutDashboard
+              widgets={widgets}
+              isEditing={isEditing}
+              onConfigureWidget={handleConfigureWidget}
+              onDeleteWidget={handleDeleteWidget}
+              onUpdateWidgets={handleUpdateWidgets}
+            />
+          </>
+        ) : (
+          <div className="text-center py-12">
+            <LayoutDashboard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Dashboard Selected</h3>
+            <p className="text-gray-600 mb-4">Create a new dashboard to get started.</p>
+            <Button onClick={() => setShowDashboardManager(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Dashboard
+            </Button>
+          </div>
+        )}
+      </div>
 
-      {/* Dialogs */}
+      {/* Modals */}
       <WidgetCatalog
         isOpen={showWidgetCatalog}
         onClose={() => setShowWidgetCatalog(false)}
+        widgets={availableWidgets}
         onAddWidget={handleAddWidget}
       />
-
-      {configWidget && (
-        <WidgetConfigModal
-          isOpen={true}
-          onClose={() => setConfigWidget(null)}
-          userWidget={configWidget}
-          onSave={handleSaveWidgetConfig}
-        />
-      )}
 
       <DashboardManager
         isOpen={showDashboardManager}
         onClose={() => setShowDashboardManager(false)}
-        onDashboardSelect={handleDashboardSelect}
-        currentDashboard={currentDashboard || undefined}
+        dashboards={dashboards}
+        onCreateDashboard={handleCreateDashboard}
+        onRefresh={loadDashboards}
       />
+
+      {configWidget && (
+        <WidgetConfigModal
+          isOpen={!!configWidget}
+          onClose={() => setConfigWidget(null)}
+          widget={configWidget}
+          onSave={handleSaveWidgetConfig}
+        />
+      )}
     </div>
   );
 }
+
