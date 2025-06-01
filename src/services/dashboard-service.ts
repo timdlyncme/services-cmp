@@ -32,19 +32,18 @@ export interface DashboardWidget {
 
 export interface UserWidget {
   user_widget_id: string;
+  widget_id: string;
+  widget_template: WidgetTemplate;
   custom_name?: string;
   position_x: number;
   position_y: number;
   width: number;
   height: number;
-  color?: string;
   custom_config?: any;
   is_visible: boolean;
   dashboard_id: string;
-  widget_id: string;
-  date_created: string;
-  date_modified: string;
-  widget_template: DashboardWidget;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DashboardWithWidgets extends Dashboard {
@@ -89,7 +88,6 @@ export interface UpdateUserWidgetRequest {
   position_y?: number;
   width?: number;
   height?: number;
-  color?: string;
   custom_config?: any;
   is_visible?: boolean;
 }

@@ -9,14 +9,46 @@ interface WidgetConfigModalProps {
 }
 
 const WIDGET_COLORS = [
-  { name: 'Blue', value: 'bg-blue-50 border-blue-200', header: 'bg-blue-100' },
-  { name: 'Green', value: 'bg-green-50 border-green-200', header: 'bg-green-100' },
-  { name: 'Purple', value: 'bg-purple-50 border-purple-200', header: 'bg-purple-100' },
-  { name: 'Red', value: 'bg-red-50 border-red-200', header: 'bg-red-100' },
-  { name: 'Yellow', value: 'bg-yellow-50 border-yellow-200', header: 'bg-yellow-100' },
-  { name: 'Gray', value: 'bg-gray-50 border-gray-200', header: 'bg-gray-100' },
-  { name: 'Indigo', value: 'bg-indigo-50 border-indigo-200', header: 'bg-indigo-100' },
-  { name: 'Pink', value: 'bg-pink-50 border-pink-200', header: 'bg-pink-100' },
+  { 
+    name: 'Blue', 
+    value: 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700', 
+    header: 'bg-blue-100 dark:bg-blue-800/30' 
+  },
+  { 
+    name: 'Green', 
+    value: 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700', 
+    header: 'bg-green-100 dark:bg-green-800/30' 
+  },
+  { 
+    name: 'Purple', 
+    value: 'bg-purple-50 border-purple-200 dark:bg-purple-900/20 dark:border-purple-700', 
+    header: 'bg-purple-100 dark:bg-purple-800/30' 
+  },
+  { 
+    name: 'Red', 
+    value: 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-700', 
+    header: 'bg-red-100 dark:bg-red-800/30' 
+  },
+  { 
+    name: 'Yellow', 
+    value: 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-700', 
+    header: 'bg-yellow-100 dark:bg-yellow-800/30' 
+  },
+  { 
+    name: 'Gray', 
+    value: 'bg-gray-50 border-gray-200 dark:bg-gray-800/20 dark:border-gray-600', 
+    header: 'bg-gray-100 dark:bg-gray-700/30' 
+  },
+  { 
+    name: 'Indigo', 
+    value: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-700', 
+    header: 'bg-indigo-100 dark:bg-indigo-800/30' 
+  },
+  { 
+    name: 'Pink', 
+    value: 'bg-pink-50 border-pink-200 dark:bg-pink-900/20 dark:border-pink-700', 
+    header: 'bg-pink-100 dark:bg-pink-800/30' 
+  },
 ];
 
 const WIDGET_SIZES = [
@@ -35,7 +67,9 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
   onSave
 }) => {
   const [customName, setCustomName] = useState(userWidget.custom_name || '');
-  const [selectedColor, setSelectedColor] = useState(userWidget.color || WIDGET_COLORS[0].value);
+  const [selectedColor, setSelectedColor] = useState(
+    userWidget.custom_config?.color || WIDGET_COLORS[0].value
+  );
   const [selectedSize, setSelectedSize] = useState({
     width: userWidget.width,
     height: userWidget.height
@@ -44,7 +78,7 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setCustomName(userWidget.custom_name || '');
-      setSelectedColor(userWidget.color || WIDGET_COLORS[0].value);
+      setSelectedColor(userWidget.custom_config?.color || WIDGET_COLORS[0].value);
       setSelectedSize({
         width: userWidget.width,
         height: userWidget.height
@@ -55,9 +89,12 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
   const handleSave = () => {
     const updates: Partial<UserWidget> = {
       custom_name: customName.trim() || null,
-      color: selectedColor,
       width: selectedSize.width,
-      height: selectedSize.height
+      height: selectedSize.height,
+      custom_config: {
+        ...userWidget.custom_config,
+        color: selectedColor
+      }
     };
 
     onSave(updates);

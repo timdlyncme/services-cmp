@@ -47,6 +47,7 @@ import {
 } from '../services/dashboard-service';
 import { 
   findNextAvailablePosition, 
+  findNextAvailablePositionWithReposition,
   checkCollision, 
   gridToPixels, 
   pixelsToGrid,
@@ -262,37 +263,59 @@ export default function EnhancedDashboard() {
     if (!configWidget || !currentDashboard) return;
 
     try {
-      // If size is being changed, check for collisions
+      let repositionedWidgets: UserWidget[] = [];
+
+      // If size is being changed, check for collisions and reposition if needed
       if ((updates.width !== undefined && updates.width !== configWidget.width) ||
           (updates.height !== undefined && updates.height !== configWidget.height)) {
         
-        const newPosition: GridPosition = {
-          x: configWidget.position_x,
-          y: configWidget.position_y,
-          width: updates.width ?? configWidget.width,
-          height: updates.height ?? configWidget.height
-        };
+        const result = findNextAvailablePositionWithReposition(
+          { 
+            width: updates.width ?? configWidget.width, 
+            height: updates.height ?? configWidget.height 
+          },
+          { x: configWidget.position_x, y: configWidget.position_y },
+          currentDashboard.user_widgets,
+          configWidget.user_widget_id
+        );
 
-        // Check if the new size would cause collisions
-        if (checkCollision(newPosition, currentDashboard.user_widgets, configWidget.user_widget_id)) {
-          toast.error('Cannot resize widget: would overlap with other widgets');
-          return;
-        }
+        repositionedWidgets = result.repositionedWidgets;
       }
 
+      // Update the main widget
       await dashboardService.updateUserWidget(configWidget.user_widget_id, updates);
       
+      // Update repositioned widgets
+      for (const widget of repositionedWidgets) {
+        await dashboardService.updateUserWidget(widget.user_widget_id, {
+          position_x: widget.position_x,
+          position_y: widget.position_y
+        });
+      }
+
       // Update the local state
       setCurrentDashboard(prev => prev ? {
         ...prev,
-        user_widgets: prev.user_widgets.map(widget =>
-          widget.user_widget_id === configWidget.user_widget_id
-            ? { ...widget, ...updates }
-            : widget
-        )
+        user_widgets: prev.user_widgets.map(widget => {
+          if (widget.user_widget_id === configWidget.user_widget_id) {
+            return { ...widget, ...updates };
+          }
+          
+          // Update repositioned widgets
+          const repositioned = repositionedWidgets.find(rw => rw.user_widget_id === widget.user_widget_id);
+          if (repositioned) {
+            return { ...widget, position_x: repositioned.position_x, position_y: repositioned.position_y };
+          }
+          
+          return widget;
+        })
       } : null);
 
-      toast.success('Widget configuration saved!');
+      if (repositionedWidgets.length > 0) {
+        toast.success(`Widget resized! ${repositionedWidgets.length} other widget(s) repositioned.`);
+      } else {
+        toast.success('Widget configuration saved!');
+      }
     } catch (error) {
       console.error('Error saving widget configuration:', error);
       toast.error('Failed to save widget configuration');
@@ -347,31 +370,30 @@ export default function EnhancedDashboard() {
       const targetWidget = currentDashboard.user_widgets.find(w => w.user_widget_id === over?.id);
       
       if (draggedWidget && targetWidget) {
-        // Calculate new position based on target widget position
-        const newPosition: GridPosition = {
-          x: targetWidget.position_x,
-          y: targetWidget.position_y,
-          width: draggedWidget.width,
-          height: draggedWidget.height
-        };
+        // Use repositioning logic instead of blocking
+        const result = findNextAvailablePositionWithReposition(
+          { width: draggedWidget.width, height: draggedWidget.height },
+          { x: targetWidget.position_x, y: targetWidget.position_y },
+          currentDashboard.user_widgets,
+          draggedWidget.user_widget_id
+        );
 
-        // Check if the new position would cause collisions
-        if (checkCollision(newPosition, currentDashboard.user_widgets, draggedWidget.user_widget_id)) {
-          toast.error('Cannot move widget: would overlap with other widgets');
-          setActiveId(null);
-          setDraggedWidget(null);
-          return;
-        }
-
-        // Update the dragged widget's position
+        // Update all affected widgets
         const updatedWidgets = currentDashboard.user_widgets.map(widget => {
           if (widget.user_widget_id === draggedWidget.user_widget_id) {
             return {
               ...widget,
-              position_x: newPosition.x,
-              position_y: newPosition.y
+              position_x: result.position.x,
+              position_y: result.position.y
             };
           }
+          
+          // Update repositioned widgets
+          const repositioned = result.repositionedWidgets.find(rw => rw.user_widget_id === widget.user_widget_id);
+          if (repositioned) {
+            return { ...widget, position_x: repositioned.position_x, position_y: repositioned.position_y };
+          }
+          
           return widget;
         });
 
@@ -379,6 +401,11 @@ export default function EnhancedDashboard() {
           ...prev,
           user_widgets: updatedWidgets
         } : null);
+
+        // Show feedback to user
+        if (result.repositionedWidgets.length > 0) {
+          toast.success(`Widget moved! ${result.repositionedWidgets.length} other widget(s) repositioned.`);
+        }
       }
     }
     

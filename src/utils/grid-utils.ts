@@ -94,6 +94,66 @@ export function findNextAvailablePosition(
 }
 
 /**
+ * Find the next available position for a widget, with automatic repositioning of overlapped widgets
+ */
+export function findNextAvailablePositionWithReposition(
+  widgetSize: { width: number; height: number },
+  targetPosition: { x: number; y: number },
+  existingWidgets: UserWidget[],
+  excludeWidgetId?: string,
+  gridWidth: number = 4
+): { position: GridPosition; repositionedWidgets: UserWidget[] } {
+  const newPosition: GridPosition = {
+    x: targetPosition.x,
+    y: targetPosition.y,
+    width: widgetSize.width,
+    height: widgetSize.height
+  };
+
+  // Get widgets that would be overlapped (excluding the widget being moved)
+  const overlappedWidgets = existingWidgets.filter(widget => {
+    if (excludeWidgetId && widget.user_widget_id === excludeWidgetId) {
+      return false;
+    }
+    
+    const existingPosition: GridPosition = {
+      x: widget.position_x,
+      y: widget.position_y,
+      width: widget.width,
+      height: widget.height
+    };
+    
+    return doWidgetsOverlap(newPosition, existingPosition);
+  });
+
+  if (overlappedWidgets.length === 0) {
+    // No overlaps, position is available
+    return { position: newPosition, repositionedWidgets: [] };
+  }
+
+  // Find new positions for overlapped widgets
+  const repositionedWidgets: UserWidget[] = [];
+  const allWidgets = existingWidgets.filter(w => !excludeWidgetId || w.user_widget_id !== excludeWidgetId);
+  
+  for (const overlappedWidget of overlappedWidgets) {
+    // Find next available position for this overlapped widget
+    const newPos = findNextAvailablePosition(
+      { width: overlappedWidget.width, height: overlappedWidget.height },
+      [...allWidgets, ...repositionedWidgets].filter(w => w.user_widget_id !== overlappedWidget.user_widget_id),
+      gridWidth
+    );
+    
+    repositionedWidgets.push({
+      ...overlappedWidget,
+      position_x: newPos.x,
+      position_y: newPos.y
+    });
+  }
+
+  return { position: newPosition, repositionedWidgets };
+}
+
+/**
  * Compact the grid by moving widgets up to fill gaps
  */
 export function compactGrid(widgets: UserWidget[]): UserWidget[] {
@@ -158,4 +218,3 @@ export function pixelsToGrid(
     y: Math.round(pixelPos.top / cellHeight)
   };
 }
-
