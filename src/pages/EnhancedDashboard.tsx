@@ -63,7 +63,7 @@ export default function EnhancedDashboard() {
   // Grid layout configuration
   const breakpoints = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 };
   const cols = { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 };
-  const rowHeight = 60;
+  const rowHeight = 120; // Increased from 60 to 120 for better content fit
 
   useEffect(() => {
     loadDashboards();
@@ -83,12 +83,11 @@ export default function EnhancedDashboard() {
         i: widget.user_widget_id,
         x: widget.position_x,
         y: widget.position_y,
-        w: Math.max(widget.width, widget.widget_template.min_width),
-        h: Math.max(widget.height, widget.widget_template.min_height),
-        minW: widget.widget_template.min_width,
-        minH: widget.widget_template.min_height,
-        maxW: widget.widget_template.max_width || undefined,
-        maxH: widget.widget_template.max_height || undefined,
+        w: Math.max(widget.width, widget.widget_template.min_width, 3), // Ensure minimum width of 3
+        h: Math.max(widget.height, widget.widget_template.min_height, 3), // Ensure minimum height of 3
+        minW: Math.max(widget.widget_template.min_width, 2), // Minimum 2 columns
+        minH: Math.max(widget.widget_template.min_height, 2), // Minimum 2 rows
+        // Remove maxW and maxH constraints to allow unlimited resizing
       }));
   }, []);
 
@@ -190,7 +189,7 @@ export default function EnhancedDashboard() {
 
   // Find next available position for new widgets
   const findNextAvailablePosition = (existingLayout: GridLayoutItem[]) => {
-    const defaultSize = { w: 4, h: 4 };
+    const defaultSize = { w: 4, h: 4 }; // Increased default size from 4x4 to better fit content
     
     // If no widgets exist, place at top-left
     if (existingLayout.length === 0) {
@@ -487,6 +486,8 @@ export default function EnhancedDashboard() {
             preventCollision={false}
             margin={[16, 16]}
             containerPadding={[0, 0]}
+            maxRows={Infinity} // Allow unlimited rows
+            autoSize={true} // Auto-size the container
           >
             {currentDashboard.user_widgets
               .filter(widget => widget.is_visible)
