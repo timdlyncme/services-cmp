@@ -63,7 +63,7 @@ export default function EnhancedDashboard() {
   // Grid layout configuration
   const breakpoints = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 };
   const cols = { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 };
-  const rowHeight = 120; // Increased from 60 to 120 for better content fit
+  const rowHeight = 60; // Increased from 60 to 120 for better content fit
 
   useEffect(() => {
     loadDashboards();
@@ -83,9 +83,9 @@ export default function EnhancedDashboard() {
         i: widget.user_widget_id,
         x: widget.position_x,
         y: widget.position_y,
-        w: Math.max(widget.width, widget.widget_template.min_width, 3), // Ensure minimum width of 3
-        h: Math.max(widget.height, widget.widget_template.min_height, 3), // Ensure minimum height of 3
-        minW: Math.max(widget.widget_template.min_width, 2), // Minimum 2 columns
+        w: Math.max(widget.width, widget.widget_template.min_width, 1), // Ensure minimum width of 3
+        h: Math.max(widget.height, widget.widget_template.min_height, 2), // Ensure minimum height of 3
+        minW: Math.max(widget.widget_template.min_width, 1), // Minimum 2 columns
         minH: Math.max(widget.widget_template.min_height, 2), // Minimum 2 rows
         // Remove maxW and maxH constraints to allow unlimited resizing
       }));
