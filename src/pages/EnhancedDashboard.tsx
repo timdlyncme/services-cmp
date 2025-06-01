@@ -43,7 +43,7 @@ export default function EnhancedDashboard() {
     
     try {
       console.log('Loading dashboards for organization:', user.organization_id);
-      const dashboardsData = await dashboardService.getDashboards(user.organization_id);
+      const dashboardsData = await dashboardService.getDashboards();
       console.log('Dashboards loaded:', dashboardsData);
       setDashboards(dashboardsData);
       
@@ -192,26 +192,6 @@ export default function EnhancedDashboard() {
   };
 
   // Handle creating new dashboard
-  const handleCreateDashboard = async (name: string, description?: string) => {
-    if (!user?.organization_id) return;
-
-    try {
-      const newDashboard = await dashboardService.createDashboard({
-        name,
-        description: description || '',
-        organization_id: user.organization_id,
-        is_default: dashboards.length === 0
-      });
-
-      setDashboards(prev => [...prev, newDashboard]);
-      setCurrentDashboard(newDashboard);
-      setShowDashboardManager(false);
-      toast.success('Dashboard created successfully!');
-    } catch (error) {
-      console.error('Error creating dashboard:', error);
-      toast.error('Failed to create dashboard');
-    }
-  };
 
   if (isLoading && !currentDashboard) {
     return (
@@ -351,9 +331,11 @@ export default function EnhancedDashboard() {
       <DashboardManager
         isOpen={showDashboardManager}
         onClose={() => setShowDashboardManager(false)}
-        dashboards={dashboards}
-        onCreateDashboard={handleCreateDashboard}
-        onRefresh={loadDashboards}
+        onDashboardSelect={(dashboard) => {
+          setCurrentDashboard(dashboard);
+          setShowDashboardManager(false);
+        }}
+        currentDashboard={currentDashboard}
       />
 
       {configWidget && (
