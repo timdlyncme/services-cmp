@@ -9,6 +9,7 @@ import { AzureOpenAIProvider } from "@/contexts/AzureOpenAIContext";
 import { AppLayout } from "@/components/app-layout";
 import { ProtectedRoute } from "@/components/protected-route";
 import Dashboard from "@/pages/Dashboard";
+import EnhancedDashboard from "@/pages/EnhancedDashboard";
 import Catalog from "@/pages/Catalog";
 import TemplateDetails from "@/pages/TemplateDetails";
 import Approvals from "@/pages/Approvals";
@@ -46,7 +47,8 @@ const App = () => (
                   <AppLayout />
                 </ProtectedRoute>
               }>
-                <Route path="/" element={<Dashboard />} />
+                <Route path="/" element={<EnhancedDashboard />} />
+                <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/catalog" element={<Catalog />} />
                 <Route path="/catalog/:templateId" element={<TemplateDetails />} />
                 <Route path="/approvals" element={<Approvals />} />
