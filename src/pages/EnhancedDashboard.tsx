@@ -42,10 +42,13 @@ export default function EnhancedDashboard() {
     if (!user?.organization_id) return;
     
     try {
+      console.log('Loading dashboards for organization:', user.organization_id);
       const dashboardsData = await dashboardService.getDashboards(user.organization_id);
+      console.log('Dashboards loaded:', dashboardsData);
       setDashboards(dashboardsData);
       
       if (dashboardsData.length > 0 && !currentDashboard) {
+        console.log('Setting current dashboard to:', dashboardsData[0]);
         setCurrentDashboard(dashboardsData[0]);
       }
     } catch (error) {
@@ -56,16 +59,24 @@ export default function EnhancedDashboard() {
 
   // Load widgets for current dashboard
   const loadWidgets = useCallback(async () => {
-    if (!currentDashboard) return;
+    console.log('loadWidgets called, currentDashboard:', currentDashboard);
+    if (!currentDashboard) {
+      console.log('No current dashboard, setting isLoading to false');
+      setIsLoading(false);
+      return;
+    }
     
     try {
+      console.log('Loading widgets for dashboard:', currentDashboard.dashboard_id);
       setIsLoading(true);
       const widgetsData = await dashboardService.getDashboardWidgets(currentDashboard.dashboard_id);
+      console.log('Widgets loaded:', widgetsData);
       setWidgets(widgetsData);
     } catch (error) {
       console.error('Error loading widgets:', error);
       toast.error('Failed to load widgets');
     } finally {
+      console.log('Setting isLoading to false');
       setIsLoading(false);
     }
   }, [currentDashboard]);
@@ -73,7 +84,9 @@ export default function EnhancedDashboard() {
   // Load available widgets
   const loadAvailableWidgets = useCallback(async () => {
     try {
+      console.log('Loading available widgets...');
       const availableWidgetsData = await dashboardService.getWidgetTemplates();
+      console.log('Available widgets loaded:', availableWidgetsData);
       setAvailableWidgets(availableWidgetsData);
     } catch (error) {
       console.error('Error loading available widgets:', error);
@@ -83,8 +96,13 @@ export default function EnhancedDashboard() {
 
   // Initial load
   useEffect(() => {
-    loadDashboards();
-    loadAvailableWidgets();
+    const initializeDashboard = async () => {
+      await loadDashboards();
+      await loadAvailableWidgets();
+      // loadWidgets will be called by the useEffect that watches currentDashboard
+    };
+    
+    initializeDashboard();
   }, [loadDashboards, loadAvailableWidgets]);
 
   // Load widgets when dashboard changes
