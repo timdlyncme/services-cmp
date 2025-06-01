@@ -5,6 +5,8 @@ const API_BASE = '/api';
 class DashboardService {
   private getAuthHeaders() {
     const token = localStorage.getItem('token');
+    console.log('Dashboard Service - Token from localStorage:', token ? 'Token exists' : 'No token found');
+    console.log('Dashboard Service - Token length:', token ? token.length : 0);
     return {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
@@ -13,15 +15,31 @@ class DashboardService {
 
   // Dashboard CRUD operations
   async getDashboards(): Promise<Dashboard[]> {
-    const response = await fetch(`${API_BASE}/dashboards`, {
-      headers: this.getAuthHeaders(),
-    });
+    try {
+      console.log('Dashboard Service - Making request to /api/dashboards/');
+      const headers = this.getAuthHeaders();
+      console.log('Dashboard Service - Request headers:', headers);
+      
+      const response = await fetch('/api/dashboards/', {
+        method: 'GET',
+        headers,
+      });
 
-    if (!response.ok) {
+      console.log('Dashboard Service - Response status:', response.status);
+      console.log('Dashboard Service - Response headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Dashboard Service - Error response:', errorText);
+        throw new Error(`Failed to fetch dashboards: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Dashboard Service - Error in getDashboards:', error);
       throw new Error('Failed to fetch dashboards');
     }
-
-    return response.json();
   }
 
   async getDashboard(dashboardId: string): Promise<DashboardWithWidgets> {
@@ -206,4 +224,3 @@ class DashboardService {
 }
 
 export const dashboardService = new DashboardService();
-

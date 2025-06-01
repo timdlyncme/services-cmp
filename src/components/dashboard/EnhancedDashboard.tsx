@@ -71,6 +71,16 @@ export default function EnhancedDashboard() {
 
   const fetchDashboards = async () => {
     try {
+      // Add debugging for authentication
+      const token = localStorage.getItem('token');
+      console.log('EnhancedDashboard - Token check:', token ? 'Token exists' : 'No token found');
+      
+      if (!token) {
+        console.error('EnhancedDashboard - No authentication token found');
+        setError('No authentication token found. Please log in again.');
+        return;
+      }
+
       const dashboardsData = await dashboardService.getDashboards();
       setDashboards(dashboardsData);
       
@@ -445,4 +455,3 @@ export default function EnhancedDashboard() {
     </div>
   );
 }
-
