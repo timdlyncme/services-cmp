@@ -117,17 +117,17 @@ export default function BaseWidget({
   const renderWidgetContent = () => {
     if (isLoading) {
       return (
-        <div className=\"flex items-center justify-center h-32\">
-          <RefreshCw className=\"h-6 w-6 animate-spin text-muted-foreground\" />
+        <div className="flex items-center justify-center h-32">
+          <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       );
     }
 
     if (error) {
       return (
-        <div className=\"flex flex-col items-center justify-center h-32 text-center\">
-          <p className=\"text-sm text-destructive mb-2\">{error}</p>
-          <Button variant=\"outline\" size=\"sm\" onClick={handleRefresh}>
+        <div className="flex flex-col items-center justify-center h-32 text-center">
+          <p className="text-sm text-destructive mb-2">{error}</p>
+          <Button variant="outline" size="sm" onClick={handleRefresh}>
             Try Again
           </Button>
         </div>
@@ -145,7 +145,7 @@ export default function BaseWidget({
       case 'status':
         return renderStatusWidget();
       default:
-        return <div className=\"p-4 text-center text-muted-foreground\">Unknown widget type</div>;
+        return <div className="p-4 text-center text-muted-foreground">Unknown widget type</div>;
     }
   };
 
@@ -161,10 +161,10 @@ export default function BaseWidget({
     const subtitle = getStatSubtitle(widgetData.data, config);
 
     return (
-      <div className=\"text-center\">
-        <div className=\"text-3xl font-bold mb-1\">{value}</div>
+      <div className="text-center">
+        <div className="text-3xl font-bold mb-1">{value}</div>
         {subtitle && (
-          <p className=\"text-sm text-muted-foreground\">{subtitle}</p>
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
         )}
       </div>
     );
@@ -175,8 +175,8 @@ export default function BaseWidget({
 
     // This would integrate with a charting library like Recharts
     return (
-      <div className=\"h-48 flex items-center justify-center border-2 border-dashed border-muted-foreground/20 rounded\">
-        <p className=\"text-muted-foreground\">Chart visualization would go here</p>
+      <div className="h-48 flex items-center justify-center border-2 border-dashed border-muted-foreground/20 rounded">
+        <p className="text-muted-foreground">Chart visualization would go here</p>
       </div>
     );
   };
@@ -189,22 +189,22 @@ export default function BaseWidget({
 
     if (config.text_type === 'welcome') {
       return (
-        <div className=\"text-center\">
-          <h3 className=\"text-lg font-semibold mb-2\">{config.title}</h3>
-          <p className=\"text-muted-foreground\">{config.content}</p>
+        <div className="text-center">
+          <h3 className="text-lg font-semibold mb-2">{config.title}</h3>
+          <p className="text-muted-foreground">{config.content}</p>
         </div>
       );
     }
 
     if (config.text_type === 'actions') {
       return (
-        <div className=\"space-y-2\">
+        <div className="space-y-2">
           {config.actions?.map((action: any, index: number) => (
             <Button
               key={index}
-              variant=\"outline\"
-              size=\"sm\"
-              className=\"w-full\"
+              variant="outline"
+              size="sm"
+              className="w-full"
               onClick={() => window.location.href = action.url}
             >
               {action.label}
@@ -215,8 +215,8 @@ export default function BaseWidget({
     }
 
     return (
-      <div className=\"text-center\">
-        <p className=\"text-muted-foreground\">{config.content || 'No content configured'}</p>
+      <div className="text-center">
+        <p className="text-muted-foreground">{config.content || 'No content configured'}</p>
       </div>
     );
   };
@@ -231,12 +231,12 @@ export default function BaseWidget({
 
     if (config.list_type === 'deployments' && widgetData.data.deployments) {
       return (
-        <div className=\"space-y-2\">
+        <div className="space-y-2">
           {widgetData.data.deployments.slice(0, config.limit || 5).map((deployment: any) => (
-            <div key={deployment.id} className=\"flex items-center justify-between p-2 border rounded\">
+            <div key={deployment.id} className="flex items-center justify-between p-2 border rounded">
               <div>
-                <p className=\"text-sm font-medium\">{deployment.name}</p>
-                <p className=\"text-xs text-muted-foreground\">{deployment.environment}</p>
+                <p className="text-sm font-medium">{deployment.name}</p>
+                <p className="text-xs text-muted-foreground">{deployment.environment}</p>
               </div>
               <div className={`px-2 py-1 rounded text-xs ${
                 deployment.status === 'running' ? 'bg-green-100 text-green-800' :
@@ -253,12 +253,12 @@ export default function BaseWidget({
 
     if (config.list_type === 'cloud_accounts' && widgetData.data.accounts) {
       return (
-        <div className=\"space-y-2\">
+        <div className="space-y-2">
           {widgetData.data.accounts.map((account: any) => (
-            <div key={account.id} className=\"flex items-center justify-between p-2 border rounded\">
+            <div key={account.id} className="flex items-center justify-between p-2 border rounded">
               <div>
-                <p className=\"text-sm font-medium\">{account.name}</p>
-                <p className=\"text-xs text-muted-foreground\">{account.provider.toUpperCase()}</p>
+                <p className="text-sm font-medium">{account.name}</p>
+                <p className="text-xs text-muted-foreground">{account.provider.toUpperCase()}</p>
               </div>
               <div className={`px-2 py-1 rounded text-xs ${
                 account.status === 'connected' ? 'bg-green-100 text-green-800' :
@@ -273,7 +273,7 @@ export default function BaseWidget({
       );
     }
 
-    return <div className=\"text-center text-muted-foreground\">No data available</div>;
+    return <div className="text-center text-muted-foreground">No data available</div>;
   };
 
   const getStatValue = (data: any, config: any) => {
@@ -304,13 +304,13 @@ export default function BaseWidget({
 
   return (
     <Card className={`relative ${className} ${!userWidget.is_visible ? 'opacity-50' : ''}`}>
-      <CardHeader className=\"flex flex-row items-center justify-between space-y-0 pb-2\">
-        <div className=\"flex-1 min-w-0\">
-          <CardTitle className=\"text-sm font-medium truncate\">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <div className="flex-1 min-w-0">
+          <CardTitle className="text-sm font-medium truncate">
             {getWidgetTitle()}
           </CardTitle>
           {getWidgetDescription() && (
-            <CardDescription className=\"text-xs truncate\">
+            <CardDescription className="text-xs truncate">
               {getWidgetDescription()}
             </CardDescription>
           )}
@@ -319,35 +319,35 @@ export default function BaseWidget({
         {isEditing && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant=\"ghost\" size=\"sm\" className=\"h-8 w-8 p-0\">
-                <MoreVertical className=\"h-4 w-4\" />
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align=\"end\">
+            <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={handleRefresh} disabled={isRefreshing}>
                 <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
                 Refresh
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onConfigureWidget?.(userWidget)}>
-                <Settings className=\"h-4 w-4 mr-2\" />
+                <Settings className="h-4 w-4 mr-2" />
                 Configure
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleToggleVisibility}>
                 {userWidget.is_visible ? (
                   <>
-                    <EyeOff className=\"h-4 w-4 mr-2\" />
+                    <EyeOff className="h-4 w-4 mr-2" />
                     Hide
                   </>
                 ) : (
                   <>
-                    <Eye className=\"h-4 w-4 mr-2\" />
+                    <Eye className="h-4 w-4 mr-2" />
                     Show
                   </>
                 )}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleRemove} className=\"text-destructive\">
-                <Trash2 className=\"h-4 w-4 mr-2\" />
+              <DropdownMenuItem onClick={handleRemove} className="text-destructive">
+                <Trash2 className="h-4 w-4 mr-2" />
                 Remove
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -356,9 +356,9 @@ export default function BaseWidget({
         
         {!isEditing && (
           <Button
-            variant=\"ghost\"
-            size=\"sm\"
-            className=\"h-8 w-8 p-0\"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
             onClick={handleRefresh}
             disabled={isRefreshing}
           >
@@ -373,4 +373,3 @@ export default function BaseWidget({
     </Card>
   );
 }
-

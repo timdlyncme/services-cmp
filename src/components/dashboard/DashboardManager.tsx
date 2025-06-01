@@ -202,7 +202,7 @@ export default function DashboardManager({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className=\"max-w-4xl max-h-[80vh] overflow-hidden flex flex-col\">
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Dashboard Manager</DialogTitle>
           <DialogDescription>
@@ -210,30 +210,30 @@ export default function DashboardManager({
           </DialogDescription>
         </DialogHeader>
 
-        <div className=\"flex flex-col gap-4 flex-1 overflow-hidden\">
+        <div className="flex flex-col gap-4 flex-1 overflow-hidden">
           {/* Create Dashboard Button */}
-          <div className=\"flex justify-between items-center\">
-            <h3 className=\"text-lg font-medium\">Your Dashboards</h3>
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium">Your Dashboards</h3>
             <Button onClick={handleCreateDashboard}>
-              <Plus className=\"h-4 w-4 mr-2\" />
+              <Plus className="h-4 w-4 mr-2" />
               New Dashboard
             </Button>
           </div>
 
           {/* Dashboards List */}
-          <div className=\"flex-1 overflow-auto\">
+          <div className="flex-1 overflow-auto">
             {isLoading ? (
-              <div className=\"flex items-center justify-center h-32\">
-                <div className=\"animate-spin rounded-full h-8 w-8 border-b-2 border-primary\"></div>
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             ) : dashboards.length === 0 ? (
-              <div className=\"flex flex-col items-center justify-center h-32 text-center\">
-                <Plus className=\"h-8 w-8 text-muted-foreground mb-2\" />
-                <p className=\"text-muted-foreground\">No dashboards yet</p>
-                <p className=\"text-sm text-muted-foreground\">Create your first dashboard to get started</p>
+              <div className="flex flex-col items-center justify-center h-32 text-center">
+                <Plus className="h-8 w-8 text-muted-foreground mb-2" />
+                <p className="text-muted-foreground">No dashboards yet</p>
+                <p className="text-sm text-muted-foreground">Create your first dashboard to get started</p>
               </div>
             ) : (
-              <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {dashboards.map((dashboard) => (
                   <Card
                     key={dashboard.dashboard_id}
@@ -242,22 +242,22 @@ export default function DashboardManager({
                     }`}
                     onClick={() => onDashboardSelect(dashboard)}
                   >
-                    <CardHeader className=\"pb-2\">
-                      <div className=\"flex items-start justify-between\">
-                        <div className=\"flex-1 min-w-0\">
-                          <div className=\"flex items-center gap-2\">
-                            <CardTitle className=\"text-sm font-medium truncate\">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-sm font-medium truncate">
                               {dashboard.name}
                             </CardTitle>
                             {dashboard.is_default && (
-                              <Badge variant=\"secondary\" className=\"text-xs\">
-                                <Star className=\"h-3 w-3 mr-1\" />
+                              <Badge variant="secondary" className="text-xs">
+                                <Star className="h-3 w-3 mr-1" />
                                 Default
                               </Badge>
                             )}
                           </div>
                           {dashboard.description && (
-                            <CardDescription className=\"text-xs mt-1 line-clamp-2\">
+                            <CardDescription className="text-xs mt-1 line-clamp-2">
                               {dashboard.description}
                             </CardDescription>
                           )}
@@ -265,16 +265,16 @@ export default function DashboardManager({
                         
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant=\"ghost\" size=\"sm\" className=\"h-8 w-8 p-0\">
-                              <MoreVertical className=\"h-4 w-4\" />
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align=\"end\">
+                          <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={(e) => {
                               e.stopPropagation();
                               handleEditDashboard(dashboard);
                             }}>
-                              <Edit className=\"h-4 w-4 mr-2\" />
+                              <Edit className="h-4 w-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
                             {!dashboard.is_default && (
@@ -282,7 +282,7 @@ export default function DashboardManager({
                                 e.stopPropagation();
                                 handleSetDefault(dashboard);
                               }}>
-                                <Star className=\"h-4 w-4 mr-2\" />
+                                <Star className="h-4 w-4 mr-2" />
                                 Set as Default
                               </DropdownMenuItem>
                             )}
@@ -292,23 +292,23 @@ export default function DashboardManager({
                                 e.stopPropagation();
                                 handleDeleteDashboard(dashboard);
                               }}
-                              className=\"text-destructive\"
+                              className="text-destructive"
                             >
-                              <Trash2 className=\"h-4 w-4 mr-2\" />
+                              <Trash2 className="h-4 w-4 mr-2" />
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
                     </CardHeader>
-                    <CardContent className=\"pt-0\">
-                      <div className=\"flex items-center justify-between text-xs text-muted-foreground\">
-                        <span className=\"flex items-center gap-1\">
-                          <Calendar className=\"h-3 w-3\" />
+                    <CardContent className="pt-0">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
                           {formatDate(dashboard.date_created)}
                         </span>
                         {currentDashboard?.dashboard_id === dashboard.dashboard_id && (
-                          <Badge variant=\"outline\" className=\"text-xs\">
+                          <Badge variant="outline" className="text-xs">
                             Current
                           </Badge>
                         )}
@@ -322,8 +322,8 @@ export default function DashboardManager({
         </div>
 
         {/* Actions */}
-        <div className=\"flex justify-end gap-2 pt-4 border-t\">
-          <Button variant=\"outline\" onClick={onClose}>
+        <div className="flex justify-end gap-2 pt-4 border-t">
+          <Button variant="outline" onClick={onClose}>
             Close
           </Button>
         </div>
@@ -344,40 +344,40 @@ export default function DashboardManager({
             </DialogDescription>
           </DialogHeader>
 
-          <div className=\"space-y-4\">
+          <div className="space-y-4">
             <div>
-              <Label htmlFor=\"name\">Name</Label>
+              <Label htmlFor="name">Name</Label>
               <Input
-                id=\"name\"
+                id="name"
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder=\"Enter dashboard name\"
+                placeholder="Enter dashboard name"
               />
             </div>
 
             <div>
-              <Label htmlFor=\"description\">Description (Optional)</Label>
+              <Label htmlFor="description">Description (Optional)</Label>
               <Textarea
-                id=\"description\"
+                id="description"
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder=\"Enter dashboard description\"
+                placeholder="Enter dashboard description"
                 rows={3}
               />
             </div>
 
-            <div className=\"flex items-center space-x-2\">
+            <div className="flex items-center space-x-2">
               <Switch
-                id=\"is_default\"
+                id="is_default"
                 checked={formData.is_default}
                 onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_default: checked }))}
               />
-              <Label htmlFor=\"is_default\">Set as default dashboard</Label>
+              <Label htmlFor="is_default">Set as default dashboard</Label>
             </div>
           </div>
 
-          <div className=\"flex justify-end gap-2 pt-4\">
-            <Button variant=\"outline\" onClick={() => setShowCreateForm(false)}>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setShowCreateForm(false)}>
               Cancel
             </Button>
             <Button onClick={handleSubmitForm}>
@@ -389,4 +389,3 @@ export default function DashboardManager({
     </Dialog>
   );
 }
-

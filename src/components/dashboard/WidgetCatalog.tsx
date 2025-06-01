@@ -110,12 +110,12 @@ export default function WidgetCatalog({ isOpen, onClose, onAddWidget }: WidgetCa
 
   const getCategoryIcon = (category: string) => {
     const IconComponent = categoryIcons[category as keyof typeof categoryIcons];
-    return IconComponent ? <IconComponent className=\"h-4 w-4\" /> : <Database className=\"h-4 w-4\" />;
+    return IconComponent ? <IconComponent className="h-4 w-4" /> : <Database className="h-4 w-4" />;
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className=\"max-w-4xl max-h-[80vh] overflow-hidden flex flex-col\">
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Widget Catalog</DialogTitle>
           <DialogDescription>
@@ -123,38 +123,38 @@ export default function WidgetCatalog({ isOpen, onClose, onAddWidget }: WidgetCa
           </DialogDescription>
         </DialogHeader>
 
-        <div className=\"flex flex-col gap-4 flex-1 overflow-hidden\">
+        <div className="flex flex-col gap-4 flex-1 overflow-hidden">
           {/* Search and Filter */}
-          <div className=\"flex gap-4\">
-            <div className=\"flex-1 relative\">
-              <Search className=\"absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground\" />
+          <div className="flex gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder=\"Search widgets...\"
+                placeholder="Search widgets..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className=\"pl-10\"
+                className="pl-10"
               />
             </div>
           </div>
 
           {/* Category Tabs */}
-          <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className=\"flex-1 flex flex-col overflow-hidden\">
-            <TabsList className=\"grid w-full grid-cols-5\">
+          <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="flex-1 flex flex-col overflow-hidden">
+            <TabsList className="grid w-full grid-cols-5">
               {getCategories().map((category) => (
-                <TabsTrigger key={category} value={category} className=\"flex items-center gap-2\">
+                <TabsTrigger key={category} value={category} className="flex items-center gap-2">
                   {category !== 'all' && getCategoryIcon(category)}
-                  <span className=\"hidden sm:inline\">{getCategoryDisplayName(category)}</span>
+                  <span className="hidden sm:inline">{getCategoryDisplayName(category)}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
 
-            <div className=\"flex-1 overflow-auto mt-4\">
+            <div className="flex-1 overflow-auto mt-4">
               {isLoading ? (
-                <div className=\"flex items-center justify-center h-32\">
-                  <div className=\"animate-spin rounded-full h-8 w-8 border-b-2 border-primary\"></div>
+                <div className="flex items-center justify-center h-32">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
               ) : (
-                <div className=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4\">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filteredWidgets.map((widget) => (
                     <Card
                       key={widget.widget_id}
@@ -163,28 +163,28 @@ export default function WidgetCatalog({ isOpen, onClose, onAddWidget }: WidgetCa
                       }`}
                       onClick={() => setSelectedWidget(widget)}
                     >
-                      <CardHeader className=\"pb-2\">
-                        <div className=\"flex items-start justify-between\">
-                          <div className=\"flex-1 min-w-0\">
-                            <CardTitle className=\"text-sm font-medium truncate\">
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="text-sm font-medium truncate">
                               {widget.name}
                             </CardTitle>
-                            <CardDescription className=\"text-xs mt-1 line-clamp-2\">
+                            <CardDescription className="text-xs mt-1 line-clamp-2">
                               {widget.description}
                             </CardDescription>
                           </div>
                           <Badge
-                            variant=\"secondary\"
+                            variant="secondary"
                             className={`ml-2 text-xs ${widgetTypeColors[widget.widget_type]}`}
                           >
                             {widget.widget_type.replace('_', ' ')}
                           </Badge>
                         </div>
                       </CardHeader>
-                      <CardContent className=\"pt-0\">
-                        <div className=\"flex items-center justify-between text-xs text-muted-foreground\">
+                      <CardContent className="pt-0">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>Size: {widget.min_width}×{widget.min_height}</span>
-                          <span className=\"flex items-center gap-1\">
+                          <span className="flex items-center gap-1">
                             {getCategoryIcon(widget.category)}
                             {widget.category}
                           </span>
@@ -196,10 +196,10 @@ export default function WidgetCatalog({ isOpen, onClose, onAddWidget }: WidgetCa
               )}
 
               {!isLoading && filteredWidgets.length === 0 && (
-                <div className=\"flex flex-col items-center justify-center h-32 text-center\">
-                  <Database className=\"h-8 w-8 text-muted-foreground mb-2\" />
-                  <p className=\"text-muted-foreground\">No widgets found</p>
-                  <p className=\"text-sm text-muted-foreground\">Try adjusting your search or category filter</p>
+                <div className="flex flex-col items-center justify-center h-32 text-center">
+                  <Database className="h-8 w-8 text-muted-foreground mb-2" />
+                  <p className="text-muted-foreground">No widgets found</p>
+                  <p className="text-sm text-muted-foreground">Try adjusting your search or category filter</p>
                 </div>
               )}
             </div>
@@ -207,14 +207,14 @@ export default function WidgetCatalog({ isOpen, onClose, onAddWidget }: WidgetCa
 
           {/* Selected Widget Details */}
           {selectedWidget && (
-            <div className=\"border-t pt-4\">
-              <div className=\"flex items-start gap-4\">
-                <div className=\"flex-1\">
-                  <h4 className=\"font-medium\">{selectedWidget.name}</h4>
-                  <p className=\"text-sm text-muted-foreground mt-1\">
+            <div className="border-t pt-4">
+              <div className="flex items-start gap-4">
+                <div className="flex-1">
+                  <h4 className="font-medium">{selectedWidget.name}</h4>
+                  <p className="text-sm text-muted-foreground mt-1">
                     {selectedWidget.description}
                   </p>
-                  <div className=\"flex items-center gap-4 mt-2 text-xs text-muted-foreground\">
+                  <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                     <span>Type: {selectedWidget.widget_type.replace('_', ' ')}</span>
                     <span>Category: {selectedWidget.category}</span>
                     <span>
@@ -225,16 +225,16 @@ export default function WidgetCatalog({ isOpen, onClose, onAddWidget }: WidgetCa
                     </span>
                   </div>
                 </div>
-                <div className=\"flex flex-col gap-2 min-w-0 w-48\">
-                  <Label htmlFor=\"custom-name\" className=\"text-xs\">
+                <div className="flex flex-col gap-2 min-w-0 w-48">
+                  <Label htmlFor="custom-name" className="text-xs">
                     Custom Name (Optional)
                   </Label>
                   <Input
-                    id=\"custom-name\"
+                    id="custom-name"
                     placeholder={selectedWidget.name}
                     value={customName}
                     onChange={(e) => setCustomName(e.target.value)}
-                    className=\"text-sm\"
+                    className="text-sm"
                   />
                 </div>
               </div>
@@ -243,12 +243,12 @@ export default function WidgetCatalog({ isOpen, onClose, onAddWidget }: WidgetCa
         </div>
 
         {/* Actions */}
-        <div className=\"flex justify-end gap-2 pt-4 border-t\">
-          <Button variant=\"outline\" onClick={onClose}>
+        <div className="flex justify-end gap-2 pt-4 border-t">
+          <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button onClick={handleAddWidget} disabled={!selectedWidget}>
-            <Plus className=\"h-4 w-4 mr-2\" />
+            <Plus className="h-4 w-4 mr-2" />
             Add Widget
           </Button>
         </div>
@@ -256,4 +256,3 @@ export default function WidgetCatalog({ isOpen, onClose, onAddWidget }: WidgetCa
     </Dialog>
   );
 }
-

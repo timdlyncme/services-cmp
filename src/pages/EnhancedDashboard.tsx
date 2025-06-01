@@ -296,20 +296,20 @@ export default function EnhancedDashboard() {
 
   if (isLoading) {
     return (
-      <div className=\"flex items-center justify-center h-64\">
-        <RefreshCw className=\"h-8 w-8 animate-spin text-muted-foreground\" />
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className=\"flex flex-col gap-4\">
+    <div className="flex flex-col gap-4">
       {/* Header */}
-      <div className=\"flex flex-col sm:flex-row sm:items-center justify-between gap-4\">
-        <div className=\"flex items-center gap-4\">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
           <div>
-            <h1 className=\"text-3xl font-bold tracking-tight\">Dashboard</h1>
-            <p className=\"text-muted-foreground\">
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground">
               Welcome back, {user?.name}
             </p>
           </div>
@@ -320,16 +320,16 @@ export default function EnhancedDashboard() {
               value={currentDashboard?.dashboard_id || ''}
               onValueChange={handleDashboardChange}
             >
-              <SelectTrigger className=\"w-64\">
-                <SelectValue placeholder=\"Select dashboard\" />
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Select dashboard" />
               </SelectTrigger>
               <SelectContent>
                 {dashboards.map((dashboard) => (
                   <SelectItem key={dashboard.dashboard_id} value={dashboard.dashboard_id}>
-                    <div className=\"flex items-center gap-2\">
+                    <div className="flex items-center gap-2">
                       <span>{dashboard.name}</span>
                       {dashboard.is_default && (
-                        <span className=\"text-xs text-muted-foreground\">(Default)</span>
+                        <span className="text-xs text-muted-foreground">(Default)</span>
                       )}
                     </div>
                   </SelectItem>
@@ -340,53 +340,53 @@ export default function EnhancedDashboard() {
         </div>
 
         {/* Actions */}
-        <div className=\"flex items-center gap-2\">
+        <div className="flex items-center gap-2">
           <Button
-            variant=\"outline\"
-            size=\"icon\"
+            variant="outline"
+            size="icon"
             onClick={handleRefreshDashboard}
             disabled={!currentDashboard}
           >
-            <RefreshCw className=\"h-4 w-4\" />
+            <RefreshCw className="h-4 w-4" />
           </Button>
           
           <Button
-            variant=\"outline\"
+            variant="outline"
             onClick={() => setShowDashboardManager(true)}
           >
-            <LayoutDashboard className=\"h-4 w-4 mr-2\" />
+            <LayoutDashboard className="h-4 w-4 mr-2" />
             Manage
           </Button>
 
           {currentDashboard && (
             <>
               {isEditing ? (
-                <div className=\"flex items-center gap-2\">
+                <div className="flex items-center gap-2">
                   <Button
-                    variant=\"outline\"
+                    variant="outline"
                     onClick={() => setIsEditing(false)}
                   >
-                    <X className=\"h-4 w-4 mr-2\" />
+                    <X className="h-4 w-4 mr-2" />
                     Cancel
                   </Button>
                   <Button onClick={handleSaveLayout}>
-                    <Save className=\"h-4 w-4 mr-2\" />
+                    <Save className="h-4 w-4 mr-2" />
                     Save Layout
                   </Button>
                 </div>
               ) : (
                 <Button
-                  variant=\"outline\"
+                  variant="outline"
                   onClick={() => setIsEditing(true)}
                 >
-                  <Edit3 className=\"h-4 w-4 mr-2\" />
+                  <Edit3 className="h-4 w-4 mr-2" />
                   Edit
                 </Button>
               )}
 
               {isEditing && (
                 <Button onClick={() => setShowWidgetCatalog(true)}>
-                  <Plus className=\"h-4 w-4 mr-2\" />
+                  <Plus className="h-4 w-4 mr-2" />
                   Add Widget
                 </Button>
               )}
@@ -397,26 +397,26 @@ export default function EnhancedDashboard() {
 
       {/* Dashboard Content */}
       {!currentDashboard ? (
-        <div className=\"flex flex-col items-center justify-center h-64 text-center\">
-          <LayoutDashboard className=\"h-12 w-12 text-muted-foreground mb-4\" />
-          <h3 className=\"text-lg font-medium mb-2\">No Dashboard Selected</h3>
-          <p className=\"text-muted-foreground mb-4\">
+        <div className="flex flex-col items-center justify-center h-64 text-center">
+          <LayoutDashboard className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium mb-2">No Dashboard Selected</h3>
+          <p className="text-muted-foreground mb-4">
             Create your first dashboard to get started
           </p>
           <Button onClick={() => setShowDashboardManager(true)}>
-            <Plus className=\"h-4 w-4 mr-2\" />
+            <Plus className="h-4 w-4 mr-2" />
             Create Dashboard
           </Button>
         </div>
       ) : currentDashboard.user_widgets.length === 0 ? (
-        <div className=\"flex flex-col items-center justify-center h-64 text-center\">
-          <Plus className=\"h-12 w-12 text-muted-foreground mb-4\" />
-          <h3 className=\"text-lg font-medium mb-2\">No Widgets Yet</h3>
-          <p className=\"text-muted-foreground mb-4\">
+        <div className="flex flex-col items-center justify-center h-64 text-center">
+          <Plus className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium mb-2">No Widgets Yet</h3>
+          <p className="text-muted-foreground mb-4">
             Add widgets to customize your dashboard
           </p>
           <Button onClick={() => setShowWidgetCatalog(true)}>
-            <Plus className=\"h-4 w-4 mr-2\" />
+            <Plus className="h-4 w-4 mr-2" />
             Add Your First Widget
           </Button>
         </div>
@@ -431,7 +431,7 @@ export default function EnhancedDashboard() {
             items={currentDashboard.user_widgets.map(w => w.user_widget_id)}
             strategy={rectSortingStrategy}
           >
-            <div className=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4\">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {currentDashboard.user_widgets
                 .filter(widget => widget.is_visible)
                 .map((userWidget) => (
@@ -452,7 +452,7 @@ export default function EnhancedDashboard() {
               <BaseWidget
                 userWidget={draggedWidget}
                 isEditing={false}
-                className=\"opacity-90 rotate-3 shadow-lg\"
+                className="opacity-90 rotate-3 shadow-lg"
               />
             ) : null}
           </DragOverlay>
@@ -475,4 +475,3 @@ export default function EnhancedDashboard() {
     </div>
   );
 }
-
