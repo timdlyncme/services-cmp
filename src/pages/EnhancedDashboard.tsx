@@ -37,7 +37,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 import BaseWidget from '@/components/dashboard/BaseWidget';
 import WidgetCatalog from '@/components/dashboard/WidgetCatalog';
-import WidgetConfigModal from '@/components/dashboard/WidgetConfigModal';
+import { WidgetConfigModal } from '@/components/dashboard/WidgetConfigModal';
 import { 
   Dashboard, 
   DashboardWithWidgets, 
