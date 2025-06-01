@@ -12,7 +12,7 @@ import {
 } from '@/types/dashboard';
 
 // API base URL
-const API_BASE = '/api/dashboards';
+const API_BASE = 'http://localhost:8000/api/dashboards';
 
 class DashboardService {
   private getAuthHeaders() {

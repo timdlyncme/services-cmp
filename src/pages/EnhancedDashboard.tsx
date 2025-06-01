@@ -72,19 +72,29 @@ export default function EnhancedDashboard() {
     setIsLoading(true);
     try {
       const data = await dashboardService.getDashboards();
-      setDashboards(data);
+      
+      // Debug: Log what we received from the API
+      console.log('API Response:', data);
+      console.log('Is Array:', Array.isArray(data));
+      console.log('Type:', typeof data);
+      
+      // Ensure data is an array
+      const dashboardsArray = Array.isArray(data) ? data : [];
+      setDashboards(dashboardsArray);
       
       // Set default dashboard or first dashboard
-      const defaultDashboard = data.find(d => d.is_default) || data[0];
+      const defaultDashboard = dashboardsArray.find(d => d.is_default) || dashboardsArray[0];
       if (defaultDashboard) {
         setCurrentDashboard(defaultDashboard);
-      } else if (data.length === 0) {
+      } else if (dashboardsArray.length === 0) {
         // Create a default dashboard if none exist
         await createDefaultDashboard();
       }
     } catch (error) {
       console.error('Error loading dashboards:', error);
       toast.error('Failed to load dashboards');
+      // Set empty array on error to prevent crashes
+      setDashboards([]);
     } finally {
       setIsLoading(false);
     }
@@ -365,7 +375,7 @@ export default function EnhancedDashboard() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
-              {dashboards.map((dashboard) => (
+              {Array.isArray(dashboards) && dashboards.map((dashboard) => (
                 <DropdownMenuItem
                   key={dashboard.id}
                   onClick={() => setCurrentDashboard(dashboard)}
@@ -530,4 +540,3 @@ export default function EnhancedDashboard() {
     </div>
   );
 }
-
