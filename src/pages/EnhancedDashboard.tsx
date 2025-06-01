@@ -22,16 +22,15 @@ import GridLayoutDashboard from '@/components/dashboard/GridLayoutDashboard';
 import WidgetCatalog from '@/components/dashboard/WidgetCatalog';
 import DashboardManager from '@/components/dashboard/DashboardManager';
 import { WidgetConfigModal } from '@/components/dashboard/WidgetConfigModal';
-import { dashboardService } from '@/services/dashboardService';
-import { widgetService } from '@/services/widgetService';
-import { Dashboard, UserWidget, Widget } from '@/types/dashboard';
+import { dashboardService } from '@/services/dashboard-service';
+import { Dashboard, UserWidget, DashboardWidget } from '@/services/dashboard-service';
 
 export default function EnhancedDashboard() {
   const { user } = useAuth();
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [currentDashboard, setCurrentDashboard] = useState<Dashboard | null>(null);
   const [widgets, setWidgets] = useState<UserWidget[]>([]);
-  const [availableWidgets, setAvailableWidgets] = useState<Widget[]>([]);
+  const [availableWidgets, setAvailableWidgets] = useState<DashboardWidget[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
@@ -74,7 +73,7 @@ export default function EnhancedDashboard() {
   // Load available widgets
   const loadAvailableWidgets = useCallback(async () => {
     try {
-      const availableWidgetsData = await widgetService.getWidgets();
+      const availableWidgetsData = await dashboardService.getWidgetTemplates();
       setAvailableWidgets(availableWidgetsData);
     } catch (error) {
       console.error('Error loading available widgets:', error);
@@ -343,11 +342,10 @@ export default function EnhancedDashboard() {
         <WidgetConfigModal
           isOpen={!!configWidget}
           onClose={() => setConfigWidget(null)}
-          widget={configWidget}
+          userWidget={configWidget}
           onSave={handleSaveWidgetConfig}
         />
       )}
     </div>
   );
 }
-

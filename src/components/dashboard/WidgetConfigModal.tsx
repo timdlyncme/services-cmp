@@ -87,13 +87,14 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
   }, [isOpen, userWidget]);
 
   const handleSave = () => {
-    const updates: Partial<UserWidget> = {
-      custom_name: customName.trim() || null,
+    const updates = {
+      custom_name: customName || null,
       width: selectedSize.width,
       height: selectedSize.height,
       custom_config: {
         ...userWidget.custom_config,
-        color: selectedColor
+        color: selectedColor,
+        headerColor: WIDGET_COLORS.find(c => c.value === selectedColor)?.header || ''
       }
     };
 
@@ -192,16 +193,13 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
             <div 
               className={`p-4 rounded-lg border-2 ${selectedColor}`}
               style={{
-                width: `${selectedSize.width * 100}px`,
-                height: `${selectedSize.height * 80}px`,
-                minWidth: '100px',
-                minHeight: '80px'
+                width: `${Math.max(selectedSize.width * 120, 120)}px`,
+                height: `${Math.max(selectedSize.height * 100, 100)}px`,
+                minWidth: '120px',
+                minHeight: '100px'
               }}
             >
-              <div className="font-medium text-sm">
-                {customName.trim() || userWidget.widget_template.name}
-              </div>
-              <div className="text-xs text-gray-600 mt-1">
+              <div className="text-xs text-gray-600">
                 Size: {selectedSize.width} × {selectedSize.height}
               </div>
             </div>

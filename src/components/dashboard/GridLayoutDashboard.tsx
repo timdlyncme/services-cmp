@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
 import { UserWidget } from '@/types/dashboard';
 import BaseWidget from './BaseWidget';
-import { dashboardService } from '@/services/dashboardService';
+import { dashboardService } from '@/services/dashboard-service';
 import { toast } from 'sonner';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -212,4 +212,3 @@ export default function GridLayoutDashboard({
     </div>
   );
 }
-
