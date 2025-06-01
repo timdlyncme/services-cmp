@@ -91,11 +91,11 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
               type="text"
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
-              placeholder={userWidget.dashboard_widget.name}
+              placeholder={userWidget.widget_template.name}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Leave empty to use default name: {userWidget.dashboard_widget.name}
+              Leave empty to use default name: {userWidget.widget_template.name}
             </p>
           </div>
 
@@ -154,7 +154,7 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
             </label>
             <div className={`p-4 rounded-lg border-2 ${selectedColor}`}>
               <div className="font-medium text-sm">
-                {customName.trim() || userWidget.dashboard_widget.name}
+                {customName.trim() || userWidget.widget_template.name}
               </div>
               <div className="text-xs text-gray-600 mt-1">
                 Size: {selectedSize.width} × {selectedSize.height}
@@ -181,4 +181,3 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
     </div>
   );
 };
-

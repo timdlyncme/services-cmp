@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { UserWidget } from '../../services/dashboard-service';
+import { UserWidget, dashboardService } from '../../services/dashboard-service';
 import { ChartRenderer } from '../charts/ChartComponents';
-import { getWidgetData } from '../../services/dashboard-service';
 
 interface WidgetRendererProps {
   userWidget: UserWidget;
@@ -22,12 +21,12 @@ export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ userWidget }) =>
         setLoading(true);
         setError(null);
         
-        const response = await getWidgetData({
-          widget_type: userWidget.dashboard_widget.widget_type,
-          data_source: userWidget.dashboard_widget.data_source,
-          config: userWidget.dashboard_widget.config || {},
-          tenant_id: undefined // Will use current user's tenant
-        });
+        const response = await dashboardService.getWidgetData(
+          userWidget.widget_template.widget_type,
+          userWidget.widget_template.data_source || '',
+          userWidget.widget_template.default_config || {},
+          undefined // tenant_id - will use current user's tenant
+        );
         
         setData(response.data);
       } catch (err) {
@@ -39,7 +38,7 @@ export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ userWidget }) =>
     };
 
     fetchData();
-  }, [userWidget.dashboard_widget.widget_type, userWidget.dashboard_widget.data_source]);
+  }, [userWidget.widget_template.widget_type, userWidget.widget_template.data_source]);
 
   if (loading) {
     return (
@@ -58,8 +57,8 @@ export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ userWidget }) =>
   }
 
   const renderContent = () => {
-    const widgetType = userWidget.dashboard_widget.widget_type;
-    const config = userWidget.dashboard_widget.config || {};
+    const widgetType = userWidget.widget_template.widget_type;
+    const config = userWidget.widget_template.default_config || {};
 
     switch (widgetType) {
       case 'deployment_count':
@@ -71,7 +70,7 @@ export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ userWidget }) =>
               {data?.count || 0}
             </div>
             <div className="text-sm text-gray-600 mt-1">
-              {userWidget.dashboard_widget.name}
+              {userWidget.widget_template.name}
             </div>
           </div>
         );
@@ -223,4 +222,3 @@ export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ userWidget }) =>
     </div>
   );
 };
-

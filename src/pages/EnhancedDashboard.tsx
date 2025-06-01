@@ -40,12 +40,7 @@ import {
   Dashboard, 
   DashboardWithWidgets, 
   UserWidget,
-  createDashboard,
-  getDashboards,
-  addWidgetToDashboard,
-  updateUserWidget,
-  removeUserWidget,
-  updateDashboard
+  dashboardService
 } from '../services/dashboard-service';
 
 interface SortableWidgetProps {
@@ -102,12 +97,12 @@ export default function EnhancedDashboard() {
   const { user, currentTenant } = useAuth();
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [currentDashboard, setCurrentDashboard] = useState<DashboardWithWidgets | null>(null);
+  const [currentDashboardId, setCurrentDashboardId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
   const [configWidget, setConfigWidget] = useState<UserWidget | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [currentDashboardId, setCurrentDashboardId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -118,21 +113,25 @@ export default function EnhancedDashboard() {
   );
 
   useEffect(() => {
-    if (currentTenant) {
-      loadDashboards();
+    loadDashboards();
+  }, []);
+
+  useEffect(() => {
+    if (currentDashboardId) {
+      loadDashboard(currentDashboardId);
     }
-  }, [currentTenant]);
+  }, [currentDashboardId]);
 
   const loadDashboards = async () => {
     try {
       setIsLoading(true);
-      const userDashboards = await getDashboards();
+      const userDashboards = await dashboardService.getDashboards();
       setDashboards(userDashboards);
       
       // Load the default dashboard or the first one
       if (userDashboards.length > 0) {
         const defaultDashboard = userDashboards.find(d => d.is_default) || userDashboards[0];
-        await loadDashboard(defaultDashboard.dashboard_id);
+        setCurrentDashboardId(defaultDashboard.dashboard_id);
       }
     } catch (error) {
       console.error('Error loading dashboards:', error);
@@ -144,11 +143,14 @@ export default function EnhancedDashboard() {
 
   const loadDashboard = async (dashboardId: string) => {
     try {
+      setIsLoading(true);
       const dashboard = await dashboardService.getDashboard(dashboardId);
       setCurrentDashboard(dashboard);
     } catch (error) {
       console.error('Error loading dashboard:', error);
       toast.error('Failed to load dashboard');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -165,57 +167,60 @@ export default function EnhancedDashboard() {
     if (!currentDashboard) return;
 
     try {
-      // Find a good position for the new widget
-      const existingWidgets = currentDashboard.user_widgets;
-      const maxY = Math.max(0, ...existingWidgets.map(w => w.position_y + w.height));
-      
-      const newWidget: CreateUserWidgetRequest = {
+      const newWidget = await dashboardService.addWidgetToDashboard(currentDashboard.dashboard_id, {
         dashboard_id: currentDashboard.dashboard_id,
         widget_id: widgetId,
         custom_name: customName,
         position_x: 0,
-        position_y: maxY,
+        position_y: 0,
         width: 1,
         height: 1,
         is_visible: true
-      };
+      });
 
-      const addedWidget = await dashboardService.addWidgetToDashboard(
-        currentDashboard.dashboard_id,
-        newWidget
-      );
-
+      // Update the current dashboard with the new widget
       setCurrentDashboard(prev => prev ? {
         ...prev,
-        user_widgets: [...prev.user_widgets, addedWidget]
+        user_widgets: [...prev.user_widgets, newWidget]
       } : null);
 
-      toast.success('Widget added to dashboard');
+      toast.success('Widget added successfully!');
     } catch (error) {
       console.error('Error adding widget:', error);
       toast.error('Failed to add widget');
     }
   };
 
-  const handleUpdateWidget = (updatedWidget: UserWidget) => {
-    setCurrentDashboard(prev => prev ? {
-      ...prev,
-      user_widgets: prev.user_widgets.map(w => 
-        w.user_widget_id === updatedWidget.user_widget_id ? updatedWidget : w
-      )
-    } : null);
+  const handleUpdateWidget = async (userWidgetId: string, updates: Partial<UserWidget>) => {
+    try {
+      await dashboardService.updateUserWidget(userWidgetId, updates);
+      
+      // Update the local state
+      setCurrentDashboard(prev => prev ? {
+        ...prev,
+        user_widgets: prev.user_widgets.map(widget =>
+          widget.user_widget_id === userWidgetId
+            ? { ...widget, ...updates }
+            : widget
+        )
+      } : null);
+    } catch (error) {
+      console.error('Error updating widget:', error);
+      toast.error('Failed to update widget');
+    }
   };
 
   const handleRemoveWidget = async (userWidgetId: string) => {
     try {
       await dashboardService.removeWidgetFromDashboard(userWidgetId);
       
+      // Update the local state
       setCurrentDashboard(prev => prev ? {
         ...prev,
-        user_widgets: prev.user_widgets.filter(w => w.user_widget_id !== userWidgetId)
+        user_widgets: prev.user_widgets.filter(widget => widget.user_widget_id !== userWidgetId)
       } : null);
 
-      toast.success('Widget removed from dashboard');
+      toast.success('Widget removed successfully!');
     } catch (error) {
       console.error('Error removing widget:', error);
       toast.error('Failed to remove widget');
@@ -230,17 +235,17 @@ export default function EnhancedDashboard() {
     if (!configWidget) return;
 
     try {
-      await updateUserWidget(configWidget.user_widget_id, updates);
+      await dashboardService.updateUserWidget(configWidget.user_widget_id, updates);
       
       // Update the local state
-      setDashboards(prev => prev.map(dashboard => ({
-        ...dashboard,
-        user_widgets: dashboard.user_widgets.map(widget =>
+      setCurrentDashboard(prev => prev ? {
+        ...prev,
+        user_widgets: prev.user_widgets.map(widget =>
           widget.user_widget_id === configWidget.user_widget_id
             ? { ...widget, ...updates }
             : widget
         )
-      })));
+      } : null);
 
       toast.success('Widget configuration saved!');
     } catch (error) {
@@ -324,7 +329,7 @@ export default function EnhancedDashboard() {
     if (!name?.trim()) return;
 
     try {
-      const newDashboard = await createDashboard({
+      const newDashboard = await dashboardService.createDashboard({
         name: name.trim(),
         description: `Custom dashboard: ${name.trim()}`
       });
