@@ -35,6 +35,17 @@ class DashboardService {
       }
 
       const data = await response.json();
+      console.log('Dashboard Service - Response data:', data);
+      console.log('Dashboard Service - Data type:', typeof data);
+      console.log('Dashboard Service - Is array:', Array.isArray(data));
+      console.log('Dashboard Service - Data length:', data?.length);
+      
+      // Ensure we return an array
+      if (!Array.isArray(data)) {
+        console.warn('Dashboard Service - Response is not an array, wrapping in array');
+        return [];
+      }
+      
       return data;
     } catch (error) {
       console.error('Dashboard Service - Error in getDashboards:', error);
@@ -43,15 +54,29 @@ class DashboardService {
   }
 
   async getDashboard(dashboardId: string): Promise<DashboardWithWidgets> {
-    const response = await fetch(`${API_BASE}/dashboards/${dashboardId}`, {
-      headers: this.getAuthHeaders(),
-    });
+    try {
+      console.log('Dashboard Service - Getting dashboard with ID:', dashboardId);
+      
+      const response = await fetch(`/api/dashboards/${dashboardId}`, {
+        headers: this.getAuthHeaders(),
+      });
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch dashboard');
+      console.log('Dashboard Service - getDashboard response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Dashboard Service - getDashboard error response:', errorText);
+        throw new Error(`Failed to fetch dashboard: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('Dashboard Service - getDashboard response data:', data);
+      
+      return data;
+    } catch (error) {
+      console.error('Dashboard Service - Error in getDashboard:', error);
+      throw error;
     }
-
-    return response.json();
   }
 
   async createDashboard(data: {

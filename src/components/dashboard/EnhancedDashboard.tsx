@@ -81,13 +81,23 @@ export default function EnhancedDashboard() {
         return;
       }
 
+      console.log('EnhancedDashboard - Calling getDashboards...');
       const dashboardsData = await dashboardService.getDashboards();
+      console.log('EnhancedDashboard - Received dashboards data:', dashboardsData);
+      console.log('EnhancedDashboard - Dashboards count:', dashboardsData?.length);
+      
       setDashboards(dashboardsData);
       
       // Load the default dashboard or the first one
       if (dashboardsData.length > 0) {
+        console.log('EnhancedDashboard - Loading default dashboard...');
         const defaultDashboard = dashboardsData.find(d => d.is_default) || dashboardsData[0];
+        console.log('EnhancedDashboard - Selected dashboard:', defaultDashboard);
         await loadDashboard(defaultDashboard.dashboard_id);
+      } else {
+        console.log('EnhancedDashboard - No dashboards found, creating default dashboard...');
+        // If no dashboards exist, create a default one
+        await createDefaultDashboard();
       }
     } catch (error) {
       console.error("Error fetching dashboards:", error);
@@ -99,15 +109,37 @@ export default function EnhancedDashboard() {
   const loadDashboard = async (dashboardId: string) => {
     try {
       setIsLoading(true);
+      console.log('EnhancedDashboard - Loading dashboard with ID:', dashboardId);
+      
       const dashboardData = await dashboardService.getDashboard(dashboardId);
+      console.log('EnhancedDashboard - Received dashboard data:', dashboardData);
+      
       setCurrentDashboard(dashboardData);
       setError(null);
+      console.log('EnhancedDashboard - Dashboard loaded successfully');
     } catch (error) {
       console.error("Error loading dashboard:", error);
       setError("Failed to load dashboard. Please try again.");
       toast.error("Failed to load dashboard");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const createDefaultDashboard = async () => {
+    try {
+      const newDashboard = await dashboardService.createDashboard({
+        name: "Default Dashboard",
+        description: "Default dashboard",
+        is_default: true,
+      });
+      
+      setDashboards(prev => [...prev, newDashboard]);
+      await loadDashboard(newDashboard.dashboard_id);
+      toast.success("Default dashboard created");
+    } catch (error) {
+      console.error("Error creating default dashboard:", error);
+      toast.error("Failed to create default dashboard");
     }
   };
 
