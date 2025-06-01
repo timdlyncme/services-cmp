@@ -22,6 +22,7 @@ from app.db.session import Base
 from app.db.init_db import init_db, create_sample_data
 
 # Import all models to ensure they're registered with Base
+from app.models.dashboard import Dashboard, DashboardWidget, UserWidget
 from app.models.user import User, Role, Permission, Tenant
 from app.models.deployment import CloudAccount, Environment, Template, TemplateVersion, Deployment, DeploymentHistory
 from app.models.integration import IntegrationConfig
@@ -63,4 +64,3 @@ def setup_db():
 
 if __name__ == "__main__":
     setup_db()
-

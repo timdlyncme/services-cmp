@@ -8,6 +8,7 @@ import sys
 import os
 
 # Import all models to ensure they're registered with Base
+from app.models.dashboard import Dashboard, DashboardWidget, UserWidget
 from app.models.user import User, Role, Permission, Tenant
 from app.models.deployment import CloudAccount, Environment, Template, TemplateVersion, Deployment, DeploymentHistory
 from app.models.deployment_details import DeploymentDetails

@@ -1,5 +1,6 @@
 # Import all models here for easy access
 from app.models.base_models import Base
+from app.models.dashboard import Dashboard, DashboardWidget, UserWidget
 from app.models.user import User, Role, Permission, Tenant
 from app.models.deployment import CloudAccount, Environment, Template, TemplateVersion, Deployment, DeploymentHistory
 from app.models.template_foundry import TemplateFoundry
