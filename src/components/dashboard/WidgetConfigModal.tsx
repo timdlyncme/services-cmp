@@ -9,14 +9,62 @@ interface WidgetConfigModalProps {
 }
 
 const WIDGET_COLORS = [
-  { name: 'Blue', value: 'bg-blue-50 border-blue-200', header: 'bg-blue-100' },
-  { name: 'Green', value: 'bg-green-50 border-green-200', header: 'bg-green-100' },
-  { name: 'Purple', value: 'bg-purple-50 border-purple-200', header: 'bg-purple-100' },
-  { name: 'Red', value: 'bg-red-50 border-red-200', header: 'bg-red-100' },
-  { name: 'Yellow', value: 'bg-yellow-50 border-yellow-200', header: 'bg-yellow-100' },
-  { name: 'Gray', value: 'bg-gray-50 border-gray-200', header: 'bg-gray-100' },
-  { name: 'Indigo', value: 'bg-indigo-50 border-indigo-200', header: 'bg-indigo-100' },
-  { name: 'Pink', value: 'bg-pink-50 border-pink-200', header: 'bg-pink-100' },
+  { 
+    name: 'Default', 
+    value: 'default',
+    light: 'bg-white border-gray-200', 
+    dark: 'dark:bg-gray-800 dark:border-gray-700',
+    header: 'bg-gray-50 dark:bg-gray-700' 
+  },
+  { 
+    name: 'Blue', 
+    value: 'blue',
+    light: 'bg-blue-50 border-blue-200', 
+    dark: 'dark:bg-blue-900/20 dark:border-blue-700',
+    header: 'bg-blue-100 dark:bg-blue-800/30' 
+  },
+  { 
+    name: 'Green', 
+    value: 'green',
+    light: 'bg-green-50 border-green-200', 
+    dark: 'dark:bg-green-900/20 dark:border-green-700',
+    header: 'bg-green-100 dark:bg-green-800/30' 
+  },
+  { 
+    name: 'Purple', 
+    value: 'purple',
+    light: 'bg-purple-50 border-purple-200', 
+    dark: 'dark:bg-purple-900/20 dark:border-purple-700',
+    header: 'bg-purple-100 dark:bg-purple-800/30' 
+  },
+  { 
+    name: 'Red', 
+    value: 'red',
+    light: 'bg-red-50 border-red-200', 
+    dark: 'dark:bg-red-900/20 dark:border-red-700',
+    header: 'bg-red-100 dark:bg-red-800/30' 
+  },
+  { 
+    name: 'Yellow', 
+    value: 'yellow',
+    light: 'bg-yellow-50 border-yellow-200', 
+    dark: 'dark:bg-yellow-900/20 dark:border-yellow-700',
+    header: 'bg-yellow-100 dark:bg-yellow-800/30' 
+  },
+  { 
+    name: 'Indigo', 
+    value: 'indigo',
+    light: 'bg-indigo-50 border-indigo-200', 
+    dark: 'dark:bg-indigo-900/20 dark:border-indigo-700',
+    header: 'bg-indigo-100 dark:bg-indigo-800/30' 
+  },
+  { 
+    name: 'Pink', 
+    value: 'pink',
+    light: 'bg-pink-50 border-pink-200', 
+    dark: 'dark:bg-pink-900/20 dark:border-pink-700',
+    header: 'bg-pink-100 dark:bg-pink-800/30' 
+  },
 ];
 
 const WIDGET_SIZES = [
@@ -35,7 +83,9 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
   onSave
 }) => {
   const [customName, setCustomName] = useState(userWidget.custom_name || '');
-  const [selectedColor, setSelectedColor] = useState(userWidget.color || WIDGET_COLORS[0].value);
+  const [selectedColor, setSelectedColor] = useState(
+    userWidget.custom_config?.color || WIDGET_COLORS[0].value
+  );
   const [selectedSize, setSelectedSize] = useState({
     width: userWidget.width,
     height: userWidget.height
@@ -44,7 +94,7 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setCustomName(userWidget.custom_name || '');
-      setSelectedColor(userWidget.color || WIDGET_COLORS[0].value);
+      setSelectedColor(userWidget.custom_config?.color || WIDGET_COLORS[0].value);
       setSelectedSize({
         width: userWidget.width,
         height: userWidget.height
@@ -55,13 +105,21 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
   const handleSave = () => {
     const updates: Partial<UserWidget> = {
       custom_name: customName.trim() || null,
-      color: selectedColor,
+      custom_config: {
+        ...userWidget.custom_config,
+        color: selectedColor
+      },
       width: selectedSize.width,
       height: selectedSize.height
     };
 
     onSave(updates);
     onClose();
+  };
+
+  // Helper function to get color classes
+  const getColorClasses = (color: typeof WIDGET_COLORS[0]) => {
+    return `${color.light} ${color.dark}`;
   };
 
   if (!isOpen) return null;
@@ -101,7 +159,7 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
 
           {/* Widget Color */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Widget Color
             </label>
             <div className="grid grid-cols-4 gap-2">
@@ -111,9 +169,9 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
                   onClick={() => setSelectedColor(color.value)}
                   className={`p-3 rounded-md border-2 transition-all ${
                     selectedColor === color.value
-                      ? 'border-blue-500 ring-2 ring-blue-200'
-                      : 'border-gray-200 hover:border-gray-300'
-                  } ${color.value}`}
+                      ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800'
+                      : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                  } ${getColorClasses(color)}`}
                   title={color.name}
                 >
                   <div className={`w-full h-4 rounded ${color.header}`}></div>
@@ -149,14 +207,16 @@ export const WidgetConfigModal: React.FC<WidgetConfigModalProps> = ({
 
           {/* Preview */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Preview
             </label>
-            <div className={`p-4 rounded-lg border-2 ${selectedColor}`}>
+            <div className={`p-4 rounded-lg border-2 ${getColorClasses(
+              WIDGET_COLORS.find(c => c.value === selectedColor) || WIDGET_COLORS[0]
+            )}`}>
               <div className="font-medium text-sm">
                 {customName.trim() || userWidget.widget_template.name}
               </div>
-              <div className="text-xs text-gray-600 mt-1">
+              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                 Size: {selectedSize.width} × {selectedSize.height}
               </div>
             </div>
