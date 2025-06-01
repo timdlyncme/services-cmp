@@ -37,6 +37,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 import BaseWidget from '@/components/dashboard/BaseWidget';
 import WidgetCatalog from '@/components/dashboard/WidgetCatalog';
+import DashboardManager from '@/components/dashboard/DashboardManager';
 import { WidgetConfigModal } from '@/components/dashboard/WidgetConfigModal';
 import { 
   Dashboard, 
@@ -103,8 +104,10 @@ export default function EnhancedDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
+  const [showDashboardManager, setShowDashboardManager] = useState(false);
   const [configWidget, setConfigWidget] = useState<UserWidget | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [draggedWidget, setDraggedWidget] = useState<UserWidget | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -156,18 +159,28 @@ export default function EnhancedDashboard() {
     }
   };
 
-  const handleDashboardSelect = async (dashboardId: string) => {
+  const handleDashboardSelect = async (dashboard: Dashboard) => {
+    try {
+      setCurrentDashboardId(dashboard.dashboard_id);
+      setShowDashboardManager(false);
+      toast.success(`Switched to ${dashboard.name}`);
+    } catch (error) {
+      console.error('Error selecting dashboard:', error);
+      toast.error('Failed to switch dashboard');
+    }
+  };
+
+  const handleDashboardChange = (dashboardId: string) => {
     if (dashboardId === 'create-new') {
-      await handleCreateDashboard();
+      setShowDashboardManager(true);
       return;
     }
-    
     setCurrentDashboardId(dashboardId);
   };
 
   const handleAddWidget = async (widgetId: string, customName?: string) => {
     if (!currentDashboard) return;
-
+    
     try {
       const newWidget = await dashboardService.addWidgetToDashboard(currentDashboard.dashboard_id, {
         dashboard_id: currentDashboard.dashboard_id,
@@ -179,13 +192,12 @@ export default function EnhancedDashboard() {
         height: 1,
         is_visible: true
       });
-
-      // Update the current dashboard with the new widget
+      
       setCurrentDashboard(prev => prev ? {
         ...prev,
         user_widgets: [...prev.user_widgets, newWidget]
       } : null);
-
+      
       toast.success('Widget added successfully!');
     } catch (error) {
       console.error('Error adding widget:', error);
@@ -373,7 +385,7 @@ export default function EnhancedDashboard() {
           {dashboards.length > 0 && (
             <Select 
               value={currentDashboard?.dashboard_id || ''} 
-              onValueChange={handleDashboardSelect}
+              onValueChange={handleDashboardChange}
             >
               <SelectTrigger className="w-64">
                 <SelectValue placeholder="Select a dashboard" />
