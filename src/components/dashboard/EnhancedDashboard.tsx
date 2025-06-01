@@ -95,9 +95,12 @@ export default function EnhancedDashboard() {
         console.log('EnhancedDashboard - Selected dashboard:', defaultDashboard);
         await loadDashboard(defaultDashboard.dashboard_id);
       } else {
-        console.log('EnhancedDashboard - No dashboards found, creating default dashboard...');
-        // If no dashboards exist, create a default one
-        await createDefaultDashboard();
+        console.log('EnhancedDashboard - No dashboards found');
+        // For now, just stop loading instead of trying to create a dashboard
+        setIsLoading(false);
+        setError('No dashboards found. Please create a dashboard first.');
+        // TODO: Re-enable auto-creation once auth issues are resolved
+        // await createDefaultDashboard();
       }
     } catch (error) {
       console.error("Error fetching dashboards:", error);

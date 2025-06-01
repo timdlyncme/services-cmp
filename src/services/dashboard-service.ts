@@ -1,41 +1,48 @@
-import { Dashboard, DashboardWithWidgets, DashboardWidget, UserWidget } from "@/components/dashboard/widget-types";
+import { Dashboard, DashboardWidget, UserWidget, DashboardWithWidgets } from '@/types/dashboard';
 
-const API_BASE = '/api';
+// Use axios like other services
+import axios from 'axios';
+
+// API base URL
+const API_URL = 'http://localhost:8000/api';
+
+// Create axios instance with default config
+const api = axios.create({
+  baseURL: API_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  withCredentials: false
+});
 
 class DashboardService {
   private getAuthHeaders() {
     const token = localStorage.getItem('token');
     console.log('Dashboard Service - Token from localStorage:', token ? 'Token exists' : 'No token found');
     console.log('Dashboard Service - Token length:', token ? token.length : 0);
+    console.log('Dashboard Service - Token preview:', token ? `${token.substring(0, 20)}...` : 'No token');
+    
     return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     };
   }
 
   // Dashboard CRUD operations
   async getDashboards(): Promise<Dashboard[]> {
     try {
-      console.log('Dashboard Service - Making request to /api/dashboards/');
+      console.log('Dashboard Service - Making request to /dashboards/');
       const headers = this.getAuthHeaders();
       console.log('Dashboard Service - Request headers:', headers);
       
-      const response = await fetch('/api/dashboards/', {
-        method: 'GET',
+      const response = await api.get('/dashboards/', {
         headers,
       });
 
       console.log('Dashboard Service - Response status:', response.status);
-      console.log('Dashboard Service - Response headers:', Object.fromEntries(response.headers.entries()));
+      console.log('Dashboard Service - Response data:', response.data);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Dashboard Service - Error response:', errorText);
-        throw new Error(`Failed to fetch dashboards: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('Dashboard Service - Response data:', data);
+      const data = response.data;
       console.log('Dashboard Service - Data type:', typeof data);
       console.log('Dashboard Service - Is array:', Array.isArray(data));
       console.log('Dashboard Service - Data length:', data?.length);
@@ -57,22 +64,14 @@ class DashboardService {
     try {
       console.log('Dashboard Service - Getting dashboard with ID:', dashboardId);
       
-      const response = await fetch(`/api/dashboards/${dashboardId}`, {
+      const response = await api.get(`/dashboards/${dashboardId}`, {
         headers: this.getAuthHeaders(),
       });
 
       console.log('Dashboard Service - getDashboard response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Dashboard Service - getDashboard error response:', errorText);
-        throw new Error(`Failed to fetch dashboard: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('Dashboard Service - getDashboard response data:', data);
+      console.log('Dashboard Service - getDashboard response data:', response.data);
       
-      return data;
+      return response.data;
     } catch (error) {
       console.error('Dashboard Service - Error in getDashboard:', error);
       throw error;
@@ -81,20 +80,26 @@ class DashboardService {
 
   async createDashboard(data: {
     name: string;
-    description?: string;
-    is_default?: boolean;
+    description: string;
+    is_default: boolean;
   }): Promise<Dashboard> {
-    const response = await fetch(`${API_BASE}/dashboards`, {
-      method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(data),
-    });
+    try {
+      console.log('Dashboard Service - Creating dashboard with data:', data);
+      const headers = this.getAuthHeaders();
+      console.log('Dashboard Service - Create request headers:', headers);
+      
+      const response = await api.post('/dashboards/', data, {
+        headers,
+      });
 
-    if (!response.ok) {
-      throw new Error('Failed to create dashboard');
+      console.log('Dashboard Service - Create dashboard response status:', response.status);
+      console.log('Dashboard Service - Created dashboard:', response.data);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Dashboard Service - Error in createDashboard:', error);
+      throw error;
     }
-
-    return response.json();
   }
 
   async updateDashboard(
@@ -106,8 +111,7 @@ class DashboardService {
       layout?: any;
     }
   ): Promise<Dashboard> {
-    const response = await fetch(`${API_BASE}/dashboards/${dashboardId}`, {
-      method: 'PUT',
+    const response = await api.put(`${API_URL}/dashboards/${dashboardId}`, {
       headers: this.getAuthHeaders(),
       body: JSON.stringify(data),
     });
@@ -120,8 +124,7 @@ class DashboardService {
   }
 
   async deleteDashboard(dashboardId: string): Promise<void> {
-    const response = await fetch(`${API_BASE}/dashboards/${dashboardId}`, {
-      method: 'DELETE',
+    const response = await api.delete(`${API_URL}/dashboards/${dashboardId}`, {
       headers: this.getAuthHeaders(),
     });
 
@@ -133,10 +136,10 @@ class DashboardService {
   // Widget catalog operations
   async getWidgetCatalog(category?: string): Promise<DashboardWidget[]> {
     const url = category 
-      ? `${API_BASE}/dashboards/widgets/catalog?category=${category}`
-      : `${API_BASE}/dashboards/widgets/catalog`;
+      ? `${API_URL}/dashboards/widgets/catalog?category=${category}`
+      : `${API_URL}/dashboards/widgets/catalog`;
 
-    const response = await fetch(url, {
+    const response = await api.get(url, {
       headers: this.getAuthHeaders(),
     });
 
@@ -160,7 +163,7 @@ class DashboardService {
       custom_config?: any;
     }
   ): Promise<UserWidget> {
-    const response = await fetch(`${API_BASE}/dashboards/${dashboardId}/widgets`, {
+    const response = await api.post(`${API_URL}/dashboards/${dashboardId}/widgets`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(data),
@@ -186,7 +189,7 @@ class DashboardService {
       is_visible?: boolean;
     }
   ): Promise<UserWidget> {
-    const response = await fetch(`${API_BASE}/dashboards/${dashboardId}/widgets/${userWidgetId}`, {
+    const response = await api.put(`${API_URL}/dashboards/${dashboardId}/widgets/${userWidgetId}`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(data),
@@ -203,8 +206,7 @@ class DashboardService {
     dashboardId: string,
     userWidgetId: string
   ): Promise<void> {
-    const response = await fetch(`${API_BASE}/dashboards/${dashboardId}/widgets/${userWidgetId}`, {
-      method: 'DELETE',
+    const response = await api.delete(`${API_URL}/dashboards/${dashboardId}/widgets/${userWidgetId}`, {
       headers: this.getAuthHeaders(),
     });
 
@@ -223,7 +225,7 @@ class DashboardService {
       height?: number;
     }>
   ): Promise<void> {
-    const response = await fetch(`${API_BASE}/dashboards/${dashboardId}/widgets/bulk-update`, {
+    const response = await api.post(`${API_URL}/dashboards/${dashboardId}/widgets/bulk-update`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(widgets),
@@ -236,7 +238,7 @@ class DashboardService {
 
   // Widget data operations
   async getWidgetData(dataSource: string): Promise<any> {
-    const response = await fetch(`${API_BASE}/widget-data/${dataSource}`, {
+    const response = await api.get(`${API_URL}/widget-data/${dataSource}`, {
       headers: this.getAuthHeaders(),
     });
 
