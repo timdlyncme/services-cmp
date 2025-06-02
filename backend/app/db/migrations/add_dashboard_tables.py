@@ -245,6 +245,21 @@ def run_migration():
                 "min_height": 1,
                 "max_width": 3,
                 "max_height": 2
+            },
+            {
+                "name": "Getting Started",
+                "description": "Checklist to help first-time users get started with the platform",
+                "widget_type": "getting_started",
+                "category": "onboarding",
+                "data_source": "/api/getting-started/status",
+                "default_config": {
+                    "show_progress": True,
+                    "auto_hide_completed": False
+                },
+                "min_width": 3,
+                "min_height": 3,
+                "max_width": 6,
+                "max_height": 4
             }
         ]
         
