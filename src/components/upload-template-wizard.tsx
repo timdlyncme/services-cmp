@@ -306,6 +306,26 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
         is_public: false,
         parameters: transformedParameters,
         variables: transformedVariables
+        // Store additional metadata for editing
+        parameter_metadata: Object.values(parameters).reduce((acc, param) => {
+          if (param.name && param.name.trim()) {
+            acc[param.name] = {
+              description: param.description || "",
+              required: param.required || false,
+              defaultValue: param.defaultValue || ""
+            };
+          }
+          return acc;
+        }, {} as Record<string, { description: string; required: boolean; defaultValue: string }>),
+        variable_metadata: Object.values(variables).reduce((acc, variable) => {
+          if (variable.name && variable.name.trim()) {
+            acc[variable.name] = {
+              description: variable.description || "",
+              sensitive: variable.sensitive || false
+            };
+          }
+          return acc;
+        }, {} as Record<string, { description: string; sensitive: boolean }>),
       };
 
       await onCreateTemplate(templateData);
@@ -484,7 +504,7 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
 
       case 3:
         return (
-          <div className="space-y-6">
+          <div className="space-y-6 max-h-[500px] overflow-y-auto">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -510,7 +530,7 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
                   </CardContent>
                 </Card>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-[200px] overflow-y-auto pr-2">
                   {Object.entries(parameters).map(([key, param]) => (
                     <Card key={key}>
                       <CardContent className="pt-4">
@@ -605,7 +625,7 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
                   </CardContent>
                 </Card>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-[200px] overflow-y-auto pr-2">
                   {Object.entries(variables).map(([key, variable]) => (
                     <Card key={key}>
                       <CardContent className="pt-4">

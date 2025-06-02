@@ -74,8 +74,37 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
       setSelectedCategories(template.categories || []);
       setIsPublic(template.isPublic || false);
       setTemplateCode(template.code || "");
-      setParameters(template.parameters || {});
-      setVariables(template.variables || {});
+      // Convert simplified parameters format back to complex format for editing
+      const convertedParameters: Record<string, TemplateParameter> = {};
+      if (template.parameters) {
+        Object.entries(template.parameters).forEach(([name, param]) => {
+          const metadata = template.parameter_metadata?.[name] || {};
+          convertedParameters[`param_${Date.now()}_${Math.random()}`] = {
+            name: name,
+            type: param.type || "string",
+            description: metadata.description || "",
+            defaultValue: metadata.defaultValue || param.value || "",
+            value: param.value || "",
+            required: metadata.required || false
+          };
+        });
+      }
+      setParameters(convertedParameters);
+      
+      // Convert simplified variables format back to complex format for editing
+      const convertedVariables: Record<string, TemplateVariable> = {};
+      if (template.variables) {
+        Object.entries(template.variables).forEach(([name, variable]) => {
+          const metadata = template.variable_metadata?.[name] || {};
+          convertedVariables[`var_${Date.now()}_${Math.random()}`] = {
+            name: name,
+            value: variable.value || "",
+            description: metadata.description || "",
+            sensitive: metadata.sensitive || false
+          };
+        });
+      }
+      setVariables(convertedVariables);
       setAiMessages([]);
       setAiInput("");
     }
@@ -197,18 +226,63 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
     setIsLoading(true);
     
     try {
+      // Convert complex parameters format back to simplified format for saving
+      const transformedParameters: Record<string, { value: string; type: string }> = {};
+      Object.values(parameters).forEach(param => {
+        if (param.name && param.name.trim()) {
+          transformedParameters[param.name] = {
+            value: param.defaultValue || param.value || "",
+            type: param.type
+          };
+        }
+      });
+
+      // Convert complex variables format back to simplified format for saving
+      const transformedVariables: Record<string, { value: string; type: string }> = {};
+      Object.values(variables).forEach(variable => {
+        if (variable.name && variable.name.trim()) {
+          transformedVariables[variable.name] = {
+            value: variable.value || "",
+            type: "string"
+          };
+        }
+      });
+
+      // Store detailed metadata for future editing
+      const parameterMetadata: Record<string, { description: string; required: boolean; defaultValue: string }> = {};
+      Object.values(parameters).forEach(param => {
+        if (param.name && param.name.trim()) {
+          parameterMetadata[param.name] = {
+            description: param.description || "",
+            required: param.required || false,
+            defaultValue: param.defaultValue || ""
+          };
+        }
+      });
+
+      const variableMetadata: Record<string, { description: string; sensitive: boolean }> = {};
+      Object.values(variables).forEach(variable => {
+        if (variable.name && variable.name.trim()) {
+          variableMetadata[variable.name] = {
+            description: variable.description || "",
+            sensitive: variable.sensitive || false
+          };
+        }
+      });
+
       const updateData = {
         name: templateName,
         description: templateDescription,
         provider: templateProvider,
         type: templateType,
-        category: selectedCategories.join(','),
+        category: selectedCategories.join(","),
         code: templateCode,
         is_public: isPublic,
-        parameters: parameters,
-        variables: variables
+        parameters: transformedParameters,
+        variables: transformedVariables,
+        parameter_metadata: parameterMetadata,
+        variable_metadata: variableMetadata
       };
-      
       await cmpService.updateTemplate(template.id, updateData);
       
       toast.success("Template updated successfully");

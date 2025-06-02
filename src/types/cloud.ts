@@ -28,6 +28,8 @@ export interface CloudTemplate {
   lastUpdatedBy?: string;
   parameters?: Record<string, TemplateParameter>;
   variables?: Record<string, TemplateVariable>;
+  parameter_metadata?: Record<string, { description: string; required: boolean; defaultValue: string }>;
+  variable_metadata?: Record<string, { description: string; sensitive: boolean }>;
   version?: string; // Add version field
 }
 
