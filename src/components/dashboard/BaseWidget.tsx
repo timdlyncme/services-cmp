@@ -23,6 +23,50 @@ import { dashboardService } from '@/services/dashboard-service';
 import { useAuth } from '@/context/auth-context';
 import { toast } from 'sonner';
 
+// Widget color definitions matching WidgetConfigModal
+const WIDGET_COLORS = {
+  default: {
+    light: 'bg-white border-gray-200',
+    dark: 'dark:bg-gray-800 dark:border-gray-700',
+    header: 'bg-gray-50 dark:bg-gray-700'
+  },
+  blue: {
+    light: 'bg-blue-50 border-blue-200',
+    dark: 'dark:bg-blue-900/20 dark:border-blue-700',
+    header: 'bg-blue-100 dark:bg-blue-800/30'
+  },
+  green: {
+    light: 'bg-green-50 border-green-200',
+    dark: 'dark:bg-green-900/20 dark:border-green-700',
+    header: 'bg-green-100 dark:bg-green-800/30'
+  },
+  purple: {
+    light: 'bg-purple-50 border-purple-200',
+    dark: 'dark:bg-purple-900/20 dark:border-purple-700',
+    header: 'bg-purple-100 dark:bg-purple-800/30'
+  },
+  red: {
+    light: 'bg-red-50 border-red-200',
+    dark: 'dark:bg-red-900/20 dark:border-red-700',
+    header: 'bg-red-100 dark:bg-red-800/30'
+  },
+  yellow: {
+    light: 'bg-yellow-50 border-yellow-200',
+    dark: 'dark:bg-yellow-900/20 dark:border-yellow-700',
+    header: 'bg-yellow-100 dark:bg-yellow-800/30'
+  },
+  indigo: {
+    light: 'bg-indigo-50 border-indigo-200',
+    dark: 'dark:bg-indigo-900/20 dark:border-indigo-700',
+    header: 'bg-indigo-100 dark:bg-indigo-800/30'
+  },
+  pink: {
+    light: 'bg-pink-50 border-pink-200',
+    dark: 'dark:bg-pink-900/20 dark:border-pink-700',
+    header: 'bg-pink-100 dark:bg-pink-800/30'
+  }
+};
+
 interface BaseWidgetProps {
   userWidget: UserWidget;
   onUpdate?: (userWidget: UserWidget) => void;
@@ -45,6 +89,20 @@ export default function BaseWidget({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Helper function to get widget color classes
+  const getWidgetColorClasses = () => {
+    const colorKey = userWidget.custom_config?.color || 'default';
+    const colorConfig = WIDGET_COLORS[colorKey as keyof typeof WIDGET_COLORS] || WIDGET_COLORS.default;
+    return `${colorConfig.light} ${colorConfig.dark}`;
+  };
+
+  // Helper function to get header color classes
+  const getHeaderColorClasses = () => {
+    const colorKey = userWidget.custom_config?.color || 'default';
+    const colorConfig = WIDGET_COLORS[colorKey as keyof typeof WIDGET_COLORS] || WIDGET_COLORS.default;
+    return colorConfig.header;
+  };
 
   const fetchWidgetData = async () => {
     if (!userWidget.widget_template.data_source) {
@@ -303,8 +361,8 @@ export default function BaseWidget({
   };
 
   return (
-    <Card className={`relative ${className} ${!userWidget.is_visible ? 'opacity-50' : ''}`}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+    <Card className={`relative ${className} ${!userWidget.is_visible ? 'opacity-50' : ''} ${getWidgetColorClasses()}`}>
+      <CardHeader className={`flex flex-row items-center justify-between space-y-0 pb-2 ${getHeaderColorClasses()}`}>
         <div className="flex-1 min-w-0">
           <CardTitle className="text-sm font-medium truncate">
             {getWidgetTitle()}
