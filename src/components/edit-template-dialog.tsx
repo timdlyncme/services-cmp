@@ -282,9 +282,7 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle>Edit Template</DialogTitle>
-        </DialogHeader>
+        <DialogHeader className="flex-shrink-0"></DialogHeader>
         
         <Tabs defaultValue="defaults" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
