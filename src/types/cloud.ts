@@ -34,13 +34,14 @@ export interface CloudTemplate {
 export interface TemplateParameter {
   value: string;
   type: "string" | "int" | "password";
-  description?: string;
+  description: string;
+  required: boolean;
 }
 
 export interface TemplateVariable {
   value: string;
-  type: "string" | "int" | "password";
-  description?: string;
+  description: string;
+  sensitive: boolean;
 }
 
 export interface CloudDeployment {

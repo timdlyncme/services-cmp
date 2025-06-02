@@ -6,12 +6,15 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, FileCode, Upload } from "lucide-react";
+import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, FileCode, Upload, BarChart3, PieChart, TrendingUp } from "lucide-react";
 import { CloudTemplate, CloudProvider, TemplateType } from "@/types/cloud";
 import { cmpService } from "@/services/cmp-service";
 import { useNavigate } from "react-router-dom";
 import { UploadTemplateWizard } from "@/components/upload-template-wizard";
+import { EditTemplateDialog } from "@/components/edit-template-dialog";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
 
 const TemplateManagement = () => {
   const { currentTenant, hasPermission } = useAuth();
@@ -25,6 +28,14 @@ const TemplateManagement = () => {
   
   // State for the upload template wizard
   const [isUploadWizardOpen, setIsUploadWizardOpen] = useState(false);
+  
+  // State for the edit template dialog
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<CloudTemplate | null>(null);
+  
+  // State for delete confirmation dialog
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<CloudTemplate | null>(null);
   
   // Check if user has permission to manage templates
   const canManageTemplates = hasPermission("manage:templates");
@@ -112,26 +123,19 @@ const TemplateManagement = () => {
   };
   
   const handleDeleteTemplate = async (templateId: string) => {
+    if (!templateId || !currentTenant) return;
+    
     try {
-      setIsLoading(true);
-      
-      // Delete the template
       await cmpService.deleteTemplate(templateId);
-      
-      // Refresh the list
-      await fetchTemplates();
-      
+      setTemplates(templates.filter(t => t.id !== templateId));
       toast.success("Template deleted successfully");
+      
+      // Close the delete dialog
+      setIsDeleteDialogOpen(false);
+      setTemplateToDelete(null);
     } catch (error) {
       console.error("Error deleting template:", error);
-      
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error("Failed to delete template");
-      }
-    } finally {
-      setIsLoading(false);
+      toast.error("Failed to delete template");
     }
   };
   
@@ -139,6 +143,57 @@ const TemplateManagement = () => {
     navigate(`/templates/${templateId}`);
   };
   
+  const handleEditTemplate = (template: CloudTemplate) => {
+    setEditingTemplate(template);
+    setIsEditDialogOpen(true);
+  };
+  
+  const handleDeleteTemplateConfirm = (template: CloudTemplate) => {
+    setTemplateToDelete(template);
+    setIsDeleteDialogOpen(true);
+  };
+  
+  // Calculate stats for dashboard
+  const getTemplateStats = () => {
+    const totalTemplates = templates.length;
+    const publicTemplates = templates.filter(t => t.isPublic).length;
+    const privateTemplates = totalTemplates - publicTemplates;
+    
+    // Group by provider
+    const providerStats = templates.reduce((acc, template) => {
+      acc[template.provider] = (acc[template.provider] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    // Group by type
+    const typeStats = templates.reduce((acc, template) => {
+      acc[template.type] = (acc[template.type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    return {
+      totalTemplates,
+      publicTemplates,
+      privateTemplates,
+      providerStats,
+      typeStats
+    };
+  };
+  
+  const stats = getTemplateStats();
+  
+  // Prepare chart data
+  const providerChartData = Object.entries(stats.providerStats).map(([provider, count]) => ({
+    name: provider.toUpperCase(),
+    value: count,
+    color: provider === 'azure' ? '#0078d4' : provider === 'aws' ? '#ff9900' : '#4285f4'
+  }));
+  
+  const typeChartData = Object.entries(stats.typeStats).map(([type, count]) => ({
+    name: type,
+    count
+  }));
+
   const providerColor = (provider: CloudProvider) => {
     switch (provider) {
       case "azure": return "bg-cloud-azure text-white";
@@ -162,9 +217,111 @@ const TemplateManagement = () => {
           <Button variant="outline" size="icon" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4" />
           </Button>
-          
+          {canManageTemplates && (
+            <Button onClick={() => setIsUploadWizardOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Template
+            </Button>
+          )}
         </div>
       </div>
+      
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Templates</CardTitle>
+            <FileCode className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalTemplates}</div>
+            <p className="text-xs text-muted-foreground">
+              Infrastructure templates
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Public Templates</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.publicTemplates}</div>
+            <p className="text-xs text-muted-foreground">
+              Shared with organization
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Private Templates</CardTitle>
+            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.privateTemplates}</div>
+            <p className="text-xs text-muted-foreground">
+              Personal templates
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Providers</CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{Object.keys(stats.providerStats).length}</div>
+            <p className="text-xs text-muted-foreground">
+              Cloud providers
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+      
+      {/* Charts */}
+      {templates.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Templates by Type</CardTitle>
+              <CardDescription>Distribution of template types</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={typeChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#8884d8" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Templates by Provider</CardTitle>
+              <CardDescription>Distribution across cloud providers</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <RechartsPieChart>
+                  <Tooltip />
+                  <Pie data={providerChartData} cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="value">
+                    {providerChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </RechartsPieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      )}
       
       <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-1">
@@ -245,10 +402,10 @@ const TemplateManagement = () => {
                     </Button>
                     {canManageTemplates && (
                       <>
-                        <Button variant="ghost" size="icon" onClick={() => toast.info("Edit template functionality would be implemented here")}>
+                        <Button variant="ghost" size="icon" onClick={() => handleEditTemplate(template)}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteTemplate(template.id)}>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteTemplateConfirm(template)}>
                           <Trash className="h-4 w-4" />
                         </Button>
                       </>
@@ -285,6 +442,35 @@ const TemplateManagement = () => {
         onCreateTemplate={handleCreateTemplate}
         isLoading={isLoading}
       />
+      
+      <EditTemplateDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        template={editingTemplate}
+        onTemplateUpdated={fetchTemplates}
+      />
+      
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the template "{templateToDelete?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={() => handleDeleteTemplate(templateToDelete?.id)}
+            >
+              Delete Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
