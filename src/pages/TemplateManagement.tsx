@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -268,14 +268,14 @@ const TemplateManagement = () => {
               ? "No templates match your search criteria" 
               : canManageTemplates 
                 ? "Upload your first template to start building your catalog" 
-          }
+              : "No templates are available for your account"}
+          </p>
           {canManageTemplates && (
             <Button className="mt-4" onClick={() => setIsUploadWizardOpen(true)}>
               <Upload className="h-4 w-4 mr-2" />
               Upload Template
             </Button>
-                : "No templates are available for your account"}
-          </p>
+          )}
         </div>
       )}
       
