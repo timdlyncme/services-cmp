@@ -245,7 +245,7 @@ const Tenants = () => {
           {canManageTenants && (
             <Dialog open={isNewTenantDialogOpen} onOpenChange={setIsNewTenantDialogOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button style={{ backgroundColor: "#FF5100" }}>
                   <Plus className="h-4 w-4 mr-2" />
                   New Tenant
                 </Button>
