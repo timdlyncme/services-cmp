@@ -25,10 +25,9 @@ export const StepWizard: React.FC<StepWizardProps> = ({
             <div className="flex flex-col items-center">
               <div
                 className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-medium",
+                  "flex h-8 w-8 items-center justify-center rounded-full border-2 text-sm font-medium transition-colors",
                   {
-                    "border-orange-500 bg-orange-500 text-white": step.id < currentStep,
-                    "border-orange-500 bg-orange-500 text-white": step.id === currentStep,
+                    "border-orange-500 bg-orange-500 text-white": step.id <= currentStep,
                     "border-gray-300 bg-white text-gray-500": step.id > currentStep,
                   }
                 )}
@@ -83,4 +82,3 @@ export const StepWizard: React.FC<StepWizardProps> = ({
     </div>
   );
 };
-
