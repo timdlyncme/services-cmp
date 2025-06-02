@@ -9,7 +9,8 @@ import {
   Eye, 
   EyeOff,
   Maximize2,
-  Minimize2
+  Minimize2,
+  ExternalLink
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -341,6 +342,29 @@ export default function BaseWidget({
 
     const data = widgetData.data;
     
+    // Define task URLs for navigation
+    const getTaskUrl = (taskId: string) => {
+      switch (taskId) {
+        case 'cloud_settings':
+          return '/settings';
+        case 'cloud_accounts':
+          return '/cloud-accounts';
+        case 'environments':
+          return '/environments';
+        case 'templates':
+          return '/catalog';
+        default:
+          return '#';
+      }
+    };
+
+    const handleTaskClick = (taskId: string) => {
+      const url = getTaskUrl(taskId);
+      if (url !== '#') {
+        window.location.href = url;
+      }
+    };
+    
     if (data?.tasks && data?.progress) {
       return (
         <div>
@@ -376,10 +400,19 @@ export default function BaseWidget({
                   {task.completed ? '✓' : index + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className={`text-xs font-medium ${
-                    task.completed ? 'text-green-700' : 'text-gray-700'
-                  }`}>
-                    {task.title}
+                  <div className="flex items-center justify-between">
+                    <div className={`text-xs font-medium ${
+                      task.completed ? 'text-green-700' : 'text-gray-700'
+                    }`}>
+                      {task.title}
+                    </div>
+                    <button
+                      onClick={() => handleTaskClick(task.id)}
+                      className="flex-shrink-0 p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                      title={`Go to ${task.title}`}
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </button>
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
                     {task.description}
