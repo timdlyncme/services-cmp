@@ -202,6 +202,8 @@ export default function BaseWidget({
         return renderTextWidget();
       case 'status':
         return renderStatusWidget();
+      case 'getting_started':
+        return renderGettingStartedWidget();
       default:
         return <div className="p-4 text-center text-muted-foreground">Unknown widget type</div>;
     }
@@ -332,6 +334,82 @@ export default function BaseWidget({
     }
 
     return <div className="text-center text-muted-foreground">No data available</div>;
+  };
+
+  const renderGettingStartedWidget = () => {
+    if (!widgetData?.data) return null;
+
+    const data = widgetData.data;
+    
+    if (data?.tasks && data?.progress) {
+      return (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-sm font-medium">Getting Started</h4>
+            <div className="text-xs text-muted-foreground">
+              {data.progress.completed}/{data.progress.total} completed
+            </div>
+          </div>
+          
+          {/* Progress bar */}
+          <div className="mb-4">
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${data.progress.percentage}%` }}
+              ></div>
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {Math.round(data.progress.percentage)}% complete
+            </div>
+          </div>
+
+          {/* Task list */}
+          <div className="space-y-3">
+            {data.tasks.map((task: any, index: number) => (
+              <div key={task.id} className="flex items-start space-x-3">
+                <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs ${
+                  task.completed 
+                    ? 'bg-green-100 text-green-600' 
+                    : 'bg-gray-100 text-gray-400'
+                }`}>
+                  {task.completed ? '✓' : index + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className={`text-xs font-medium ${
+                    task.completed ? 'text-green-700' : 'text-gray-700'
+                  }`}>
+                    {task.title}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {task.description}
+                  </div>
+                  {task.count > 0 && (
+                    <div className="text-xs text-blue-600 mt-1">
+                      {task.count} configured
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {data.is_complete && (
+            <div className="mt-4 p-3 bg-green-50 rounded-lg">
+              <div className="text-xs text-green-700 font-medium">
+                🎉 Congratulations! You've completed the setup.
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="text-center text-muted-foreground">
+        Loading getting started information...
+      </div>
+    );
   };
 
   const getStatValue = (data: any, config: any) => {
