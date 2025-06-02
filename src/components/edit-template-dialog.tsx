@@ -6,12 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Plus, X, ChevronDown, ChevronRight, Send, Bot, User } from "lucide-react";
+import { Trash2, Plus, X, ChevronDown, ChevronRight, Send, Bot, User, Save } from "lucide-react";
 import { toast } from "sonner";
 import { CloudTemplate, CloudProvider, TemplateType, TemplateParameter, TemplateVariable } from "@/types/cloud";
 import { cmpService } from "@/services/cmp-service";
@@ -283,12 +283,7 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader className="flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <DialogTitle>Edit Template</DialogTitle>
-            <Button variant="ghost" size="sm" onClick={handleClose}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <DialogTitle>Edit Template</DialogTitle>
         </DialogHeader>
         
         <Tabs defaultValue="defaults" className="w-full">
@@ -459,7 +454,7 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
               </div>
               
               <CollapsibleContent>
-                <ScrollArea className="h-[500px] w-full">
+                <ScrollArea className="max-h-[400px] w-full">
                   <div className="space-y-3 pr-4">
                     {Object.entries(parameters).map(([paramName, param]) => (
                       <Card key={paramName}>
@@ -543,7 +538,7 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
               </div>
               
               <CollapsibleContent>
-                <ScrollArea className="h-[500px] w-full">
+                <ScrollArea className="max-h-[400px] w-full">
                   <div className="space-y-3 pr-4">
                     {Object.entries(variables).map(([varName, variable]) => (
                       <Card key={varName}>
