@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -395,7 +396,7 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
                 <Card className="h-[550px] flex flex-col">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center">
-                      <Bot className="h-4 w-4 mr-2" />
+                      <Bot className="h-4 w-4 mx-auto mb-2" />
                       Chat with AI about your code
                     </CardTitle>
                   </CardHeader>

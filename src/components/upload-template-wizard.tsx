@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,7 +22,6 @@ interface UploadTemplateWizardProps {
   onOpenChange: (open: boolean) => void;
   onCreateTemplate: (templateData: any) => Promise<void>;
   isLoading: boolean;
-  onClose: () => void;
 }
 
 const steps = [
@@ -52,7 +52,6 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
   onOpenChange,
   onCreateTemplate,
   isLoading,
-  onClose,
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
   
@@ -92,7 +91,7 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
   // Handle dialog close
   const handleClose = () => {
     clearFormData();
-    onClose();
+    onOpenChange(false);
   };
 
   const canProceedToStep2 = templateName.trim() && templateDescription.trim() && templateProvider && templateType && selectedCategories.length > 0;
@@ -304,7 +303,6 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
         variables: transformedVariables
       };
       await onCreateTemplate(templateData);
-      onOpenChange(false);
     } catch (error) {
       console.error("Error creating template:", error);
     }
