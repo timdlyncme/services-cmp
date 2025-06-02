@@ -274,24 +274,27 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
 
   const handleCreateTemplate = async () => {
     try {
-      // Transform parameters to match TemplateDetails format: { [name]: { value: string, type: string } }
-      const transformedParameters: Record<string, { value: string; type: string }> = {};
+      // Transform parameters to unified schema: { [name]: { value: string, type: string, description: string, required: boolean } }
+      const transformedParameters: Record<string, TemplateParameter> = {};
       Object.values(parameters).forEach(param => {
         if (param.name && param.name.trim()) {
           transformedParameters[param.name] = {
             value: param.defaultValue || param.value || "",
-            type: param.type
+            type: param.type,
+            description: param.description || "",
+            required: param.required || false
           };
         }
       });
 
-      // Transform variables to match TemplateDetails format: { [name]: { value: string, type: string } }
-      const transformedVariables: Record<string, { value: string; type: string }> = {};
+      // Transform variables to unified schema: { [name]: { value: string, description: string, sensitive: boolean } }
+      const transformedVariables: Record<string, TemplateVariable> = {};
       Object.values(variables).forEach(variable => {
         if (variable.name && variable.name.trim()) {
           transformedVariables[variable.name] = {
             value: variable.value || "",
-            type: "string"  // Variables in TemplateDetails are always string type
+            description: variable.description || "",
+            sensitive: variable.sensitive || false
           };
         }
       });
@@ -301,33 +304,12 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
         description: templateDescription,
         provider: templateProvider,
         type: templateType,
-        category: selectedCategories.join(','),
+        category: selectedCategories.join(","),
         code: templateCode,
         is_public: false,
         parameters: transformedParameters,
-        variables: transformedVariables,
-        // Store additional metadata for editing
-        parameter_metadata: Object.values(parameters).reduce((acc, param) => {
-          if (param.name && param.name.trim()) {
-            acc[param.name] = {
-              description: param.description || "",
-              required: param.required || false,
-              defaultValue: param.defaultValue || ""
-            };
-          }
-          return acc;
-        }, {} as Record<string, { description: string; required: boolean; defaultValue: string }>),
-        variable_metadata: Object.values(variables).reduce((acc, variable) => {
-          if (variable.name && variable.name.trim()) {
-            acc[variable.name] = {
-              description: variable.description || "",
-              sensitive: variable.sensitive || false
-            };
-          }
-          return acc;
-        }, {} as Record<string, { description: string; sensitive: boolean }>),
+        variables: transformedVariables
       };
-
       await onCreateTemplate(templateData);
       onOpenChange(false);
     } catch (error) {

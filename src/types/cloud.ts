@@ -28,21 +28,20 @@ export interface CloudTemplate {
   lastUpdatedBy?: string;
   parameters?: Record<string, TemplateParameter>;
   variables?: Record<string, TemplateVariable>;
-  parameter_metadata?: Record<string, { description: string; required: boolean; defaultValue: string }>;
-  variable_metadata?: Record<string, { description: string; sensitive: boolean }>;
   version?: string; // Add version field
 }
 
 export interface TemplateParameter {
   value: string;
   type: "string" | "int" | "password";
-  description?: string;
+  description: string;
+  required: boolean;
 }
 
 export interface TemplateVariable {
   value: string;
-  type: "string" | "int" | "password";
-  description?: string;
+  description: string;
+  sensitive: boolean;
 }
 
 export interface CloudDeployment {

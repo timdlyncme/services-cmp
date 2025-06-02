@@ -74,10 +74,37 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
       setSelectedCategories(template.categories || []);
       setIsPublic(template.isPublic || false);
       setTemplateCode(template.code || "");
+      // Convert simplified parameters format back to complex format for editing
+      const convertedParameters: Record<string, TemplateParameter> = {};
+      if (template.parameters) {
+        Object.entries(template.parameters).forEach(([name, param]) => {
+          const metadata = template.parameter_metadata?.[name] || {};
+          convertedParameters[`param_${Date.now()}_${Math.random()}`] = {
+            name: name,
+            type: param.type || "string",
+            description: metadata.description || "",
+            defaultValue: metadata.defaultValue || param.value || "",
+            value: param.value || "",
+            required: metadata.required || false
+          };
+        });
+      }
+      setParameters(convertedParameters);
       
-      // Use unified schema directly - no conversion needed
-      setParameters(template.parameters || {});
-      setVariables(template.variables || {});
+      // Convert simplified variables format back to complex format for editing
+      const convertedVariables: Record<string, TemplateVariable> = {};
+      if (template.variables) {
+        Object.entries(template.variables).forEach(([name, variable]) => {
+          const metadata = template.variable_metadata?.[name] || {};
+          convertedVariables[`var_${Date.now()}_${Math.random()}`] = {
+            name: name,
+            value: variable.value || "",
+            description: metadata.description || "",
+            sensitive: metadata.sensitive || false
+          };
+        });
+      }
+      setVariables(convertedVariables);
       setAiMessages([]);
       setAiInput("");
     }
@@ -92,54 +119,43 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
   };
   
   const addParameter = () => {
-    const newParamName = `param_${Date.now()}`;
+    const newId = `param_${Date.now()}`;
     setParameters(prev => ({
       ...prev,
-      [newParamName]: {
-        value: "",
+      [newId]: {
+        name: "",
         type: "string",
         description: "",
+        defaultValue: "",
         required: false
       }
     }));
   };
   
-  const updateParameter = (paramName: string, field: keyof TemplateParameter, value: any) => {
+  const updateParameter = (id: string, field: keyof TemplateParameter, value: any) => {
     setParameters(prev => ({
       ...prev,
-      [paramName]: {
-        ...prev[paramName],
+      [id]: {
+        ...prev[id],
         [field]: value
       }
     }));
   };
   
-  const renameParameter = (oldName: string, newName: string) => {
-    if (oldName === newName || !newName.trim()) return;
-    
+  const removeParameter = (id: string) => {
     setParameters(prev => {
       const newParams = { ...prev };
-      if (newParams[oldName]) {
-        newParams[newName] = newParams[oldName];
-        delete newParams[oldName];
-      }
-      return newParams;
-    });
-  };
-  
-  const removeParameter = (paramName: string) => {
-    setParameters(prev => {
-      const newParams = { ...prev };
-      delete newParams[paramName];
+      delete newParams[id];
       return newParams;
     });
   };
   
   const addVariable = () => {
-    const newVarName = `var_${Date.now()}`;
+    const newId = `var_${Date.now()}`;
     setVariables(prev => ({
       ...prev,
-      [newVarName]: {
+      [newId]: {
+        name: "",
         value: "",
         description: "",
         sensitive: false
@@ -147,33 +163,20 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
     }));
   };
   
-  const updateVariable = (varName: string, field: keyof TemplateVariable, value: any) => {
+  const updateVariable = (id: string, field: keyof TemplateVariable, value: any) => {
     setVariables(prev => ({
       ...prev,
-      [varName]: {
-        ...prev[varName],
+      [id]: {
+        ...prev[id],
         [field]: value
       }
     }));
   };
   
-  const renameVariable = (oldName: string, newName: string) => {
-    if (oldName === newName || !newName.trim()) return;
-    
+  const removeVariable = (id: string) => {
     setVariables(prev => {
       const newVars = { ...prev };
-      if (newVars[oldName]) {
-        newVars[newName] = newVars[oldName];
-        delete newVars[oldName];
-      }
-      return newVars;
-    });
-  };
-  
-  const removeVariable = (varName: string) => {
-    setVariables(prev => {
-      const newVars = { ...prev };
-      delete newVars[varName];
+      delete newVars[id];
       return newVars;
     });
   };
@@ -223,7 +226,50 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
     setIsLoading(true);
     
     try {
-      // Use unified schema directly - no conversion needed
+      // Convert complex parameters format back to simplified format for saving
+      const transformedParameters: Record<string, { value: string; type: string }> = {};
+      Object.values(parameters).forEach(param => {
+        if (param.name && param.name.trim()) {
+          transformedParameters[param.name] = {
+            value: param.defaultValue || param.value || "",
+            type: param.type
+          };
+        }
+      });
+
+      // Convert complex variables format back to simplified format for saving
+      const transformedVariables: Record<string, { value: string; type: string }> = {};
+      Object.values(variables).forEach(variable => {
+        if (variable.name && variable.name.trim()) {
+          transformedVariables[variable.name] = {
+            value: variable.value || "",
+            type: "string"
+          };
+        }
+      });
+
+      // Store detailed metadata for future editing
+      const parameterMetadata: Record<string, { description: string; required: boolean; defaultValue: string }> = {};
+      Object.values(parameters).forEach(param => {
+        if (param.name && param.name.trim()) {
+          parameterMetadata[param.name] = {
+            description: param.description || "",
+            required: param.required || false,
+            defaultValue: param.defaultValue || ""
+          };
+        }
+      });
+
+      const variableMetadata: Record<string, { description: string; sensitive: boolean }> = {};
+      Object.values(variables).forEach(variable => {
+        if (variable.name && variable.name.trim()) {
+          variableMetadata[variable.name] = {
+            description: variable.description || "",
+            sensitive: variable.sensitive || false
+          };
+        }
+      });
+
       const updateData = {
         name: templateName,
         description: templateDescription,
@@ -232,8 +278,10 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
         category: selectedCategories.join(","),
         code: templateCode,
         is_public: isPublic,
-        parameters: parameters,
-        variables: variables
+        parameters: transformedParameters,
+        variables: transformedVariables,
+        parameter_metadata: parameterMetadata,
+        variable_metadata: variableMetadata
       };
       await cmpService.updateTemplate(template.id, updateData);
       
@@ -422,28 +470,30 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
                 </div>
                 
                 <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                  {Object.entries(parameters).map(([paramName, param]) => (
-                    <Card key={paramName}>
+                  {Object.entries(parameters).map(([id, param]) => (
+                    <Card key={id}>
                       <CardContent className="p-4 space-y-3">
                         <div className="flex justify-between items-start">
                           <div className="grid grid-cols-2 gap-2 flex-1">
                             <Input
                               placeholder="Parameter name"
-                              value={paramName}
-                              onChange={(e) => renameParameter(paramName, e.target.value)}
+                              value={param.name}
+                              onChange={(e) => updateParameter(id, 'name', e.target.value)}
                             />
-                            <Select value={param.type} onValueChange={(value) => updateParameter(paramName, "type", value)}>
+                            <Select value={param.type} onValueChange={(value) => updateParameter(id, 'type', value)}>
                               <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="string">String</SelectItem>
-                                <SelectItem value="int">Integer</SelectItem>
-                                <SelectItem value="password">Password</SelectItem>
+                                <SelectItem value="number">Number</SelectItem>
+                                <SelectItem value="boolean">Boolean</SelectItem>
+                                <SelectItem value="array">Array</SelectItem>
+                                <SelectItem value="object">Object</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
-                          <Button variant="ghost" size="sm" onClick={() => removeParameter(paramName)}>
+                          <Button variant="ghost" size="sm" onClick={() => removeParameter(id)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -451,23 +501,21 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
                         <Input
                           placeholder="Description"
                           value={param.description}
-                          onChange={(e) => updateParameter(paramName, "description", e.target.value)}
+                          onChange={(e) => updateParameter(id, 'description', e.target.value)}
                         />
                         
                         <div className="grid grid-cols-2 gap-2">
                           <Input
                             placeholder="Default value"
-                            value={param.value}
-                            onChange={(e) => updateParameter(paramName, "value", e.target.value)}
-                            type={param.type === "password" ? "password" : param.type === "int" ? "number" : "text"}
+                            value={param.defaultValue}
+                            onChange={(e) => updateParameter(id, 'defaultValue', e.target.value)}
                           />
                           <div className="flex items-center space-x-2">
                             <Checkbox
-                              id={`required-${paramName}`}
                               checked={param.required}
-                              onCheckedChange={(checked) => updateParameter(paramName, "required", checked)}
+                              onCheckedChange={(checked) => updateParameter(id, 'required', checked)}
                             />
-                            <label htmlFor={`required-${paramName}`} className="text-sm">Required</label>
+                            <Label className="text-sm">Required</Label>
                           </div>
                         </div>
                       </CardContent>
@@ -486,24 +534,24 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
                 </div>
                 
                 <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                  {Object.entries(variables).map(([varName, variable]) => (
-                    <Card key={varName}>
+                  {Object.entries(variables).map(([id, variable]) => (
+                    <Card key={id}>
                       <CardContent className="p-4 space-y-3">
                         <div className="flex justify-between items-start">
                           <div className="grid grid-cols-2 gap-2 flex-1">
                             <Input
                               placeholder="Variable name"
-                              value={varName}
-                              onChange={(e) => renameVariable(varName, e.target.value)}
+                              value={variable.name}
+                              onChange={(e) => updateVariable(id, 'name', e.target.value)}
                             />
                             <Input
                               placeholder="Value"
                               value={variable.value}
-                              onChange={(e) => updateVariable(varName, "value", e.target.value)}
+                              onChange={(e) => updateVariable(id, 'value', e.target.value)}
                               type={variable.sensitive ? "password" : "text"}
                             />
                           </div>
-                          <Button variant="ghost" size="sm" onClick={() => removeVariable(varName)}>
+                          <Button variant="ghost" size="sm" onClick={() => removeVariable(id)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -511,16 +559,15 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
                         <Input
                           placeholder="Description"
                           value={variable.description}
-                          onChange={(e) => updateVariable(varName, "description", e.target.value)}
+                          onChange={(e) => updateVariable(id, 'description', e.target.value)}
                         />
                         
                         <div className="flex items-center space-x-2">
                           <Checkbox
-                            id={`sensitive-${varName}`}
                             checked={variable.sensitive}
-                            onCheckedChange={(checked) => updateVariable(varName, "sensitive", checked)}
+                            onCheckedChange={(checked) => updateVariable(id, 'sensitive', checked)}
                           />
-                          <label htmlFor={`sensitive-${varName}`} className="text-sm">Sensitive</label>
+                          <Label className="text-sm">Sensitive</Label>
                         </div>
                       </CardContent>
                     </Card>
