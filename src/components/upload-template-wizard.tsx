@@ -274,19 +274,25 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
 
   const handleCreateTemplate = async () => {
     try {
-      // Transform parameters to use actual names as keys
-      const transformedParameters: Record<string, TemplateParameter> = {};
+      // Transform parameters to match TemplateDetails format: { [name]: { value: string, type: string } }
+      const transformedParameters: Record<string, { value: string; type: string }> = {};
       Object.values(parameters).forEach(param => {
         if (param.name && param.name.trim()) {
-          transformedParameters[param.name] = param;
+          transformedParameters[param.name] = {
+            value: param.defaultValue || param.value || "",
+            type: param.type
+          };
         }
       });
 
-      // Transform variables to use actual names as keys
-      const transformedVariables: Record<string, TemplateVariable> = {};
+      // Transform variables to match TemplateDetails format: { [name]: { value: string, type: string } }
+      const transformedVariables: Record<string, { value: string; type: string }> = {};
       Object.values(variables).forEach(variable => {
         if (variable.name && variable.name.trim()) {
-          transformedVariables[variable.name] = variable;
+          transformedVariables[variable.name] = {
+            value: variable.value || "",
+            type: "string"  // Variables in TemplateDetails are always string type
+          };
         }
       });
 
