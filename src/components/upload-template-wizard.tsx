@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Upload, FileCode, Github, ChevronLeft, ChevronRight, Plus, Trash2, AlertCircle } from "lucide-react";
+import { Loader2, Upload, FileCode, Github, ChevronLeft, ChevronRight, Plus, Trash2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { CloudProvider, TemplateType, TemplateParameter, TemplateVariable } from "@/types/cloud";
 import { availableCategories } from "@/types/template";
 import { toast } from "sonner";
@@ -57,8 +57,8 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
   // Step 1: Template Info
   const [templateName, setTemplateName] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
-  const [templateProvider, setTemplateProvider] = useState<CloudProvider>("azure");
-  const [templateType, setTemplateType] = useState<TemplateType>("terraform");
+  const [templateProvider, setTemplateProvider] = useState<CloudProvider | "">("");
+  const [templateType, setTemplateType] = useState<TemplateType | "">("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   
   // Step 2: Template Code
@@ -71,14 +71,22 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
   const [parameters, setParameters] = useState<Record<string, TemplateParameter>>({});
   const [variables, setVariables] = useState<Record<string, TemplateVariable>>({});
   
+  // Review stage expandable cards
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({
+    info: true,
+    code: true,
+    params: true,
+    vars: true
+  });
+
   // Reset wizard when dialog opens
   useEffect(() => {
     if (open) {
       setCurrentStep(1);
       setTemplateName("");
       setTemplateDescription("");
-      setTemplateProvider("azure");
-      setTemplateType("terraform");
+      setTemplateProvider("");
+      setTemplateType("");
       setSelectedCategories([]);
       setCodeSource("manual");
       setTemplateCode("");
@@ -88,7 +96,7 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
     }
   }, [open]);
 
-  const canProceedToStep2 = templateName.trim() && templateDescription.trim() && selectedCategories.length > 0;
+  const canProceedToStep2 = templateName.trim() && templateDescription.trim() && templateProvider && templateType && selectedCategories.length > 0;
   const canProceedToStep3 = templateCode.trim();
   const canProceedToStep4 = true; // Parameters are optional
 
@@ -116,6 +124,13 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
         ? prev.filter(c => c !== category)
         : [...prev, category]
     );
+  };
+
+  const toggleCardExpansion = (cardId: string) => {
+    setExpandedCards(prev => ({
+      ...prev,
+      [cardId]: !prev[cardId]
+    }));
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -259,6 +274,22 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
 
   const handleCreateTemplate = async () => {
     try {
+      // Transform parameters to use actual names as keys
+      const transformedParameters: Record<string, TemplateParameter> = {};
+      Object.values(parameters).forEach(param => {
+        if (param.name && param.name.trim()) {
+          transformedParameters[param.name] = param;
+        }
+      });
+
+      // Transform variables to use actual names as keys
+      const transformedVariables: Record<string, TemplateVariable> = {};
+      Object.values(variables).forEach(variable => {
+        if (variable.name && variable.name.trim()) {
+          transformedVariables[variable.name] = variable;
+        }
+      });
+
       const templateData = {
         name: templateName,
         description: templateDescription,
@@ -267,8 +298,8 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
         category: selectedCategories.join(','),
         code: templateCode,
         is_public: false,
-        parameters: parameters,
-        variables: variables
+        parameters: transformedParameters,
+        variables: transformedVariables
       };
 
       await onCreateTemplate(templateData);
@@ -309,7 +340,7 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
                 <Label htmlFor="type">Template Type</Label>
                 <Select value={templateType} onValueChange={(value) => setTemplateType(value as TemplateType)}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select a template type..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="terraform">Terraform</SelectItem>
@@ -323,7 +354,7 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
                 <Label htmlFor="provider">Cloud Provider</Label>
                 <Select value={templateProvider} onValueChange={(value) => setTemplateProvider(value as CloudProvider)}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select a cloud provider..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="azure">Azure</SelectItem>
@@ -350,15 +381,6 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
                   </div>
                 ))}
               </div>
-              {selectedCategories.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {selectedCategories.map((category) => (
-                    <Badge key={category} variant="secondary">
-                      {category}
-                    </Badge>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         );
@@ -638,100 +660,137 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
             <h3 className="text-lg font-medium">Review Template Configuration</h3>
             
             <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Template Information</CardTitle>
+              <CardHeader className="cursor-pointer" onClick={() => toggleCardExpansion('info')}>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm">Template Information</CardTitle>
+                  {expandedCards.info ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </div>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Name:</span>
-                  <Badge variant="outline">{templateName}</Badge>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Type:</span>
-                  <Badge variant="outline">{templateType}</Badge>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Provider:</span>
-                  <Badge variant="outline">{templateProvider.toUpperCase()}</Badge>
-                </div>
-                <div className="flex justify-between items-start">
-                  <span className="text-sm text-gray-600">Categories:</span>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedCategories.map((category) => (
-                      <Badge key={category} variant="secondary" className="text-xs">
-                        {category}
-                      </Badge>
-                    ))}
+              {expandedCards.info && (
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Name:</span>
+                    <Badge variant="outline">{templateName}</Badge>
                   </div>
-                </div>
-                <div>
-                  <span className="text-sm text-gray-600">Description:</span>
-                  <p className="text-xs mt-1 p-2 bg-gray-50 rounded">{templateDescription}</p>
-                </div>
-              </CardContent>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Type:</span>
+                    <Badge variant="outline">{templateType}</Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Provider:</span>
+                    <Badge variant="outline">{templateProvider.toUpperCase()}</Badge>
+                  </div>
+                  <div className="flex justify-between items-start">
+                    <span className="text-sm text-gray-600">Categories:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedCategories.map((category, index) => {
+                        const colors = [
+                          "bg-blue-100 text-blue-800",
+                          "bg-green-100 text-green-800", 
+                          "bg-purple-100 text-purple-800",
+                          "bg-orange-100 text-orange-800",
+                          "bg-pink-100 text-pink-800",
+                          "bg-indigo-100 text-indigo-800",
+                          "bg-yellow-100 text-yellow-800",
+                          "bg-red-100 text-red-800",
+                          "bg-teal-100 text-teal-800",
+                          "bg-cyan-100 text-cyan-800"
+                        ];
+                        return (
+                          <Badge 
+                            key={category} 
+                            className={`text-xs ${colors[index % colors.length]}`}
+                          >
+                            {category}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-600">Description:</span>
+                    <p className="text-xs mt-1 p-2 bg-gray-50 rounded">{templateDescription}</p>
+                  </div>
+                </CardContent>
+              )}
             </Card>
             
             <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Template Code</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-600">Source:</span>
-                  <Badge variant="outline">
-                    {codeSource === "manual" ? "Manual Entry" : 
-                     codeSource === "file" ? "File Upload" : "GitHub"}
-                  </Badge>
+              <CardHeader className="cursor-pointer" onClick={() => toggleCardExpansion('code')}>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm">Template Code</CardTitle>
+                  {expandedCards.code ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </div>
-                <ScrollArea className="h-32 w-full rounded-md border">
-                  <pre className="p-3 text-xs">
-                    <code>{templateCode.substring(0, 500)}...</code>
-                  </pre>
-                </ScrollArea>
-              </CardContent>
+              </CardHeader>
+              {expandedCards.code && (
+                <CardContent>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-gray-600">Source:</span>
+                    <Badge variant="outline">
+                      {codeSource === "manual" ? "Manual Entry" : 
+                       codeSource === "file" ? "File Upload" : "GitHub"}
+                    </Badge>
+                  </div>
+                  <ScrollArea className={`w-full rounded-md border ${expandedCards.code ? 'h-64' : 'h-32'}`}>
+                    <pre className="p-3 text-xs">
+                      <code>{templateCode}</code>
+                    </pre>
+                  </ScrollArea>
+                </CardContent>
+              )}
             </Card>
             
             {Object.keys(parameters).length > 0 && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Parameters ({Object.keys(parameters).length})</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {Object.entries(parameters).map(([key, param]) => (
-                      <div key={key} className="flex justify-between text-xs">
-                        <span className="font-medium">{param.name}</span>
-                        <div className="flex gap-2">
-                          <Badge variant="outline" className="text-xs">{param.type}</Badge>
-                          {param.required && <Badge variant="destructive" className="text-xs">Required</Badge>}
-                        </div>
-                      </div>
-                    ))}
+                <CardHeader className="cursor-pointer" onClick={() => toggleCardExpansion('params')}>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">Parameters ({Object.keys(parameters).length})</CardTitle>
+                    {expandedCards.params ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </div>
-                </CardContent>
+                </CardHeader>
+                {expandedCards.params && (
+                  <CardContent>
+                    <div className="space-y-2">
+                      {Object.entries(parameters).map(([key, param]) => (
+                        <div key={key} className="flex justify-between text-xs">
+                          <span className="font-medium">{param.name}</span>
+                          <div className="flex gap-2">
+                            <Badge variant="outline" className="text-xs">{param.type}</Badge>
+                            {param.required && <Badge variant="destructive" className="text-xs">Required</Badge>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                )}
               </Card>
             )}
             
             {Object.keys(variables).length > 0 && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Variables ({Object.keys(variables).length})</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {Object.entries(variables).map(([key, variable]) => (
-                      <div key={key} className="flex justify-between text-xs">
-                        <span className="font-medium">{variable.name}</span>
-                        <div className="flex gap-2">
-                          <span className="text-muted-foreground">
-                            {variable.sensitive ? "••••••••" : variable.value || "(empty)"}
-                          </span>
-                          {variable.sensitive && <Badge variant="outline" className="text-xs">Sensitive</Badge>}
-                        </div>
-                      </div>
-                    ))}
+                <CardHeader className="cursor-pointer" onClick={() => toggleCardExpansion('vars')}>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">Variables ({Object.keys(variables).length})</CardTitle>
+                    {expandedCards.vars ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </div>
-                </CardContent>
+                </CardHeader>
+                {expandedCards.vars && (
+                  <CardContent>
+                    <div className="space-y-2">
+                      {Object.entries(variables).map(([key, variable]) => (
+                        <div key={key} className="flex justify-between text-xs">
+                          <span className="font-medium">{variable.name}</span>
+                          <div className="flex gap-2">
+                            <span className="text-muted-foreground">
+                              {variable.sensitive ? "••••••••" : variable.value || "(empty)"}
+                            </span>
+                            {variable.sensitive && <Badge variant="outline" className="text-xs">Sensitive</Badge>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                )}
               </Card>
             )}
           </div>

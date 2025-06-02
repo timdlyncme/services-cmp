@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, FileCode, Upload, BarChart3, PieChart, TrendingUp } from "lucide-react";
 import { CloudTemplate, CloudProvider, TemplateType } from "@/types/cloud";
@@ -31,6 +32,10 @@ const TemplateManagement = () => {
   // State for the edit template dialog
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<CloudTemplate | null>(null);
+  
+  // State for delete confirmation dialog
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<CloudTemplate | null>(null);
   
   // Check if user has permission to manage templates
   const canManageTemplates = hasPermission("manage:templates");
@@ -118,26 +123,19 @@ const TemplateManagement = () => {
   };
   
   const handleDeleteTemplate = async (templateId: string) => {
+    if (!templateId || !currentTenant) return;
+    
     try {
-      setIsLoading(true);
-      
-      // Delete the template
       await cmpService.deleteTemplate(templateId);
-      
-      // Refresh the list
-      await fetchTemplates();
-      
+      setTemplates(templates.filter(t => t.id !== templateId));
       toast.success("Template deleted successfully");
+      
+      // Close the delete dialog
+      setIsDeleteDialogOpen(false);
+      setTemplateToDelete(null);
     } catch (error) {
       console.error("Error deleting template:", error);
-      
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error("Failed to delete template");
-      }
-    } finally {
-      setIsLoading(false);
+      toast.error("Failed to delete template");
     }
   };
   
@@ -148,6 +146,11 @@ const TemplateManagement = () => {
   const handleEditTemplate = (template: CloudTemplate) => {
     setEditingTemplate(template);
     setIsEditDialogOpen(true);
+  };
+  
+  const handleDeleteTemplateConfirm = (template: CloudTemplate) => {
+    setTemplateToDelete(template);
+    setIsDeleteDialogOpen(true);
   };
   
   // Calculate stats for dashboard
@@ -402,7 +405,7 @@ const TemplateManagement = () => {
                         <Button variant="ghost" size="icon" onClick={() => handleEditTemplate(template)}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteTemplate(template.id)}>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteTemplateConfirm(template)}>
                           <Trash className="h-4 w-4" />
                         </Button>
                       </>
@@ -446,6 +449,28 @@ const TemplateManagement = () => {
         template={editingTemplate}
         onTemplateUpdated={fetchTemplates}
       />
+      
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the template "{templateToDelete?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={() => handleDeleteTemplate(templateToDelete?.id)}
+            >
+              Delete Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
