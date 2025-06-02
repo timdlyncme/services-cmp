@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +11,7 @@ import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, FileCode, Upload } f
 import { CloudTemplate, CloudProvider, TemplateType } from "@/types/cloud";
 import { cmpService } from "@/services/cmp-service";
 import { useNavigate } from "react-router-dom";
+import { UploadTemplateWizard } from "@/components/upload-template-wizard";
 
 const TemplateManagement = () => {
   const { currentTenant, hasPermission } = useAuth();
@@ -23,13 +23,8 @@ const TemplateManagement = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // State for the new template dialog
-  const [isNewTemplateDialogOpen, setIsNewTemplateDialogOpen] = useState(false);
-  const [newTemplateName, setNewTemplateName] = useState("");
-  const [newTemplateDescription, setNewTemplateDescription] = useState("");
-  const [newTemplateProvider, setNewTemplateProvider] = useState<CloudProvider>("azure");
-  const [newTemplateType, setNewTemplateType] = useState<TemplateType>("terraform");
-  const [newTemplateCategories, setNewTemplateCategories] = useState("");
+  // State for the upload template wizard
+  const [isUploadWizardOpen, setIsUploadWizardOpen] = useState(false);
   
   // Check if user has permission to manage templates
   const canManageTemplates = hasPermission("manage:templates");
@@ -91,61 +86,16 @@ const TemplateManagement = () => {
     toast.success("Refreshing templates...");
   };
   
-  const handleCreateTemplate = async () => {
-    if (!newTemplateName) {
-      toast.error("Template name is required");
-      return;
-    }
-    
+  const handleCreateTemplate = async (templateData: any) => {
     try {
       setIsLoading(true);
       
-      // Get the file input element
-      const fileInput = document.getElementById('file') as HTMLInputElement;
-      let fileContent = "";
+      console.log("Creating template with data:", templateData);
       
-      // Read the file content if a file was selected
-      if (fileInput && fileInput.files && fileInput.files.length > 0) {
-        const file = fileInput.files[0];
-        fileContent = await readFileContent(file);
-        console.log("File content read:", fileContent.substring(0, 100) + "...");
-      } else {
-        console.log("No file selected");
-      }
-      
-      // Create the new template
-      const categories = newTemplateCategories
-        .split(",")
-        .map(cat => cat.trim())
-        .filter(cat => cat.length > 0);
-      
-      const newTemplate = {
-        name: newTemplateName,
-        description: newTemplateDescription,
-        provider: newTemplateProvider,
-        type: newTemplateType, // Make sure this is correctly set
-        category: categories.length > 0 ? categories.join(',') : undefined,  // Convert array to comma-separated string
-        code: fileContent || "",  // Include the file content, ensure it's not null
-        is_public: false
-      };
-      
-      console.log("Sending template data:", {
-        ...newTemplate,
-        code: newTemplate.code ? `${newTemplate.code.substring(0, 100)}...` : 'No code'
-      });
-      
-      await cmpService.createTemplate(newTemplate, currentTenant!.tenant_id);
+      await cmpService.createTemplate(templateData, currentTenant!.tenant_id);
       
       // Refresh the list
       await fetchTemplates();
-      
-      // Reset form and close dialog
-      setNewTemplateName("");
-      setNewTemplateDescription("");
-      setNewTemplateProvider("azure");
-      setNewTemplateType("terraform");
-      setNewTemplateCategories("");
-      setIsNewTemplateDialogOpen(false);
       
       toast.success("Template created successfully");
     } catch (error) {
@@ -198,22 +148,6 @@ const TemplateManagement = () => {
     }
   };
   
-  // Helper function to read file content
-  const readFileContent = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target && typeof event.target.result === 'string') {
-          resolve(event.target.result);
-        } else {
-          reject(new Error("Failed to read file content"));
-        }
-      };
-      reader.onerror = (error) => reject(error);
-      reader.readAsText(file);
-    });
-  };
-  
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -229,103 +163,6 @@ const TemplateManagement = () => {
             <RefreshCw className="h-4 w-4" />
           </Button>
           
-          {canManageTemplates && (
-            <Dialog open={isNewTemplateDialogOpen} onOpenChange={setIsNewTemplateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Template
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Upload New Template</DialogTitle>
-                  <DialogDescription>
-                    Add a new infrastructure template to your catalog
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <label htmlFor="name" className="text-sm font-medium">Template Name</label>
-                    <Input
-                      id="name"
-                      value={newTemplateName}
-                      onChange={(e) => setNewTemplateName(e.target.value)}
-                      placeholder="e.g., Web App with Database"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label htmlFor="description" className="text-sm font-medium">Description</label>
-                    <Input
-                      id="description"
-                      value={newTemplateDescription}
-                      onChange={(e) => setNewTemplateDescription(e.target.value)}
-                      placeholder="Describe this template"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label htmlFor="provider" className="text-sm font-medium">Cloud Provider</label>
-                      <select
-                        id="provider"
-                        value={newTemplateProvider}
-                        onChange={(e) => setNewTemplateProvider(e.target.value as CloudProvider)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="azure">Azure</option>
-                        <option value="aws">AWS</option>
-                        <option value="gcp">GCP</option>
-                      </select>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <label htmlFor="type" className="text-sm font-medium">Template Type</label>
-                      <select
-                        id="type"
-                        value={newTemplateType}
-                        onChange={(e) => setNewTemplateType(e.target.value as TemplateType)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="terraform">Terraform</option>
-                        <option value="arm">ARM Template</option>
-                        <option value="cloudformation">CloudFormation</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label htmlFor="categories" className="text-sm font-medium">Categories</label>
-                    <Input
-                      id="categories"
-                      value={newTemplateCategories}
-                      onChange={(e) => setNewTemplateCategories(e.target.value)}
-                      placeholder="e.g., web, database, networking (comma separated)"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label htmlFor="file" className="text-sm font-medium">Template File</label>
-                    <Input
-                      id="file"
-                      type="file"
-                      accept=".tf,.json,.yaml,.yml"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Upload a Terraform, ARM, or CloudFormation template file
-                    </p>
-                  </div>
-                </div>
-                
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsNewTemplateDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={handleCreateTemplate}>Upload Template</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          )}
         </div>
       </div>
       
@@ -431,15 +268,23 @@ const TemplateManagement = () => {
               ? "No templates match your search criteria" 
               : canManageTemplates 
                 ? "Upload your first template to start building your catalog" 
-                : "No templates are available for your account"}
+              : "No templates are available for your account"}
           </p>
           {canManageTemplates && (
-            <Button className="mt-4" onClick={() => setIsNewTemplateDialogOpen(true)}>
+            <Button className="mt-4" onClick={() => setIsUploadWizardOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" />
               Upload Template
             </Button>
           )}
         </div>
       )}
+      
+      <UploadTemplateWizard
+        open={isUploadWizardOpen}
+        onOpenChange={setIsUploadWizardOpen}
+        onCreateTemplate={handleCreateTemplate}
+        isLoading={isLoading}
+      />
     </div>
   );
 };
