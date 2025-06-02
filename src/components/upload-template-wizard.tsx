@@ -817,7 +817,6 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader className="flex-shrink-0">
-          <DialogTitle>Upload Template</DialogTitle>
           <div className="mt-4">
             <StepWizard steps={steps} currentStep={currentStep} />
           </div>
