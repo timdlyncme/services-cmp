@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Trash2, Plus, X, ChevronDown, ChevronRight, Send, Bot, User } from "lucide-react";
 import { toast } from "sonner";
-import { Save, Plus, Trash2, MessageSquare, Send, Bot } from "lucide-react";
 import { CloudTemplate, CloudProvider, TemplateType, TemplateParameter, TemplateVariable } from "@/types/cloud";
 import { cmpService } from "@/services/cmp-service";
 import { useAuth } from "@/context/auth-context";
@@ -59,10 +60,35 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
   const [parameters, setParameters] = useState<Record<string, TemplateParameter>>({});
   const [variables, setVariables] = useState<Record<string, TemplateVariable>>({});
   
-  // AI Assistant
-  const [aiMessages, setAiMessages] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
+  // AI Chat state
+  const [aiMessages, setAiMessages] = useState<Array<{ role: 'user' | 'assistant', content: string }>>([]);
   const [aiInput, setAiInput] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
+  
+  // Collapsible sections state
+  const [parametersExpanded, setParametersExpanded] = useState(true);
+  const [variablesExpanded, setVariablesExpanded] = useState(true);
+  
+  // Clear form data
+  const clearFormData = () => {
+    setTemplateName("");
+    setTemplateDescription("");
+    setTemplateProvider("azure");
+    setTemplateType("terraform");
+    setSelectedCategories([]);
+    setIsPublic(false);
+    setTemplateCode("");
+    setParameters({});
+    setVariables({});
+    setAiMessages([]);
+    setAiInput("");
+  };
+  
+  // Handle dialog close
+  const handleClose = () => {
+    clearFormData();
+    onOpenChange(false);
+  };
   
   // Initialize form when template changes
   useEffect(() => {
@@ -249,13 +275,19 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
   };
   
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Edit Template</DialogTitle>
-          <DialogDescription>
-            Modify template settings, code, parameters, and variables
-          </DialogDescription>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+      <DialogContent 
+        className="max-w-7xl max-h-[95vh] overflow-hidden flex flex-col"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+        <DialogHeader className="flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <DialogTitle>Edit Template</DialogTitle>
+            <Button variant="ghost" size="sm" onClick={handleClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </DialogHeader>
         
         <Tabs defaultValue="defaults" className="w-full">
@@ -349,7 +381,7 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
           <TabsContent value="code" className="space-y-4">
             <div className="grid grid-cols-2 gap-4 h-[600px]">
               <div className="space-y-2">
-                <Label>Template Code</Label>
+                <label className="text-sm font-medium">Template Code</label>
                 <Textarea
                   value={templateCode}
                   onChange={(e) => setTemplateCode(e.target.value)}
@@ -411,128 +443,166 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
           </TabsContent>
           
           <TabsContent value="params" className="space-y-4">
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-base font-medium">Parameters</Label>
-                  <Button onClick={addParameter} size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Parameter
+            <Collapsible open={parametersExpanded} onOpenChange={setParametersExpanded}>
+              <div className="flex items-center justify-between">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="flex items-center gap-2 p-0 h-auto">
+                    {parametersExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    <h3 className="text-lg font-semibold">Template Parameters</h3>
                   </Button>
-                </div>
-                
-                <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                  {Object.entries(parameters).map(([paramName, param]) => (
-                    <Card key={paramName}>
-                      <CardContent className="p-4 space-y-3">
-                        <div className="flex justify-between items-start">
-                          <div className="grid grid-cols-2 gap-2 flex-1">
-                            <Input
-                              placeholder="Parameter name"
-                              value={paramName}
-                              onChange={(e) => renameParameter(paramName, e.target.value)}
-                            />
-                            <Select value={param.type} onValueChange={(value) => updateParameter(paramName, "type", value)}>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="string">String</SelectItem>
-                                <SelectItem value="int">Integer</SelectItem>
-                                <SelectItem value="password">Password</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <Button variant="ghost" size="sm" onClick={() => removeParameter(paramName)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        
-                        <Input
-                          placeholder="Description"
-                          value={param.description}
-                          onChange={(e) => updateParameter(paramName, "description", e.target.value)}
-                        />
-                        
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input
-                            placeholder="Default value"
-                            value={param.value}
-                            onChange={(e) => updateParameter(paramName, "value", e.target.value)}
-                            type={param.type === "password" ? "password" : param.type === "int" ? "number" : "text"}
-                          />
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`required-${paramName}`}
-                              checked={param.required}
-                              onCheckedChange={(checked) => updateParameter(paramName, "required", checked)}
-                            />
-                            <label htmlFor={`required-${paramName}`} className="text-sm">Required</label>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                </CollapsibleTrigger>
+                <Button onClick={addParameter} size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Parameter
+                </Button>
               </div>
               
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-base font-medium">Variables</Label>
-                  <Button onClick={addVariable} size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Variable
-                  </Button>
-                </div>
-                
-                <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                  {Object.entries(variables).map(([varName, variable]) => (
-                    <Card key={varName}>
-                      <CardContent className="p-4 space-y-3">
-                        <div className="flex justify-between items-start">
-                          <div className="grid grid-cols-2 gap-2 flex-1">
-                            <Input
-                              placeholder="Variable name"
-                              value={varName}
-                              onChange={(e) => renameVariable(varName, e.target.value)}
-                            />
-                            <Input
-                              placeholder="Value"
-                              value={variable.value}
-                              onChange={(e) => updateVariable(varName, "value", e.target.value)}
-                              type={variable.sensitive ? "password" : "text"}
-                            />
+              <CollapsibleContent>
+                <ScrollArea className="h-[500px] w-full">
+                  <div className="space-y-3 pr-4">
+                    {Object.entries(parameters).map(([paramName, param]) => (
+                      <Card key={paramName}>
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div className="grid grid-cols-2 gap-2 flex-1">
+                              <Input
+                                placeholder="Parameter name"
+                                value={paramName}
+                                onChange={(e) => {
+                                  const newName = e.target.value;
+                                  if (newName !== paramName) {
+                                    renameParameter(paramName, newName);
+                                  }
+                                }}
+                                onBlur={(e) => {
+                                  const newName = e.target.value.trim();
+                                  if (newName && newName !== paramName) {
+                                    renameParameter(paramName, newName);
+                                  }
+                                }}
+                              />
+                              <Select value={param.type} onValueChange={(value) => updateParameter(paramName, "type", value)}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="string">String</SelectItem>
+                                  <SelectItem value="int">Integer</SelectItem>
+                                  <SelectItem value="password">Password</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => removeParameter(paramName)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
-                          <Button variant="ghost" size="sm" onClick={() => removeVariable(varName)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        
-                        <Input
-                          placeholder="Description"
-                          value={variable.description}
-                          onChange={(e) => updateVariable(varName, "description", e.target.value)}
-                        />
-                        
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`sensitive-${varName}`}
-                            checked={variable.sensitive}
-                            onCheckedChange={(checked) => updateVariable(varName, "sensitive", checked)}
+                          
+                          <Input
+                            placeholder="Description"
+                            value={param.description}
+                            onChange={(e) => updateParameter(paramName, "description", e.target.value)}
                           />
-                          <label htmlFor={`sensitive-${varName}`} className="text-sm">Sensitive</label>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                          
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              placeholder="Default value"
+                              value={param.value}
+                              onChange={(e) => updateParameter(paramName, "value", e.target.value)}
+                              type={param.type === "password" ? "password" : param.type === "int" ? "number" : "text"}
+                            />
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`required-${paramName}`}
+                                checked={param.required}
+                                onCheckedChange={(checked) => updateParameter(paramName, "required", checked)}
+                              />
+                              <label htmlFor={`required-${paramName}`} className="text-sm">Required</label>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CollapsibleContent>
+            </Collapsible>
+            
+            <Collapsible open={variablesExpanded} onOpenChange={setVariablesExpanded}>
+              <div className="flex items-center justify-between">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="flex items-center gap-2 p-0 h-auto">
+                    {variablesExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    <h3 className="text-lg font-semibold">Template Variables</h3>
+                  </Button>
+                </CollapsibleTrigger>
+                <Button onClick={addVariable} size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Variable
+                </Button>
               </div>
-            </div>
+              
+              <CollapsibleContent>
+                <ScrollArea className="h-[500px] w-full">
+                  <div className="space-y-3 pr-4">
+                    {Object.entries(variables).map(([varName, variable]) => (
+                      <Card key={varName}>
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div className="grid grid-cols-2 gap-2 flex-1">
+                              <Input
+                                placeholder="Variable name"
+                                value={varName}
+                                onChange={(e) => {
+                                  const newName = e.target.value;
+                                  if (newName !== varName) {
+                                    renameVariable(varName, newName);
+                                  }
+                                }}
+                                onBlur={(e) => {
+                                  const newName = e.target.value.trim();
+                                  if (newName && newName !== varName) {
+                                    renameVariable(varName, newName);
+                                  }
+                                }}
+                              />
+                              <Input
+                                placeholder="Value"
+                                value={variable.value}
+                                onChange={(e) => updateVariable(varName, "value", e.target.value)}
+                                type={variable.sensitive ? "password" : "text"}
+                              />
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => removeVariable(varName)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          
+                          <Input
+                            placeholder="Description"
+                            value={variable.description}
+                            onChange={(e) => updateVariable(varName, "description", e.target.value)}
+                          />
+                          
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`sensitive-${varName}`}
+                              checked={variable.sensitive}
+                              onCheckedChange={(checked) => updateVariable(varName, "sensitive", checked)}
+                            />
+                            <label htmlFor={`sensitive-${varName}`} className="text-sm">Sensitive</label>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CollapsibleContent>
+            </Collapsible>
           </TabsContent>
         </Tabs>
         
         <div className="flex justify-end gap-2 pt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={isLoading}>
