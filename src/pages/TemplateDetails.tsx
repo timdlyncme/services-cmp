@@ -21,6 +21,7 @@ import { useAzureOpenAI } from "@/contexts/AzureOpenAIContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AIAssistantService, ChatMessage as AIChatMessage } from "@/services/ai-assistant-service";
 import { DeploymentWizard } from "@/components/deployment-wizard";
+import ReactMarkdown from "react-markdown";
 
 interface TemplateVersion {
   id: number;
@@ -1283,7 +1284,60 @@ const TemplateDetails = () => {
                       }`}
                     >
                       {message.role === "assistant" ? (
-                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        <div className="text-sm prose prose-sm max-w-none dark:prose-invert">
+                          <ReactMarkdown
+                            components={{
+                              // Customize code blocks
+                              code: ({ node, inline, className, children, ...props }) => {
+                                if (inline) {
+                                  return (
+                                    <code className="bg-muted px-1 py-0.5 rounded text-sm font-mono" {...props}>
+                                      {children}
+                                    </code>
+                                  );
+                                }
+                                return (
+                                  <pre className="bg-muted p-3 rounded-md overflow-x-auto">
+                                    <code className={className} {...props}>
+                                      {children}
+                                    </code>
+                                  </pre>
+                                );
+                              },
+                              // Customize links
+                              a: ({ href, children, ...props }) => (
+                                <a 
+                                  href={href} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="text-primary hover:underline"
+                                  {...props}
+                                >
+                                  {children}
+                                </a>
+                              ),
+                              // Customize paragraphs to remove default margins
+                              p: ({ children, ...props }) => (
+                                <p className="mb-2 last:mb-0" {...props}>
+                                  {children}
+                                </p>
+                              ),
+                              // Customize lists
+                              ul: ({ children, ...props }) => (
+                                <ul className="list-disc pl-4 mb-2" {...props}>
+                                  {children}
+                                </ul>
+                              ),
+                              ol: ({ children, ...props }) => (
+                                <ol className="list-decimal pl-4 mb-2" {...props}>
+                                  {children}
+                                </ol>
+                              ),
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
                       ) : (
                         <div className="bg-primary text-primary-foreground p-3 rounded-lg rounded-tr-none max-w-[80%]">
                           <p className="text-sm">{message.content}</p>
