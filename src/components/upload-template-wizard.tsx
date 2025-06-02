@@ -267,8 +267,8 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
         category: selectedCategories.join(','),
         code: templateCode,
         is_public: false,
-        parameters: Object.values(parameters),
-        variables: Object.values(variables)
+        parameters: parameters,
+        variables: variables
       };
 
       await onCreateTemplate(templateData);
@@ -819,4 +819,3 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
     </Dialog>
   );
 };
-
