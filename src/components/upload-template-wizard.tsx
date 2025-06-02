@@ -305,7 +305,7 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
         code: templateCode,
         is_public: false,
         parameters: transformedParameters,
-        variables: transformedVariables
+        variables: transformedVariables,
         // Store additional metadata for editing
         parameter_metadata: Object.values(parameters).reduce((acc, param) => {
           if (param.name && param.name.trim()) {
