@@ -6,16 +6,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent } from "@/components/ui/card";
+import { StepWizard } from "@/components/ui/step-wizard";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronLeft, ChevronRight, ChevronDown, Upload, Github, FileText, Plus, Trash2, X } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, Upload, FileCode, Github, ChevronLeft, ChevronRight, Plus, Trash2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { CloudProvider, TemplateType, TemplateParameter, TemplateVariable } from "@/types/cloud";
 import { availableCategories } from "@/types/template";
 import { toast } from "sonner";
-import { cmpService } from "@/services/cmp-service";
-import { useAuth } from "@/context/auth-context";
 
 interface UploadTemplateWizardProps {
   open: boolean;
@@ -68,31 +67,34 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
   const [githubUrl, setGithubUrl] = useState("");
   const [isLoadingGithub, setIsLoadingGithub] = useState(false);
   
-  // Collapsible sections state
-  const [parametersExpanded, setParametersExpanded] = useState(true);
-  const [variablesExpanded, setVariablesExpanded] = useState(true);
+  // Step 3: Parameters and Variables
+  const [parameters, setParameters] = useState<Record<string, TemplateParameter>>({});
+  const [variables, setVariables] = useState<Record<string, TemplateVariable>>({});
+  
+  // Review stage expandable cards
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({
+    info: true,
+    code: true,
+    params: true,
+    vars: true
+  });
 
-  // Clear form data
-  const clearFormData = () => {
-    setCurrentStep(1);
-    setTemplateName("");
-    setTemplateDescription("");
-    setTemplateProvider("azure");
-    setTemplateType("terraform");
-    setSelectedCategories([]);
-    setTemplateCode("");
-    setUploadMethod("code");
-    setGithubUrl("");
-    setIsUploading(false);
-    setParameters({});
-    setVariables({});
-  };
-
-  // Handle dialog close
-  const handleClose = () => {
-    clearFormData();
-    onOpenChange(false);
-  };
+  // Reset wizard when dialog opens
+  useEffect(() => {
+    if (open) {
+      setCurrentStep(1);
+      setTemplateName("");
+      setTemplateDescription("");
+      setTemplateProvider("");
+      setTemplateType("");
+      setSelectedCategories([]);
+      setCodeSource("manual");
+      setTemplateCode("");
+      setGithubUrl("");
+      setParameters({});
+      setVariables({});
+    }
+  }, [open]);
 
   const canProceedToStep2 = templateName.trim() && templateDescription.trim() && templateProvider && templateType && selectedCategories.length > 0;
   const canProceedToStep3 = templateCode.trim();
@@ -107,6 +109,12 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
   const handlePrevious = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isLoading) {
+      onOpenChange(false);
     }
   };
 
@@ -303,6 +311,7 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
         variables: transformedVariables
       };
       await onCreateTemplate(templateData);
+      onOpenChange(false);
     } catch (error) {
       console.error("Error creating template:", error);
     }
@@ -477,192 +486,178 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
 
       case 3:
         return (
-          <div className="space-y-6 flex-1 overflow-hidden">
-            <div className="text-center">
-              <h3 className="text-lg font-semibold">Parameters & Variables</h3>
-              <p className="text-sm text-muted-foreground">Define template parameters and variables (optional)</p>
+          <div className="space-y-6 max-h-[500px] overflow-y-auto">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium">Template Parameters</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Define parameters that users can customize when deploying this template
+                  </p>
+                </div>
+                <Button onClick={addParameter} size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Parameter
+                </Button>
+              </div>
+              
+              {Object.keys(parameters).length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center text-muted-foreground">
+                      <FileCode className="h-8 w-8 mx-auto mb-2" />
+                      <p>No parameters defined</p>
+                      <p className="text-xs">Parameters are optional but help users customize the template</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4 max-h-[200px] overflow-y-auto pr-2">
+                  {Object.entries(parameters).map(([key, param]) => (
+                    <Card key={key}>
+                      <CardContent className="pt-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Parameter Name</Label>
+                            <Input
+                              value={param.name}
+                              onChange={(e) => updateParameter(key, "name", e.target.value)}
+                              placeholder="Parameter name"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Type</Label>
+                            <Select 
+                              value={param.type} 
+                              onValueChange={(value) => updateParameter(key, "type", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="string">String</SelectItem>
+                                <SelectItem value="int">Integer</SelectItem>
+                                <SelectItem value="bool">Boolean</SelectItem>
+                                <SelectItem value="password">Password</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Description</Label>
+                            <Input
+                              value={param.description}
+                              onChange={(e) => updateParameter(key, "description", e.target.value)}
+                              placeholder="Parameter description"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Default Value</Label>
+                            <Input
+                              value={param.defaultValue}
+                              onChange={(e) => updateParameter(key, "defaultValue", e.target.value)}
+                              placeholder="Default value"
+                            />
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              checked={param.required}
+                              onCheckedChange={(checked) => updateParameter(key, "required", checked)}
+                            />
+                            <Label>Required</Label>
+                          </div>
+                          <div className="flex justify-end">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => removeParameter(key)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
             
-            <div className="space-y-6 overflow-y-auto max-h-[60vh]">
-              <Collapsible open={parametersExpanded} onOpenChange={setParametersExpanded}>
-                <div className="flex items-center justify-between">
-                  <CollapsibleTrigger asChild>
-                    <Button variant="ghost" className="flex items-center gap-2 p-0 h-auto">
-                      {parametersExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      <h4 className="text-base font-medium">Template Parameters</h4>
-                    </Button>
-                  </CollapsibleTrigger>
-                  <Button onClick={addParameter} size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Parameter
-                  </Button>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium">Template Variables</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Define variables that can be used within the template
+                  </p>
                 </div>
-                
-                <CollapsibleContent>
-                  <ScrollArea className="h-[300px] w-full">
-                    <div className="space-y-3 pr-4">
-                      {Object.entries(parameters).map(([paramName, param]) => (
-                        <Card key={paramName}>
-                          <CardContent className="p-4 space-y-3">
-                            <div className="flex justify-between items-start">
-                              <div className="grid grid-cols-2 gap-2 flex-1">
-                                <Input
-                                  placeholder="Parameter name"
-                                  value={paramName}
-                                  onChange={(e) => {
-                                    const newName = e.target.value;
-                                    if (newName !== paramName) {
-                                      renameParameter(paramName, newName);
-                                    }
-                                  }}
-                                  onBlur={(e) => {
-                                    const newName = e.target.value.trim();
-                                    if (newName && newName !== paramName) {
-                                      renameParameter(paramName, newName);
-                                    }
-                                  }}
-                                />
-                                <Select value={param.type} onValueChange={(value) => updateParameter(paramName, "type", value)}>
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="string">String</SelectItem>
-                                    <SelectItem value="int">Integer</SelectItem>
-                                    <SelectItem value="password">Password</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <Button variant="ghost" size="sm" onClick={() => removeParameter(paramName)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                            
-                            <Input
-                              placeholder="Description"
-                              value={param.description}
-                              onChange={(e) => updateParameter(paramName, "description", e.target.value)}
-                            />
-                            
-                            <div className="grid grid-cols-2 gap-2">
-                              <Input
-                                placeholder="Default value"
-                                value={param.value}
-                                onChange={(e) => updateParameter(paramName, "value", e.target.value)}
-                                type={param.type === "password" ? "password" : param.type === "int" ? "number" : "text"}
-                              />
-                              <div className="flex items-center space-x-2">
-                                <Checkbox
-                                  id={`required-${paramName}`}
-                                  checked={param.required}
-                                  onCheckedChange={(checked) => updateParameter(paramName, "required", checked)}
-                                />
-                                <label htmlFor={`required-${paramName}`} className="text-sm">Required</label>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                      
-                      {Object.keys(parameters).length === 0 && (
-                        <Card>
-                          <CardContent className="pt-6">
-                            <div className="text-center text-muted-foreground">
-                              <FileText className="h-8 w-8 mx-auto mb-2" />
-                              <p>No parameters defined</p>
-                              <p className="text-xs">Parameters are optional but help users customize the template</p>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CollapsibleContent>
-              </Collapsible>
+                <Button onClick={addVariable} size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Variable
+                </Button>
+              </div>
               
-              <Collapsible open={variablesExpanded} onOpenChange={setVariablesExpanded}>
-                <div className="flex items-center justify-between">
-                  <CollapsibleTrigger asChild>
-                    <Button variant="ghost" className="flex items-center gap-2 p-0 h-auto">
-                      {variablesExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      <h4 className="text-base font-medium">Template Variables</h4>
-                    </Button>
-                  </CollapsibleTrigger>
-                  <Button onClick={addVariable} size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Variable
-                  </Button>
-                </div>
-                
-                <CollapsibleContent>
-                  <ScrollArea className="h-[300px] w-full">
-                    <div className="space-y-3 pr-4">
-                      {Object.entries(variables).map(([varName, variable]) => (
-                        <Card key={varName}>
-                          <CardContent className="p-4 space-y-3">
-                            <div className="flex justify-between items-start">
-                              <div className="grid grid-cols-2 gap-2 flex-1">
-                                <Input
-                                  placeholder="Variable name"
-                                  value={varName}
-                                  onChange={(e) => {
-                                    const newName = e.target.value;
-                                    if (newName !== varName) {
-                                      renameVariable(varName, newName);
-                                    }
-                                  }}
-                                  onBlur={(e) => {
-                                    const newName = e.target.value.trim();
-                                    if (newName && newName !== varName) {
-                                      renameVariable(varName, newName);
-                                    }
-                                  }}
-                                />
-                                <Input
-                                  placeholder="Value"
-                                  value={variable.value}
-                                  onChange={(e) => updateVariable(varName, "value", e.target.value)}
-                                  type={variable.sensitive ? "password" : "text"}
-                                />
-                              </div>
-                              <Button variant="ghost" size="sm" onClick={() => removeVariable(varName)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                            
+              {Object.keys(variables).length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center text-muted-foreground">
+                      <FileCode className="h-8 w-8 mx-auto mb-2" />
+                      <p>No variables defined</p>
+                      <p className="text-xs">Variables are optional and can be used for template logic</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4 max-h-[200px] overflow-y-auto pr-2">
+                  {Object.entries(variables).map(([key, variable]) => (
+                    <Card key={key}>
+                      <CardContent className="pt-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Variable Name</Label>
                             <Input
-                              placeholder="Description"
-                              value={variable.description}
-                              onChange={(e) => updateVariable(varName, "description", e.target.value)}
+                              value={variable.name}
+                              onChange={(e) => updateVariable(key, "name", e.target.value)}
+                              placeholder="Variable name"
                             />
-                            
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Value</Label>
+                            <Input
+                              value={variable.value}
+                              onChange={(e) => updateVariable(key, "value", e.target.value)}
+                              placeholder="Variable value"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Description</Label>
+                            <Input
+                              value={variable.description}
+                              onChange={(e) => updateVariable(key, "description", e.target.value)}
+                              placeholder="Variable description"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2">
                               <Checkbox
-                                id={`sensitive-${varName}`}
                                 checked={variable.sensitive}
-                                onCheckedChange={(checked) => updateVariable(varName, "sensitive", checked)}
+                                onCheckedChange={(checked) => updateVariable(key, "sensitive", checked)}
                               />
-                              <label htmlFor={`sensitive-${varName}`} className="text-sm">Sensitive</label>
+                              <Label>Sensitive</Label>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                      
-                      {Object.keys(variables).length === 0 && (
-                        <Card>
-                          <CardContent className="pt-6">
-                            <div className="text-center text-muted-foreground">
-                              <FileText className="h-8 w-8 mx-auto mb-2" />
-                              <p>No variables defined</p>
-                              <p className="text-xs">Variables are optional and can be used for template logic</p>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CollapsibleContent>
-              </Collapsible>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => removeVariable(key)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         );
@@ -815,18 +810,16 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent 
-        className="max-w-5xl max-h-[95vh] flex flex-col"
+        className="max-w-4xl max-h-[90vh] flex flex-col"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader className="flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <DialogTitle>Upload Template</DialogTitle>
-            <Button variant="ghost" size="sm" onClick={handleClose}>
-              <X className="h-4 w-4" />
-            </Button>
+          <DialogTitle>Upload Template</DialogTitle>
+          <div className="mt-4">
+            <StepWizard steps={steps} currentStep={currentStep} />
           </div>
         </DialogHeader>
         
@@ -836,35 +829,55 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
           </ScrollArea>
         </div>
         
-        <div className="flex justify-between items-center pt-4 border-t flex-shrink-0">
-          <div className="flex gap-2">
+        <div className="flex justify-between flex-shrink-0 pt-4 border-t">
+          <div>
             {currentStep > 1 && (
-              <Button variant="outline" onClick={handlePrevious}>
-                <ChevronLeft className="h-4 w-4 mr-2" />
+              <Button 
+                variant="outline" 
+                onClick={handlePrevious}
+                disabled={isLoading}
+              >
+                <ChevronLeft className="mr-2 h-4 w-4" />
                 Previous
               </Button>
             )}
           </div>
           
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleClose}>
+          <div className="space-x-2">
+            <Button 
+              variant="outline" 
+              onClick={handleClose}
+              disabled={isLoading}
+            >
               Cancel
             </Button>
+            
             {currentStep < 4 ? (
               <Button 
                 onClick={handleNext}
                 disabled={
+                  isLoading ||
                   (currentStep === 1 && !canProceedToStep2) ||
                   (currentStep === 2 && !canProceedToStep3) ||
-                  isUploading
+                  (currentStep === 3 && !canProceedToStep4)
                 }
               >
                 Next
-                <ChevronRight className="h-4 w-4 ml-2" />
+                <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
               <Button onClick={handleCreateTemplate} disabled={isLoading}>
-                {isLoading ? "Creating..." : "Create Template"}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Create Template
+                  </>
+                )}
               </Button>
             )}
           </div>
