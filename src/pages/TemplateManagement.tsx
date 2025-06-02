@@ -140,7 +140,7 @@ const TemplateManagement = () => {
   };
   
   const handleViewTemplate = (templateId: string) => {
-    navigate(`/templates/${templateId}`);
+    navigate(`/catalog/${templateId}`);
   };
   
   const handleEditTemplate = (template: CloudTemplate) => {
