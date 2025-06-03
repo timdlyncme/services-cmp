@@ -22,7 +22,7 @@ class DefaultDashboardConfig:
             "widget_name": "Welcome Message",
             "position_x": 0,
             "position_y": 0,
-            "width": 6,
+            "width": 12,
             "height": 2,
             "custom_config": {
                 "text_type": "welcome",
@@ -33,7 +33,7 @@ class DefaultDashboardConfig:
         {
             "widget_name": "Getting Started",
             "position_x": 9,
-            "position_y": 0,
+            "position_y": 2,
             "width": 3,
             "height": 6,
             "custom_config": {
@@ -46,7 +46,7 @@ class DefaultDashboardConfig:
             "position_x": 0,
             "position_y": 2,
             "width": 2,
-            "height": 1,
+            "height": 2,
             "custom_config": None
         },
         {
@@ -54,7 +54,7 @@ class DefaultDashboardConfig:
             "position_x": 2,
             "position_y": 2,
             "width": 2,
-            "height": 1,
+            "height": 2,
             "custom_config": None
         },
         {
@@ -62,30 +62,30 @@ class DefaultDashboardConfig:
             "position_x": 4,
             "position_y": 2,
             "width": 2,
-            "height": 1,
+            "height": 2,
             "custom_config": None
         },
         {
             "widget_name": "Quick Actions",
             "position_x": 9,
-            "position_y": 6,
+            "position_y": 8,
             "width": 3,
-            "height": 2,
+            "height": 3,
             "custom_config": {
                 "text_type": "actions",
                 "actions": [
-                    {"label": "New Deployment", "url": "/deployments/new"},
-                    {"label": "Add Cloud Account", "url": "/cloud-accounts/new"},
-                    {"label": "Browse Templates", "url": "/templates"}
+                    {"label": "View Deployments", "url": "/deployments/"},
+                    {"label": "Add Cloud Account", "url": "/cloud-accounts/"},
+                    {"label": "Browse Templates", "url": "/templates/"},
                 ]
             }
         },
         {
             "widget_name": "Recent Deployments",
-            "position_x": 3,
+            "position_x": 6,
             "position_y": 3,
             "width": 3,
-            "height": 3,
+            "height": 4,
             "custom_config": {
                 "list_type": "deployments",
                 "limit": 5,
