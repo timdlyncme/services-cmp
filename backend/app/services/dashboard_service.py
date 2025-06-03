@@ -32,7 +32,7 @@ class DefaultDashboardConfig:
         },
         {
             "widget_name": "Getting Started",
-            "position_x": 6,
+            "position_x": 9,
             "position_y": 0,
             "width": 3,
             "height": 6,
@@ -67,8 +67,8 @@ class DefaultDashboardConfig:
         },
         {
             "widget_name": "Quick Actions",
-            "position_x": 0,
-            "position_y": 3,
+            "position_x": 9,
+            "position_y": 6,
             "width": 3,
             "height": 2,
             "custom_config": {
