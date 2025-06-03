@@ -14,15 +14,17 @@ from app.models.deployment_details import DeploymentDetails
 from app.models.cloud_settings import CloudSettings
 from app.models.integration import IntegrationConfig
 from app.models.template_foundry import TemplateFoundry
+from app.models.template_foundry_versions import TemplateFoundryVersion
 from app.models.nexus_ai import NexusAIConfig, NexusAILog
 from app.models.ai_assistant import AIAssistantConfig, AIAssistantLog
+from app.models.dashboard import Dashboard, DashboardWidget, UserWidget
 from app.db.session import Base
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    logger.info("Initializing database")
+    logger.info("Initializing fresh database with consolidated setup")
     
     # Create database engine and session
     engine = create_engine(settings.SQLALCHEMY_DATABASE_URI)
@@ -37,15 +39,10 @@ if __name__ == "__main__":
     db = SessionLocal()
     
     try:
-        # Call init_db with the database session
+        # Call consolidated init_db function
         init_db(db)
-        logger.info("Database initialization completed")
+        logger.info("Database initialization completed successfully")
         
-        # Run migrations for AI Assistant tables
-        from app.db.migrations.add_ai_assistant_tables import upgrade as upgrade_ai_assistant
-        logger.info("Running AI Assistant tables migration...")
-        upgrade_ai_assistant()
-        logger.info("AI Assistant tables migration completed")
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
         db.rollback()
