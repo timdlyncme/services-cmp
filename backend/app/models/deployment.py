@@ -31,6 +31,7 @@ class CloudAccount(Base):
     category = Column(JSON, nullable=True)  # Changed from String to JSON to store category arrays
     categories = Column(JSON, default=[])  # New JSON array column
     provider = Column(String)  # azure, aws, gcp
+    status = Column(String, default="connected")  # Add status field
     
     # Provider-specific fields
     cloud_ids = Column(JSON, nullable=True)  # Store as JSON array of cloud identifiers (subscriptions, accounts, projects)
