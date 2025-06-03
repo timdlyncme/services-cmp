@@ -304,7 +304,7 @@ export const UploadTemplateWizard: React.FC<UploadTemplateWizardProps> = ({
         description: templateDescription,
         provider: templateProvider,
         type: templateType,
-        category: selectedCategories.join(","),
+        categories: selectedCategories,  // Send as array instead of comma-separated string
         code: templateCode,
         is_public: false,
         parameters: transformedParameters,
