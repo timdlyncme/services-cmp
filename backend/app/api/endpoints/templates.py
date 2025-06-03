@@ -18,7 +18,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.get("/categories", response_model=Dict[str, int])
-def get_template.category(
+def get_template_categories(
     tenant_id: Optional[str] = Query(None, description="Filter by tenant ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
