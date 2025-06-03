@@ -256,7 +256,7 @@ export const EditTemplateDialog: React.FC<EditTemplateDialogProps> = ({
         description: templateDescription,
         provider: templateProvider,
         type: templateType,
-        category: selectedCategories.join(","),
+        categories: selectedCategories,  // Send as array instead of comma-separated string
         code: templateCode,
         is_public: isPublic,
         parameters: parameters,

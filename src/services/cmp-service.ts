@@ -172,12 +172,39 @@ export class CMPService {
           Authorization: `Bearer ${token}`
         },
         params: {
-          tenant_id: formatTenantId(tenantId)
+          tenant_id: tenantId
         }
       });
+
       return response.data;
     } catch (error) {
-      console.error('Get templates error:', error);
+      console.error('Error fetching templates:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get template categories with counts
+   */
+  async getTemplateCategories(tenantId: string): Promise<Record<string, number>> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return {};
+      }
+
+      const response = await api.get('/templates/categories', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        params: {
+          tenant_id: tenantId
+        }
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching template categories:', error);
       throw error;
     }
   }

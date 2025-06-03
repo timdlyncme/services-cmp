@@ -1,12 +1,12 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 import uuid
+import logging
 from datetime import datetime
 
-from app.api.endpoints.auth import get_current_user
-from app.db.session import get_db
+from app.api.deps import get_db, get_current_user
 from app.models.user import User, Tenant
 from app.models.deployment import Template, Deployment, TemplateVersion
 from app.schemas.deployment import (
@@ -15,11 +15,88 @@ from app.schemas.deployment import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
+@router.get("/categories", response_model=Dict[str, int])
+def get_template_categories(
+    tenant_id: Optional[str] = Query(None, description="Filter by tenant ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get all available template.category with their template counts
+    """
+    try:
+        # Check if user has permission to view templates
+        has_permission = any(p.name == "view:templates" for p in current_user.role.permissions)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view templates"
+            )
+
+        # Get templates that the user has access to
+        query = db.query(Template)
+
+        # Handle tenant filtering
+        if tenant_id:
+            # Check if user has access to the specified tenant
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
+            if not tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Tenant with ID {tenant_id} not found"
+                )
+
+            # Check if user has access to this tenant
+            user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
+            if not user_tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User tenant not found"
+                )
+
+            # Admin and MSP users can view all tenants
+            if current_user.role.name not in ["admin", "msp"]:
+                if tenant.tenant_id != user_tenant.tenant_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Not authorized to view templates for this tenant"
+                    )
+
+            # Only return templates that belong to the specified tenant
+            query = query.filter(Template.tenant_id == tenant.tenant_id)
+        else:
+            # No tenant specified, show templates from all tenants the user has access to
+            user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
+            # Admin and MSP users can see all templates
+            if current_user.role.name not in ["admin", "msp"]:
+                # Regular users can only see templates from their tenant
+                if user_tenant:
+                    query = query.filter(Template.tenant_id == user_tenant.tenant_id)
+
+        templates = query.all()
+
+        # Aggregate categories and count templates
+        category_counts = {}
+        for template in templates:
+            if template.category and isinstance(template.category, list):
+                for category in template.category:
+                    if category.strip():  # Only count non-empty categories
+                        category_counts[category.strip()] = category_counts.get(category.strip(), 0) + 1
+
+        return category_counts
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving template.category: {str(e)}"
+        )
 
 @router.get("/", response_model=List[CloudTemplateResponse])
 def get_templates(
-    tenant_id: Optional[str] = None,
+    tenant_id: Optional[str] = Query(None, description="Filter by tenant ID"),
+    group_by_category: Optional[bool] = Query(False, description="Group templates by categories"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -133,7 +210,7 @@ def get_templates(
             # Convert category to categories list
             categories = []
             if template.category:
-                categories = [cat.strip() for cat in template.category.split(",")]
+                categories = template.category if isinstance(template.category, list) else []
             
             # Get the last user who updated the template
             last_updated_by = current_user.full_name or current_user.username
@@ -221,7 +298,7 @@ def get_template(
         # Convert category to categories list
         categories = []
         if template.category:
-            categories = [cat.strip() for cat in template.category.split(",")]
+            categories = template.category if isinstance(template.category, list) else []
         
         # Use the template's code field directly
         code = template.code or ""
@@ -290,7 +367,7 @@ def create_template(
     
     logger.debug(f"Creating new template: {template.name}")
     logger.debug(f"Template type: {template.type}")
-    logger.debug(f"Template category: {template.category}")
+    logger.debug(f"Template categories: {template.categories}")
     logger.debug(f"Template code length: {len(template.code) if template.code else 0}")
     logger.debug(f"Requested tenant_id: {tenant_id}")
     
@@ -330,14 +407,14 @@ def create_template(
         # Debug: Print the template data
         logger.debug(f"Template data received: {template.dict()}")
         logger.debug(f"Template type: {template.type}")
-        logger.debug(f"Template category: {template.category}")
+        logger.debug(f"Template categories: {template.categories}")
         
         # Create new template
         new_template = Template(
             template_id=str(uuid.uuid4()),
             name=template.name,
             description=template.description,
-            category=template.category,  # Store category as a string
+            category=template.categories,  # Store full categories array as JSON
             provider=template.provider,
             type=template.type,  # Always use the provided type
             is_public=template.is_public,
@@ -384,7 +461,7 @@ def create_template(
         # Convert category to categories list
         categories = []
         if new_template.category:
-            categories = [cat.strip() for cat in new_template.category.split(",")]
+            categories = new_template.category if isinstance(new_template.category, list) else []
         
         return CloudTemplateResponse(
             id=new_template.template_id,
@@ -467,8 +544,8 @@ def update_template(
         if template_update.is_public is not None:
             template.is_public = template_update.is_public
         
-        if template_update.category is not None:
-            template.category = template_update.category
+        if template_update.categories is not None:
+            template.category = template_update.categories
         
         if template_update.parameters is not None:
             template.parameters = template_update.parameters
@@ -532,7 +609,7 @@ def update_template(
         # Convert category to categories list
         categories = []
         if template.category:
-            categories = [cat.strip() for cat in template.category.split(",")]
+            categories = template.category if isinstance(template.category, list) else []
         
         # Get the last user who updated the template
         last_updated_by = current_user.full_name or current_user.username

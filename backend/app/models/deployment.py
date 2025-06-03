@@ -27,9 +27,10 @@ class CloudAccount(Base):
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
-    provider = Column(String)  # azure, aws, gcp
-    status = Column(String)  # connected, disconnected, error
     description = Column(String, nullable=True)
+    category = Column(JSON, nullable=True)  # Changed from String to JSON to store category arrays
+    categories = Column(JSON, default=[])  # New JSON array column
+    provider = Column(String)  # azure, aws, gcp
     
     # Provider-specific fields
     cloud_ids = Column(JSON, nullable=True)  # Store as JSON array of cloud identifiers (subscriptions, accounts, projects)
@@ -60,6 +61,9 @@ class Environment(Base):
     environment_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
+    category = Column(JSON, nullable=True)  # Changed from String to JSON to store category arrays
+    categories = Column(JSON, default=[])  # New JSON array column
+    provider = Column(String)  # azure, aws, gcp
     
     # New fields
     update_strategy = Column(String, nullable=True)  # rolling, blue-green, canary
@@ -89,7 +93,7 @@ class Template(Base):
     template_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
-    category = Column(String, nullable=True)
+    category = Column(JSON, nullable=True)  # Changed from String to JSON to store category arrays
     provider = Column(String)  # azure, aws, gcp
     type = Column(String)  # terraform, arm, cloudformation
     is_public = Column(Boolean, default=False)
