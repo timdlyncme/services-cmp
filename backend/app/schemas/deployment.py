@@ -72,7 +72,7 @@ class TemplateCreate(TemplateBase):
     type: str
     code: Optional[str] = None
     is_public: bool = False
-    category: Optional[str] = None
+    categories: Optional[List[str]] = []  # Changed from category to categories
     parameters: Optional[Dict[str, Any]] = None
     variables: Optional[Dict[str, Any]] = None
 
@@ -83,7 +83,7 @@ class TemplateUpdate(BaseModel):
     type: Optional[str] = None
     code: Optional[str] = None
     is_public: Optional[bool] = None
-    category: Optional[str] = None
+    categories: Optional[List[str]] = None  # Changed from category to categories
     parameters: Optional[Dict[str, Any]] = None
     variables: Optional[Dict[str, Any]] = None
     create_new_version: Optional[bool] = True  # Flag to control version creation
@@ -94,7 +94,7 @@ class TemplateResponse(TemplateBase):
     provider: str
     code: Optional[str] = None
     is_public: bool
-    category: Optional[str] = None
+    categories: Optional[List[str]] = []  # Changed from category to categories
     current_version: Optional[str] = None
     created_at: datetime
     updated_at: datetime
