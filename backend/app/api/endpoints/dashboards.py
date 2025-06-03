@@ -133,7 +133,7 @@ def delete_dashboard(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete a dashboard (soft delete)"""
+    """Delete a dashboard and all associated user widgets"""
     dashboard = db.query(Dashboard).filter(
         and_(
             Dashboard.dashboard_id == dashboard_id,
@@ -148,8 +148,8 @@ def delete_dashboard(
             detail="Dashboard not found"
         )
     
-    # Soft delete
-    dashboard.is_active = False
+    # Hard delete - this will also delete associated user_widgets due to cascade="all, delete-orphan"
+    db.delete(dashboard)
     db.commit()
     
     return {"message": "Dashboard deleted successfully"}
