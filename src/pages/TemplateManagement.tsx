@@ -218,7 +218,7 @@ const TemplateManagement = () => {
             <RefreshCw className="h-4 w-4" />
           </Button>
           {canManageTemplates && (
-            <Button style={{ backgroundColor: "#FF5100" }} onClick={() => setIsUploadWizardOpen(true)}>
+            <Button onClick={() => setIsUploadWizardOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Create Template
             </Button>
