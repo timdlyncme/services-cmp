@@ -573,7 +573,7 @@ const Settings = () => {
                   </div>
                   <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
-                      <Button style={{ backgroundColor: "#FF5100" }}>
+                      <Button>
                         <Plus className="h-4 w-4 mr-2" />
                         Add Credential
                       </Button>
