@@ -157,8 +157,8 @@ const Settings = () => {
         apiVersion: config.api_version || "2023-05-15"
       });
       
-      // Also check the connection status
-      await handleTestAIConnection();
+      // Only check the connection status without saving
+      await checkAIConnectionStatus();
       
       addLog("Azure OpenAI settings loaded successfully", "success");
     } catch (error) {
@@ -309,6 +309,36 @@ const Settings = () => {
       ...prev,
       [field]: value
     }));
+  };
+  
+  // Check AI connection status without saving
+  const checkAIConnectionStatus = async () => {
+    try {
+      const status = await aiAssistantService.checkStatus(currentTenant?.tenant_id);
+      setAIConnectionStatus({
+        status: status.status,
+        message: status.message,
+        lastChecked: new Date().toISOString()
+      });
+      
+      if (status.status === 'connected') {
+        addLog("Azure OpenAI connection status: Connected", "success");
+      } else if (status.status === 'not_configured') {
+        addLog("Azure OpenAI connection status: Not configured", "info");
+      } else {
+        addLog(`Azure OpenAI connection status: ${status.message}`, "warning");
+      }
+    } catch (error) {
+      console.error("Error checking Azure OpenAI connection status:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addLog(`Error checking Azure OpenAI connection status: ${errorMessage}`, "error");
+      
+      setAIConnectionStatus({
+        status: 'error',
+        message: errorMessage,
+        lastChecked: new Date().toISOString()
+      });
+    }
   };
   
   // Test Azure OpenAI connection
