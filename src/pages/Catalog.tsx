@@ -72,10 +72,6 @@ const Catalog = () => {
     }
   };
 
-  const refreshTemplates = () => {
-    fetchTemplates();
-  };
-
   // Category management functions
   const toggleCategory = (categoryName: string) => {
     const newExpanded = new Set(expandedCategories);
@@ -97,6 +93,11 @@ const Catalog = () => {
 
   const clearCategoryFilters = () => {
     setFilters({ ...filters, categories: [] });
+  };
+
+  const refreshTemplates = () => {
+    fetchTemplates();
+    toast.success("Refreshing templates...");
   };
 
   // Group templates by their primary category (first category in the array)
@@ -155,12 +156,6 @@ const Catalog = () => {
     setFilteredTemplates(result);
   }, [filters, templates]);
   
-
-
-  const refreshTemplates = () => {
-    fetchTemplates();
-    toast.success("Refreshing templates...");
-  };
 
   return (
     <div className="space-y-6">
