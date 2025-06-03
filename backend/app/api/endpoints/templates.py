@@ -414,21 +414,22 @@ def create_template(
             template_id=str(uuid.uuid4()),
             name=template.name,
             description=template.description,
-            category=template.categories,  # Store category as a string
+            categories=template.categories,  # Use categories instead of category
             provider=template.provider,
             type=template.type,  # Always use the provided type
             is_public=template.is_public,
-            tenant_id=None if template.is_public else template_tenant.tenant_id,
             code=template.code,  # Store the code directly in the template
             parameters=template.parameters,  # Store parameters
             variables=template.variables,  # Store variables
-            current_version="1.0.0",  # Initial version
+            tenant_id=tenant.tenant_id,
+            created_by=current_user.id,
+            updated_by=current_user.id,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
         
         # Debug: Print the new template object
-        logger.debug(f"New template object: type={new_template.type}, category={new_template.categories}")
+        logger.debug(f"New template object: type={new_template.type}, categories={new_template.categories}")
         
         db.add(new_template)
         db.commit()
@@ -436,7 +437,7 @@ def create_template(
         
         # Verify the template was created correctly
         created_template = db.query(Template).filter(Template.id == new_template.id).first()
-        logger.debug(f"Created template: type={created_template.type}, category={created_template.categories}")
+        logger.debug(f"Created template: type={created_template.type}, categories={created_template.categories}")
         
         # Create initial version
         initial_version = TemplateVersion(
