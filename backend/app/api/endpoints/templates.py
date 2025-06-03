@@ -414,16 +414,14 @@ def create_template(
             template_id=str(uuid.uuid4()),
             name=template.name,
             description=template.description,
-            categories=template.categories,  # Use only the new categories field
+            categories=template.categories,
             provider=template.provider,
-            type=template.type,  # Always use the provided type
+            type=template.type,
             is_public=template.is_public,
-            code=template.code,  # Store the code directly in the template
-            parameters=template.parameters,  # Store parameters
-            variables=template.variables,  # Store variables
+            code=template.code,
+            parameters=template.parameters,
+            variables=template.variables,
             tenant_id=template_tenant.tenant_id if template_tenant else None,
-            created_by=current_user.id,
-            updated_by=current_user.id,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
