@@ -13,6 +13,7 @@ from app.schemas.dashboard import (
     BulkUserWidgetUpdate, DashboardLayoutUpdate, WidgetDataRequest, WidgetDataResponse,
     DashboardStatsResponse
 )
+from app.services.dashboard_service import get_or_create_default_dashboard
 
 router = APIRouter()
 
@@ -23,14 +24,8 @@ def get_user_dashboards(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all dashboards for the current user"""
-    dashboards = db.query(Dashboard).filter(
-        and_(
-            Dashboard.user_id == current_user.user_id,
-            Dashboard.is_active == True
-        )
-    ).order_by(Dashboard.is_default.desc(), Dashboard.date_created.asc()).all()
-    
+    """Get all dashboards for the current user, creating a default one if none exist"""
+    dashboards = get_or_create_default_dashboard(db, current_user)
     return dashboards
 
 
@@ -460,4 +455,3 @@ def get_dashboard_stats(
         widget_types={wt[0]: wt[1] for wt in widget_types},
         categories={cat[0]: cat[1] for cat in categories}
     )
-
