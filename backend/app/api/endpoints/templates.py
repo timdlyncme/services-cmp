@@ -18,13 +18,13 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.get("/categories", response_model=Dict[str, int])
-def get_template_categories(
+def get_template.category(
     tenant_id: Optional[str] = Query(None, description="Filter by tenant ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get all available template categories with their template counts
+    Get all available template.category with their template counts
     """
     try:
         # Check if user has permission to view templates
@@ -80,8 +80,8 @@ def get_template_categories(
         # Aggregate categories and count templates
         category_counts = {}
         for template in templates:
-            if template.categories and isinstance(template.categories, list):
-                for category in template.categories:
+            if template.category and isinstance(template.category, list):
+                for category in template.category:
                     if category.strip():  # Only count non-empty categories
                         category_counts[category.strip()] = category_counts.get(category.strip(), 0) + 1
 
@@ -90,7 +90,7 @@ def get_template_categories(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving template categories: {str(e)}"
+            detail=f"Error retrieving template.category: {str(e)}"
         )
 
 @router.get("/", response_model=List[CloudTemplateResponse])
@@ -209,8 +209,8 @@ def get_templates(
             
             # Convert category to categories list
             categories = []
-            if template.categories:
-                categories = template.categories if isinstance(template.categories, list) else []
+            if template.category:
+                categories = template.category if isinstance(template.category, list) else []
             
             # Get the last user who updated the template
             last_updated_by = current_user.full_name or current_user.username
@@ -297,8 +297,8 @@ def get_template(
         
         # Convert category to categories list
         categories = []
-        if template.categories:
-            categories = template.categories if isinstance(template.categories, list) else []
+        if template.category:
+            categories = template.category if isinstance(template.category, list) else []
         
         # Use the template's code field directly
         code = template.code or ""
@@ -367,7 +367,7 @@ def create_template(
     
     logger.debug(f"Creating new template: {template.name}")
     logger.debug(f"Template type: {template.type}")
-    logger.debug(f"Template category: {template.categories}")
+    logger.debug(f"Template category: {template.category}")
     logger.debug(f"Template code length: {len(template.code) if template.code else 0}")
     logger.debug(f"Requested tenant_id: {tenant_id}")
     
@@ -407,27 +407,28 @@ def create_template(
         # Debug: Print the template data
         logger.debug(f"Template data received: {template.dict()}")
         logger.debug(f"Template type: {template.type}")
-        logger.debug(f"Template category: {template.categories}")
+        logger.debug(f"Template category: {template.category}")
         
         # Create new template
         new_template = Template(
             template_id=str(uuid.uuid4()),
             name=template.name,
             description=template.description,
-            categories=template.categories,
+            category=template.category,  # Store category as a string
             provider=template.provider,
-            type=template.type,
+            type=template.type,  # Always use the provided type
             is_public=template.is_public,
-            code=template.code,
-            parameters=template.parameters,
-            variables=template.variables,
-            tenant_id=template_tenant.tenant_id if template_tenant else None,
+            tenant_id=None if template.is_public else template_tenant.tenant_id,
+            code=template.code,  # Store the code directly in the template
+            parameters=template.parameters,  # Store parameters
+            variables=template.variables,  # Store variables
+            current_version="1.0.0",  # Initial version
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
         
         # Debug: Print the new template object
-        logger.debug(f"New template object: type={new_template.type}, categories={new_template.categories}")
+        logger.debug(f"New template object: type={new_template.type}, category={new_template.category}")
         
         db.add(new_template)
         db.commit()
@@ -435,7 +436,7 @@ def create_template(
         
         # Verify the template was created correctly
         created_template = db.query(Template).filter(Template.id == new_template.id).first()
-        logger.debug(f"Created template: type={created_template.type}, categories={created_template.categories}")
+        logger.debug(f"Created template: type={created_template.type}, category={created_template.category}")
         
         # Create initial version
         initial_version = TemplateVersion(
@@ -459,8 +460,8 @@ def create_template(
         
         # Convert category to categories list
         categories = []
-        if new_template.categories:
-            categories = new_template.categories if isinstance(new_template.categories, list) else []
+        if new_template.category:
+            categories = new_template.category if isinstance(new_template.category, list) else []
         
         return CloudTemplateResponse(
             id=new_template.template_id,
@@ -544,7 +545,7 @@ def update_template(
             template.is_public = template_update.is_public
         
         if template_update.categories is not None:
-            template.categories = template_update.categories
+            template.category = template_update.categories
         
         if template_update.parameters is not None:
             template.parameters = template_update.parameters
@@ -607,8 +608,8 @@ def update_template(
         
         # Convert category to categories list
         categories = []
-        if template.categories:
-            categories = template.categories if isinstance(template.categories, list) else []
+        if template.category:
+            categories = template.category if isinstance(template.category, list) else []
         
         # Get the last user who updated the template
         last_updated_by = current_user.full_name or current_user.username

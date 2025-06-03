@@ -93,8 +93,7 @@ class Template(Base):
     template_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
-    category = Column(String, nullable=True)  # Keep old column for migration compatibility
-    categories = Column(JSON, default=[])  # New JSON array column
+    category = Column(String, nullable=True)
     provider = Column(String)  # azure, aws, gcp
     type = Column(String)  # terraform, arm, cloudformation
     is_public = Column(Boolean, default=False)
