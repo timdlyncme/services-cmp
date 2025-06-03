@@ -367,7 +367,7 @@ def create_template(
     
     logger.debug(f"Creating new template: {template.name}")
     logger.debug(f"Template type: {template.type}")
-    logger.debug(f"Template category: {template.category}")
+    logger.debug(f"Template categories: {template.categories}")
     logger.debug(f"Template code length: {len(template.code) if template.code else 0}")
     logger.debug(f"Requested tenant_id: {tenant_id}")
     
@@ -407,14 +407,14 @@ def create_template(
         # Debug: Print the template data
         logger.debug(f"Template data received: {template.dict()}")
         logger.debug(f"Template type: {template.type}")
-        logger.debug(f"Template category: {template.category}")
+        logger.debug(f"Template categories: {template.categories}")
         
         # Create new template
         new_template = Template(
             template_id=str(uuid.uuid4()),
             name=template.name,
             description=template.description,
-            category=template.category,  # Store category as a string
+            category=template.categories[0] if template.categories and len(template.categories) > 0 else None,  # Store first category as a string
             provider=template.provider,
             type=template.type,  # Always use the provided type
             is_public=template.is_public,
