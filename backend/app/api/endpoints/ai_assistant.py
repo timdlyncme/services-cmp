@@ -64,6 +64,23 @@ def get_config(db: Session, tenant_id: str):
         db.refresh(config)
     return config
 
+def get_config_read_only(db: Session, tenant_id: str):
+    """Get the current AI Assistant configuration from the database for a specific tenant (read-only)"""
+    return db.query(AIAssistantConfig).filter(AIAssistantConfig.tenant_id == tenant_id).first()
+    return config
+
+# Helper function to get or create configuration (for write operations)
+def get_or_create_config(db: Session, tenant_id: str):
+    """Get or create AI Assistant configuration from the database for a specific tenant"""
+    config = db.query(AIAssistantConfig).filter(AIAssistantConfig.tenant_id == tenant_id).first()
+    if not config:
+        # Create a default config if none exists for this tenant
+        config = AIAssistantConfig(tenant_id=tenant_id)
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+    return config
+
 # Models
 class ChatMessage(BaseModel):
     role: str
@@ -144,7 +161,7 @@ async def chat(
             detail=f"Tenant with ID {config_tenant_id} not found"
         )
     # Get the configuration from the database
-    config = get_config(db, config_tenant_id)
+    config = get_or_create_config(db, config_tenant_id)
     
     # Check if Azure OpenAI is configured
     if not config.api_key or not config.endpoint or not config.deployment_name:
@@ -328,7 +345,7 @@ async def stream_chat(
 
         return
     # Get the configuration from the database
-    config = get_config(db, config_tenant_id)
+    config = get_or_create_config(db, config_tenant_id)
     
     # Check if Azure OpenAI is configured
     if not config.api_key or not config.endpoint or not config.deployment_name:
@@ -431,7 +448,7 @@ async def stream_chat(
     
     except Exception as e:
         # Update connection status in the database
-        config = get_config(db, config_tenant_id)
+        config = get_or_create_config(db, config_tenant_id)
         config.last_status = "error"
         config.last_checked = datetime.utcnow()
         config.last_error = str(e)
@@ -471,7 +488,17 @@ async def get_config_endpoint(
         )
     
     # Get the configuration from the database
-    config = get_config(db, config_tenant_id)
+    config = get_config_read_only(db, config_tenant_id)
+    
+    # If no config exists, return default empty values
+    if not config:
+        return {
+            "api_key": None,
+            "endpoint": None,
+            "api_version": "2023-05-15",
+            "deployment_name": None,
+            "model": "gpt-4"
+        }
     
     # Return the configuration (mask the API key)
     return {
@@ -513,7 +540,7 @@ async def update_config(
             detail=f"Tenant with ID {config_tenant_id} not found"
         )
     # Get the configuration from the database
-    config = get_config(db, config_tenant_id)
+    config = get_or_create_config(db, config_tenant_id)
     
     # Update the configuration
     if request.api_key is not None:
@@ -572,10 +599,10 @@ async def get_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Tenant with ID {config_tenant_id} not found"
         )
-    config = get_config(db, config_tenant_id)
+    config = get_config_read_only(db, config_tenant_id)
     
     # Check if Azure OpenAI is configured
-    if not config.api_key or not config.endpoint or not config.deployment_name:
+    if not config or not config.api_key or not config.endpoint or not config.deployment_name:
         return {
             "status": "not_configured",
             "last_checked": datetime.now().isoformat(),

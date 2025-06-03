@@ -157,8 +157,8 @@ const Settings = () => {
         apiVersion: config.api_version || "2023-05-15"
       });
       
-      // Only check the connection status without saving
-      await checkAIConnectionStatus();
+      // Don't automatically check connection status on load
+      // Status will be checked only when user explicitly tests connection
       
       addLog("Azure OpenAI settings loaded successfully", "success");
     } catch (error) {
