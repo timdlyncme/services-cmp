@@ -28,7 +28,7 @@ class CloudAccount(Base):
     account_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
-    category = Column(String, nullable=True)  # Keep old column for migration compatibility
+    category = Column(JSON, nullable=True)  # Changed from String to JSON to store category arrays
     categories = Column(JSON, default=[])  # New JSON array column
     provider = Column(String)  # azure, aws, gcp
     
@@ -61,7 +61,7 @@ class Environment(Base):
     environment_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
-    category = Column(String, nullable=True)  # Keep old column for migration compatibility
+    category = Column(JSON, nullable=True)  # Changed from String to JSON to store category arrays
     categories = Column(JSON, default=[])  # New JSON array column
     provider = Column(String)  # azure, aws, gcp
     
@@ -93,7 +93,7 @@ class Template(Base):
     template_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
-    category = Column(String, nullable=True)
+    category = Column(JSON, nullable=True)  # Changed from String to JSON to store category arrays
     provider = Column(String)  # azure, aws, gcp
     type = Column(String)  # terraform, arm, cloudformation
     is_public = Column(Boolean, default=False)

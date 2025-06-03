@@ -414,7 +414,7 @@ def create_template(
             template_id=str(uuid.uuid4()),
             name=template.name,
             description=template.description,
-            category=template.categories[0] if template.categories and len(template.categories) > 0 else None,  # Store first category as a string
+            category=template.categories,  # Store full categories array as JSON
             provider=template.provider,
             type=template.type,  # Always use the provided type
             is_public=template.is_public,
