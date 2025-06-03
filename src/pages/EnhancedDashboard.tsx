@@ -402,7 +402,6 @@ export default function EnhancedDashboard() {
           </Button>
           
           <Button
-            style={{ backgroundColor: "#FF5100" }}
             onClick={() => setShowDashboardManager(true)}
           >
             <LayoutDashboard className="h-4 w-4 mr-2" />
