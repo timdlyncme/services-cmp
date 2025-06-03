@@ -176,8 +176,51 @@ USERS = [
     }
 ]
 
+def ensure_schema_compatibility(db: Session) -> None:
+    """Ensure database schema is compatible with current models."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError, ProgrammingError
+    
+    try:
+        # Check if the status column exists in cloud_accounts table
+        result = db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'cloud_accounts' 
+            AND column_name = 'status'
+        """))
+        
+        if result.fetchone() is None:
+            # Column doesn't exist, add it
+            logger.info("Adding missing status column to cloud_accounts table")
+            db.execute(text("""
+                ALTER TABLE cloud_accounts 
+                ADD COLUMN status VARCHAR DEFAULT 'connected'
+            """))
+            
+            # Update existing records to have the default status
+            db.execute(text("""
+                UPDATE cloud_accounts 
+                SET status = 'connected' 
+                WHERE status IS NULL
+            """))
+            
+            db.commit()
+            logger.info("Successfully added status column to cloud_accounts table")
+        
+    except (OperationalError, ProgrammingError) as e:
+        # Table might not exist yet (fresh installation), which is fine
+        logger.debug(f"Schema check skipped (table may not exist yet): {e}")
+        pass
+
+
 def init_db(db: Session) -> None:
     """Initialize the database with default data."""
+    logger.info("Starting database initialization...")
+    
+    # Ensure schema compatibility first
+    ensure_schema_compatibility(db)
+    
     # Create permissions
     permissions = {}
     for permission_data in PERMISSIONS:

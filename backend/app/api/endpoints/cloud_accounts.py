@@ -263,15 +263,36 @@ def create_cloud_account(
                 )
         
         # Create new cloud account
-        cloud_account = CloudAccount(
-            name=cloud_account_in.name,
-            provider=cloud_account_in.provider,
-            status=cloud_account_in.status,
-            description=cloud_account_in.description,
-            tenant_id=account_tenant_id,
-            settings_id=cloud_settings.id if cloud_settings else None,
-            cloud_ids=cloud_account_in.cloud_ids if cloud_account_in.cloud_ids else cloud_account_in.subscription_ids
-        )
+        try:
+            # Try to create with status field first
+            cloud_account = CloudAccount(
+                name=cloud_account_in.name,
+                provider=cloud_account_in.provider,
+                status=cloud_account_in.status,
+                description=cloud_account_in.description,
+                tenant_id=account_tenant_id,
+                settings_id=cloud_settings.id if cloud_settings else None,
+                cloud_ids=cloud_account_in.cloud_ids if cloud_account_in.cloud_ids else cloud_account_in.subscription_ids
+            )
+        except TypeError as e:
+            if "'status' is an invalid keyword argument" in str(e):
+                # Fallback: Create without status field if the database schema doesn't have it yet
+                cloud_account = CloudAccount(
+                    name=cloud_account_in.name,
+                    provider=cloud_account_in.provider,
+                    description=cloud_account_in.description,
+                    tenant_id=account_tenant_id,
+                    settings_id=cloud_settings.id if cloud_settings else None,
+                    cloud_ids=cloud_account_in.cloud_ids if cloud_account_in.cloud_ids else cloud_account_in.subscription_ids
+                )
+                # Set status after creation if the column exists
+                try:
+                    cloud_account.status = cloud_account_in.status
+                except AttributeError:
+                    # Status column doesn't exist in database yet, skip setting it
+                    pass
+            else:
+                raise e
         
         db.add(cloud_account)
         db.commit()
@@ -289,11 +310,18 @@ def create_cloud_account(
                 cloud_ids = cloud_account.cloud_ids
         
         # Create a response with the correct format
+        # Handle case where status field might not exist in database yet
+        try:
+            status_value = cloud_account.status
+        except AttributeError:
+            # Status column doesn't exist in database yet, use default
+            status_value = "connected"
+        
         return CloudAccountResponse(
             id=str(cloud_account.account_id),
             name=cloud_account.name,
             provider=cloud_account.provider,
-            status=cloud_account.status,
+            status=status_value,
             tenant_id=str(cloud_account.tenant_id),
             cloud_ids=cloud_ids,
             created_at=cloud_account.created_at,
