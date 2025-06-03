@@ -25,7 +25,7 @@ def run_migration():
     """Run the dashboard tables migration"""
     
     # Create database engine
-    engine = create_engine(settings.DATABASE_URL)
+    engine = create_engine(settings.SQLALCHEMY_DATABASE_URI)
     
     # Create all dashboard tables
     print("Creating dashboard tables...")
@@ -57,9 +57,9 @@ def run_migration():
                     "icon": "database",
                     "color": "blue"
                 },
-                "min_width": 1,
+                "min_width": 2,
                 "min_height": 1,
-                "max_width": 2,
+                "max_width": 3,
                 "max_height": 1
             },
             {
@@ -74,9 +74,9 @@ def run_migration():
                     "color": "green",
                     "filter": "status:running"
                 },
-                "min_width": 1,
+                "min_width": 2,
                 "min_height": 1,
-                "max_width": 2,
+                "max_width": 3,
                 "max_height": 1
             },
             {
@@ -91,9 +91,9 @@ def run_migration():
                     "color": "red",
                     "filter": "status:failed"
                 },
-                "min_width": 1,
+                "min_width": 2,
                 "min_height": 1,
-                "max_width": 2,
+                "max_width": 3,
                 "max_height": 1
             },
             {
@@ -107,9 +107,9 @@ def run_migration():
                     "icon": "cloud-cog",
                     "color": "purple"
                 },
-                "min_width": 1,
+                "min_width": 2,
                 "min_height": 1,
-                "max_width": 2,
+                "max_width": 3,
                 "max_height": 1
             },
             {
@@ -123,9 +123,9 @@ def run_migration():
                     "icon": "file-text",
                     "color": "orange"
                 },
-                "min_width": 1,
+                "min_width": 2,
                 "min_height": 1,
-                "max_width": 2,
+                "max_width": 3,
                 "max_height": 1
             },
             
@@ -140,10 +140,10 @@ def run_migration():
                     "chart_type": "pie",
                     "title": "Deployments by Provider"
                 },
-                "min_width": 2,
-                "min_height": 2,
+                "min_width": 3,
+                "min_height": 3,
                 "max_width": 4,
-                "max_height": 3
+                "max_height": 4
             },
             {
                 "name": "Deployment Status Overview",
@@ -155,10 +155,10 @@ def run_migration():
                     "chart_type": "bar",
                     "title": "Deployment Status Overview"
                 },
-                "min_width": 2,
-                "min_height": 2,
+                "min_width": 3,
+                "min_height": 3,
                 "max_width": 4,
-                "max_height": 3
+                "max_height": 4
             },
             {
                 "name": "Deployment Timeline",
@@ -171,10 +171,10 @@ def run_migration():
                     "title": "Deployment Timeline",
                     "time_range": "30d"
                 },
-                "min_width": 3,
-                "min_height": 2,
+                "min_width": 4,
+                "min_height": 3,
                 "max_width": 6,
-                "max_height": 3
+                "max_height": 4
             },
             
             # Status and Monitoring Widgets
@@ -189,10 +189,10 @@ def run_migration():
                     "limit": 5,
                     "show_status": True
                 },
-                "min_width": 2,
-                "min_height": 2,
+                "min_width": 3,
+                "min_height": 3,
                 "max_width": 4,
-                "max_height": 4
+                "max_height": 6
             },
             {
                 "name": "Cloud Account Status",
@@ -204,10 +204,10 @@ def run_migration():
                     "list_type": "cloud_accounts",
                     "show_health": True
                 },
-                "min_width": 2,
-                "min_height": 2,
+                "min_width": 3,
+                "min_height": 3,
                 "max_width": 4,
-                "max_height": 3
+                "max_height": 6
             },
             
             # Text-based Information Widgets
@@ -222,10 +222,10 @@ def run_migration():
                     "title": "Welcome to your Dashboard",
                     "content": "Manage your cloud infrastructure deployments from this centralized dashboard."
                 },
-                "min_width": 2,
-                "min_height": 1,
+                "min_width": 3,
+                "min_height": 2,
                 "max_width": 6,
-                "max_height": 2
+                "max_height": 3
             },
             {
                 "name": "Quick Actions",
@@ -241,8 +241,8 @@ def run_migration():
                         {"label": "Browse Templates", "url": "/templates"}
                     ]
                 },
-                "min_width": 2,
-                "min_height": 1,
+                "min_width": 3,
+                "min_height": 2,
                 "max_width": 3,
                 "max_height": 2
             },
@@ -257,9 +257,9 @@ def run_migration():
                     "auto_hide_completed": False
                 },
                 "min_width": 3,
-                "min_height": 3,
-                "max_width": 6,
-                "max_height": 4
+                "min_height": 6,
+                "max_width": 4,
+                "max_height": 6
             }
         ]
         
