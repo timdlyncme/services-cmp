@@ -5,6 +5,7 @@ This module contains the database models for AI Assistant.
 """
 
 from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -31,6 +32,10 @@ class AIAssistantConfig(Base):
     last_status = Column(String, default="disconnected")
     last_checked = Column(DateTime, nullable=True)
     last_error = Column(String, nullable=True)
+    
+    # Tenant relationship
+    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))
+    tenant = relationship("Tenant", back_populates="ai_assistant_configs")
 
 
 class AIAssistantLog(Base):
@@ -46,4 +51,8 @@ class AIAssistantLog(Base):
     level = Column(String, default="info")
     message = Column(String)
     details = Column(JSON, nullable=True)
+    
+    # Tenant relationship
+    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))
+    tenant = relationship("Tenant", back_populates="ai_assistant_logs")
 
