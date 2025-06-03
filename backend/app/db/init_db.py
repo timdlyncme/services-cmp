@@ -485,7 +485,6 @@ def init_db(db: Session) -> None:
             api_key=None,
             endpoint=None,
             deployment_name=None,
-            model="gpt-4",
             api_version="2023-05-15",
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
