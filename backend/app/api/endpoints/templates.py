@@ -421,7 +421,7 @@ def create_template(
             code=template.code,  # Store the code directly in the template
             parameters=template.parameters,  # Store parameters
             variables=template.variables,  # Store variables
-            tenant_id=tenant.tenant_id,
+            tenant_id=template_tenant.tenant_id if template_tenant else None,
             created_by=current_user.id,
             updated_by=current_user.id,
             created_at=datetime.utcnow(),
