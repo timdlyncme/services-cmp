@@ -47,6 +47,15 @@ export interface AzureOpenAIConfig {
   api_version: string;
 }
 
+export interface AzureOpenAIConfigUpdate {
+  api_key?: string;
+  endpoint?: string;
+  deployment_name?: string;
+  model?: string;
+  api_version?: string;
+}
+
+
 export interface ConnectionStatus {
   status: 'connected' | 'not_configured' | 'deployment_not_found' | 'error';
   message: string;
@@ -247,7 +256,7 @@ export class AIAssistantService {
   /**
    * Update Azure OpenAI configuration
    */
-  async updateConfig(config: AzureOpenAIConfig, tenantId?: string): Promise<AzureOpenAIConfig> {
+  async updateConfig(config: AzureOpenAIConfigUpdate, tenantId?: string): Promise<AzureOpenAIConfig> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
