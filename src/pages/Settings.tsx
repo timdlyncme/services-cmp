@@ -146,7 +146,7 @@ const Settings = () => {
     addLog("Loading Azure OpenAI settings...");
     
     try {
-      const config = await aiAssistantService.getConfig();
+      const config = await aiAssistantService.getConfig(currentTenant?.tenant_id);
       
       setAzureOpenAISettings({
         enabled: Boolean(config.api_key && config.endpoint && config.deployment_name),
@@ -158,18 +158,23 @@ const Settings = () => {
       });
       
       // Also check the connection status
-      const status = await aiAssistantService.checkStatus();
-      setAIConnectionStatus({
-        status: status.status,
-        message: status.message,
-        lastChecked: new Date().toISOString()
-      });
+      await handleTestAIConnection();
       
       addLog("Azure OpenAI settings loaded successfully", "success");
     } catch (error) {
       console.error("Error loading Azure OpenAI settings:", error);
-      addLog(`Failed to load Azure OpenAI settings: ${error instanceof Error ? error.message : String(error)}`, "error");
-      // Don't show a toast error here, as this might be the first time the user is setting up Azure OpenAI
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addLog(`Failed to load Azure OpenAI settings: ${errorMessage}`, "error");
+      
+      // Set default values on error
+      setAzureOpenAISettings({
+        enabled: false,
+        endpoint: "",
+        apiKey: "",
+        deploymentName: "",
+        model: "gpt-4",
+        apiVersion: "2023-05-15"
+      });
     }
   };
   
@@ -316,8 +321,7 @@ const Settings = () => {
       await handleSaveAISettings(false);
       
       // Then test the connection
-      const status = await aiAssistantService.checkStatus();
-      
+      const status = await aiAssistantService.checkStatus(currentTenant?.tenant_id);
       setAIConnectionStatus({
         status: status.status,
         message: status.message,
@@ -326,16 +330,13 @@ const Settings = () => {
       
       if (status.status === 'connected') {
         addLog("Azure OpenAI connection test successful", "success");
-        toast.success("Azure OpenAI connection test successful");
       } else {
         addLog(`Azure OpenAI connection test failed: ${status.message}`, "error");
-        toast.error(`Connection test failed: ${status.message}`);
       }
     } catch (error) {
       console.error("Error testing Azure OpenAI connection:", error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       addLog(`Error testing Azure OpenAI connection: ${errorMessage}`, "error");
-      toast.error(`Connection test failed: ${errorMessage}`);
       
       setAIConnectionStatus({
         status: 'error',
@@ -361,7 +362,7 @@ const Settings = () => {
           deployment_name: "",
           model: azureOpenAISettings.model,
           api_version: azureOpenAISettings.apiVersion
-        });
+        }, currentTenant?.tenant_id);
         
         addLog("Azure OpenAI integration disabled", "success");
         if (showToast) {
@@ -403,7 +404,7 @@ const Settings = () => {
         deployment_name: azureOpenAISettings.deploymentName,
         model: azureOpenAISettings.model,
         api_version: azureOpenAISettings.apiVersion
-      });
+      }, currentTenant?.tenant_id);
       
       addLog("Azure OpenAI settings saved successfully", "success");
       if (showToast) {

@@ -56,17 +56,19 @@ export class AIAssistantService {
   /**
    * Send a chat request to Azure OpenAI
    */
-  async chat(request: ChatRequest): Promise<ChatResponse> {
+  async chat(request: ChatRequest, tenantId?: string): Promise<ChatResponse> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication required');
       }
 
+      const params = tenantId ? { tenant_id: tenantId } : {};
       const response = await api.post('/ai-assistant/chat', request, {
         headers: {
           Authorization: `Bearer ${token}`
-        }
+        },
+        params
       });
       
       return response.data;
@@ -86,7 +88,7 @@ export class AIAssistantService {
   /**
    * Stream a chat request to Azure OpenAI
    */
-  streamChat(request: ChatRequest, onMessage: (content: string) => void, onError: (error: string) => void, onComplete: () => void): () => void {
+  streamChat(request: ChatRequest, onMessage: (content: string) => void, onError: (error: string) => void, onComplete: () => void, tenantId?: string): () => void {
     const token = localStorage.getItem('token');
     if (!token) {
       onError('Authentication required');
@@ -106,8 +108,14 @@ export class AIAssistantService {
     const controller = new AbortController();
     const { signal } = controller;
 
+    // Build URL with tenant_id if provided
+    const url = new URL(`${API_URL}/ai-assistant/chat/stream`);
+    if (tenantId) {
+      url.searchParams.append('tenant_id', tenantId);
+    }
+
     // Start the streaming request
-    fetch(`${API_URL}/ai-assistant/chat/stream`, {
+    fetch(url.toString(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -214,17 +222,19 @@ export class AIAssistantService {
   /**
    * Get Azure OpenAI configuration
    */
-  async getConfig(): Promise<AzureOpenAIConfig> {
+  async getConfig(tenantId?: string): Promise<AzureOpenAIConfig> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication required');
       }
 
+      const params = tenantId ? { tenant_id: tenantId } : {};
       const response = await api.get('/ai-assistant/config', {
         headers: {
           Authorization: `Bearer ${token}`
-        }
+        },
+        params
       });
       
       return response.data;
@@ -237,17 +247,19 @@ export class AIAssistantService {
   /**
    * Update Azure OpenAI configuration
    */
-  async updateConfig(config: AzureOpenAIConfig): Promise<AzureOpenAIConfig> {
+  async updateConfig(config: AzureOpenAIConfig, tenantId?: string): Promise<AzureOpenAIConfig> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication required');
       }
 
+      const params = tenantId ? { tenant_id: tenantId } : {};
       const response = await api.post('/ai-assistant/config', config, {
         headers: {
           Authorization: `Bearer ${token}`
-        }
+        },
+        params
       });
       
       return response.data;
@@ -260,17 +272,19 @@ export class AIAssistantService {
   /**
    * Check Azure OpenAI connection status
    */
-  async checkStatus(): Promise<ConnectionStatus> {
+  async checkStatus(tenantId?: string): Promise<ConnectionStatus> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication required');
       }
 
+      const params = tenantId ? { tenant_id: tenantId } : {};
       const response = await api.get('/ai-assistant/status', {
         headers: {
           Authorization: `Bearer ${token}`
         },
+        params,
         // Add a timeout to prevent hanging requests
         timeout: 5000
       });
