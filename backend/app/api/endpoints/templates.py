@@ -414,7 +414,7 @@ def create_template(
             template_id=str(uuid.uuid4()),
             name=template.name,
             description=template.description,
-            categories=template.categories,  # Use categories instead of category
+            categories=template.categories,  # Use only the new categories field
             provider=template.provider,
             type=template.type,  # Always use the provided type
             is_public=template.is_public,
