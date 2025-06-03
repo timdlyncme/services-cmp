@@ -446,7 +446,7 @@ async def stream_chat(
 async def get_config_endpoint(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    tenant_id: Optional[str] = None
+    tenant_id: Optional[str] = Query(None, description="Tenant ID for configuration")
 ) -> Any:
     """
     Get Azure OpenAI configuration
@@ -487,7 +487,8 @@ async def get_config_endpoint(
 async def update_config(
     request: ConfigRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    tenant_id: Optional[str] = Query(None, description="Tenant ID for configuration"),
 ) -> Any:
     """
     Update Azure OpenAI configuration
@@ -553,7 +554,8 @@ async def update_config(
 @router.get("/status", response_model=StatusResponse)
 async def get_status(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    tenant_id: Optional[str] = Query(None, description="Tenant ID for configuration")
 ) -> Any:
     """
     Get Azure OpenAI connection status
@@ -645,7 +647,8 @@ async def get_status(
 @router.get("/logs", response_model=LogsResponse)
 async def get_logs(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    tenant_id: Optional[str] = Query(None, description="Tenant ID for configuration")
 ) -> Any:
     """
     Get debug logs
