@@ -293,7 +293,7 @@ const Environments = () => {
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button style={{ backgroundColor: "#FF5100" }}>
+              <Button>
                 <Plus className="h-4 w-4 mr-2" />
                 New Environment
               </Button>
