@@ -842,12 +842,12 @@ const TemplateDetails = () => {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <Button style={{ backgroundColor: "#FF5100" }} onClick={() => navigate(-1)}>
+        <Button onClick={() => navigate(-1)}>
           <ChevronLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
         <div className="space-x-2">
-          <Button style={{ backgroundColor: "#FF5100" }} onClick={() => setDeployDialogOpen(true)}>
+          <Button onClick={() => setDeployDialogOpen(true)}>
             <Play className="mr-2 h-4 w-4" />
             Deploy Template
           </Button>
