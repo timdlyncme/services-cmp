@@ -323,7 +323,8 @@ async def stream_chat(
     # Check if tenant exists
     tenant = db.query(Tenant).filter(Tenant.tenant_id == config_tenant_id).first()
     if not tenant:
-        yield f"data: {json.dumps({"error": f"Tenant with ID {config_tenant_id} not found"})}\n\n"
+        error_msg = json.dumps({"error": f"Tenant with ID {config_tenant_id} not found"})
+        yield f"data: {error_msg}\n\n"
 
         return
     # Get the configuration from the database
