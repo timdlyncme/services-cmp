@@ -64,6 +64,10 @@ class Tenant(Base):
     
     # Relationship with IntegrationConfig
     integration_configs = relationship("IntegrationConfig", back_populates="tenant")
+    
+    # Relationship with AI Assistant
+    ai_assistant_configs = relationship("AIAssistantConfig", back_populates="tenant")
+    ai_assistant_logs = relationship("AIAssistantLog", back_populates="tenant")
 
 
 class User(Base):

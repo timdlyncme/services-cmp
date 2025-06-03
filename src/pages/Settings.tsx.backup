@@ -30,7 +30,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { AIAssistantService, AzureOpenAIConfigUpdate } from "@/services/ai-assistant-service";
+import { AIAssistantService } from "@/services/ai-assistant-service";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -385,7 +385,6 @@ const Settings = () => {
   };
   
   // Save Azure OpenAI settings
-  // Save Azure OpenAI settings
   const handleSaveAISettings = async (showToast: boolean = true) => {
     if (!azureOpenAISettings.enabled) {
       // If disabled, just save empty settings
@@ -425,60 +424,27 @@ const Settings = () => {
       return;
     }
     
-    // Validate required fields - but allow obfuscated API key
-    if (!azureOpenAISettings.endpoint || !azureOpenAISettings.deploymentName) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-    
-    // If API key is empty (not obfuscated), require it
-    if (!azureOpenAISettings.apiKey) {
+    // Validate required fields
+    if (!azureOpenAISettings.endpoint || !azureOpenAISettings.apiKey || !azureOpenAISettings.deploymentName) {
       toast.error("Please fill in all required fields");
       return;
     }
     
     setIsSavingAISettings(true);
-    addLog("Saving and validating Azure OpenAI settings...");
+    addLog("Saving Azure OpenAI settings...");
     
     try {
-      // First save the configuration
-      const configToSave: AzureOpenAIConfigUpdate = {
-        api_key: azureOpenAISettings.apiKey === "********" ? undefined : azureOpenAISettings.apiKey, // Don't overwrite if obfuscated
+      await aiAssistantService.updateConfig({
+        api_key: azureOpenAISettings.apiKey,
         endpoint: azureOpenAISettings.endpoint,
         deployment_name: azureOpenAISettings.deploymentName,
         model: azureOpenAISettings.model,
         api_version: azureOpenAISettings.apiVersion
-      };
+      }, currentTenant?.tenant_id);
       
-      await aiAssistantService.updateConfig(configToSave, currentTenant?.tenant_id);
-      
-      // Then test the connection to validate the saved settings
-      addLog("Testing connection with saved settings...");
-      const status = await aiAssistantService.checkStatus(currentTenant?.tenant_id);
-      
-      if (status.status === 'connected') {
-        setAIConnectionStatus({
-          status: status.status,
-          message: status.message,
-          lastChecked: new Date().toISOString()
-        });
-        
-        addLog("Azure OpenAI settings saved and validated successfully", "success");
-        if (showToast) {
-          toast.success("Azure OpenAI settings saved and connection verified");
-        }
-      } else {
-        // Connection failed - show error but don't prevent saving
-        setAIConnectionStatus({
-          status: status.status,
-          message: status.message,
-          lastChecked: new Date().toISOString()
-        });
-        
-        addLog(`Azure OpenAI settings saved but connection failed: ${status.message}`, "warning");
-        if (showToast) {
-          toast.warning("Settings saved but connection test failed. Please verify your credentials.");
-        }
+      addLog("Azure OpenAI settings saved successfully", "success");
+      if (showToast) {
+        toast.success("Azure OpenAI settings saved successfully");
       }
     } catch (error) {
       console.error("Error saving Azure OpenAI settings:", error);
@@ -491,7 +457,6 @@ const Settings = () => {
       setIsSavingAISettings(false);
     }
   };
-
   
   useEffect(() => {
     if (currentTenant) {
