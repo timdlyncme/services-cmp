@@ -8,6 +8,7 @@ from app.db.session import get_db
 from app.api.endpoints.auth import get_current_user
 from app.models.user import User, Tenant
 from app.models.deployment import Deployment, CloudAccount, Template
+from app.models.cloud_settings import CloudSettings
 from app.schemas.dashboard import WidgetDataRequest, WidgetDataResponse
 
 router = APIRouter()
@@ -41,6 +42,8 @@ def get_widget_data(
             data = get_recent_deployments(db, tenant_id, request.config)
         elif request.data_source == "/api/cloud-accounts/status":
             data = get_cloud_account_status(db, tenant_id, request.config)
+        elif request.data_source == "/api/getting-started/status":
+            data = get_getting_started_status(db, tenant_id, request.config)
         elif request.data_source == "static":
             data = get_static_widget_data(request.config)
         elif request.widget_type == "cloud_accounts_status":
@@ -253,6 +256,79 @@ def get_cloud_account_status(db: Session, tenant_id: str, config: Optional[Dict[
         })
     
     return {"accounts": account_data}
+
+
+def get_getting_started_status(db: Session, tenant_id: str, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Get getting started status information for status widgets"""
+    
+    # Check if cloud settings are configured
+    cloud_settings_count = db.query(func.count(CloudSettings.id)).filter(
+        CloudSettings.tenant_id == tenant_id,
+        CloudSettings.is_active == True
+    ).scalar() or 0
+    
+    # Check if cloud accounts are configured
+    cloud_accounts_count = db.query(func.count(CloudAccount.id)).filter(
+        CloudAccount.tenant_id == tenant_id
+    ).scalar() or 0
+    
+    # Check if environments are configured
+    from app.models.deployment import Environment
+    environments_count = db.query(func.count(Environment.id)).filter(
+        Environment.tenant_id == tenant_id
+    ).scalar() or 0
+    
+    # Check if templates are configured
+    templates_count = db.query(func.count(Template.id)).filter(
+        Template.tenant_id == tenant_id
+    ).scalar() or 0
+    
+    # Define the tasks and their completion status
+    tasks = [
+        {
+            "id": "cloud_settings",
+            "title": "Configure Cloud Settings",
+            "description": "Set up your cloud provider credentials",
+            "completed": cloud_settings_count > 0,
+            "count": cloud_settings_count
+        },
+        {
+            "id": "cloud_accounts",
+            "title": "Add Cloud Accounts",
+            "description": "Connect your cloud accounts to the platform",
+            "completed": cloud_accounts_count > 0,
+            "count": cloud_accounts_count
+        },
+        {
+            "id": "environments",
+            "title": "Create Environments",
+            "description": "Set up deployment environments",
+            "completed": environments_count > 0,
+            "count": environments_count
+        },
+        {
+            "id": "templates",
+            "title": "Add Templates",
+            "description": "Add deployment templates to get started",
+            "completed": templates_count > 0,
+            "count": templates_count
+        }
+    ]
+    
+    # Calculate overall progress
+    completed_tasks = sum(1 for task in tasks if task["completed"])
+    total_tasks = len(tasks)
+    progress_percentage = (completed_tasks / total_tasks) * 100 if total_tasks > 0 else 0
+    
+    return {
+        "tasks": tasks,
+        "progress": {
+            "completed": completed_tasks,
+            "total": total_tasks,
+            "percentage": progress_percentage
+        },
+        "is_complete": completed_tasks == total_tasks
+    }
 
 
 def get_static_widget_data(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:

@@ -200,6 +200,7 @@ export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ userWidget }) =>
           </div>
         );
 
+
       default:
         return (
           <div className="text-center text-gray-500">
