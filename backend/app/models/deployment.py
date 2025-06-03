@@ -28,8 +28,6 @@ class CloudAccount(Base):
     account_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
-    category = Column(JSON, nullable=True)  # Changed from String to JSON to store category arrays
-    categories = Column(JSON, default=[])  # New JSON array column
     provider = Column(String)  # azure, aws, gcp
     status = Column(String, default="connected")  # Add status field
     
@@ -62,8 +60,6 @@ class Environment(Base):
     environment_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     name = Column(String)
     description = Column(String, nullable=True)
-    category = Column(JSON, nullable=True)  # Changed from String to JSON to store category arrays
-    categories = Column(JSON, default=[])  # New JSON array column
     provider = Column(String)  # azure, aws, gcp
     
     # New fields
