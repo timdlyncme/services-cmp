@@ -179,8 +179,8 @@ async def chat(
     
     # If streaming is requested, use the streaming endpoint
     if request.stream:
-        return await stream_chat(request, current_user, db, config_tenant_id)
-    
+        return await stream_chat(request, current_user, db)
+
     try:
         add_log(f"Sending request to Azure OpenAI: {len(request.messages)} messages", tenant_id=config_tenant_id)
         
@@ -317,7 +317,7 @@ async def stream_chat_endpoint(
             detail=f"Tenant with ID {config_tenant_id} not found"
         )
     # The issue is here - we need to await the coroutine
-    generator = stream_chat(request, current_user, db, config_tenant_id)
+    generator = stream_chat(request, current_user, db)
     
     return StreamingResponse(
         generator,
