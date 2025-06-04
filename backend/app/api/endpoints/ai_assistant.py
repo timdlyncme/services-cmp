@@ -354,7 +354,7 @@ async def stream_chat(
         return
     
     try:
-        add_log(f"Sending streaming request to Azure OpenAI: {len(request.messages, tenant_id=config_tenant_id)} messages")
+        add_log(f"Sending streaming request to Azure OpenAI: {len(request.messages)} messages", tenant_id=config_tenant_id)
         
         # Prepare the request to Azure OpenAI
         azure_url = f"{config.endpoint}/openai/deployments/{config.deployment_name}/chat/completions?api-version={config.api_version}"
