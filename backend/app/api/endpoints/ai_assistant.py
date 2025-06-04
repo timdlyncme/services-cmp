@@ -150,8 +150,8 @@ async def chat(
         )
     
 
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+    # Use the current user's tenant ID
+    config_tenant_id = current_user.tenant.tenant_id
     
     # Check if tenant exists
     tenant = db.query(Tenant).filter(Tenant.tenant_id == config_tenant_id).first()
@@ -179,8 +179,8 @@ async def chat(
     
     # If streaming is requested, use the streaming endpoint
     if request.stream:
-        return await stream_chat(request, current_user, db, tenant_id)
-    
+        return await stream_chat(request, current_user, db)
+
     try:
         add_log(f"Sending request to Azure OpenAI: {len(request.messages)} messages", tenant_id=config_tenant_id)
         
@@ -306,8 +306,8 @@ async def stream_chat_endpoint(
         )
     
 
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+    # Use the current user's tenant ID
+    config_tenant_id = current_user.tenant.tenant_id
     
     # Check if tenant exists
     tenant = db.query(Tenant).filter(Tenant.tenant_id == config_tenant_id).first()
@@ -317,7 +317,7 @@ async def stream_chat_endpoint(
             detail=f"Tenant with ID {config_tenant_id} not found"
         )
     # The issue is here - we need to await the coroutine
-    generator = stream_chat(request, current_user, db, tenant_id)
+    generator = stream_chat(request, current_user, db)
     
     return StreamingResponse(
         generator,
@@ -334,8 +334,8 @@ async def stream_chat(
     Stream chat responses from Azure OpenAI
     """
 
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+    # Use the current user's tenant ID
+    config_tenant_id = current_user.tenant.tenant_id
     
     # Check if tenant exists
     tenant = db.query(Tenant).filter(Tenant.tenant_id == config_tenant_id).first()
@@ -354,7 +354,7 @@ async def stream_chat(
         return
     
     try:
-        add_log(f"Sending streaming request to Azure OpenAI: {len(request.messages, tenant_id=config_tenant_id)} messages")
+        add_log(f"Sending streaming request to Azure OpenAI: {len(request.messages)} messages", tenant_id=config_tenant_id)
         
         # Prepare the request to Azure OpenAI
         azure_url = f"{config.endpoint}/openai/deployments/{config.deployment_name}/chat/completions?api-version={config.api_version}"
@@ -476,8 +476,8 @@ async def get_config_endpoint(
             detail="Not enough permissions"
         )
     
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+    # Use the current user's tenant ID
+    config_tenant_id = current_user.tenant.tenant_id
     
     # Check if tenant exists
     tenant = db.query(Tenant).filter(Tenant.tenant_id == config_tenant_id).first()
@@ -529,8 +529,8 @@ async def update_config(
         )
     
 
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+    # Use the current user's tenant ID
+    config_tenant_id = current_user.tenant.tenant_id
     
     # Check if tenant exists
     tenant = db.query(Tenant).filter(Tenant.tenant_id == config_tenant_id).first()
@@ -589,8 +589,8 @@ async def get_status(
     """
     # Get the configuration from the database
 
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+    # Use the current user's tenant ID
+    config_tenant_id = current_user.tenant.tenant_id
     
     # Check if tenant exists
     tenant = db.query(Tenant).filter(Tenant.tenant_id == config_tenant_id).first()
@@ -689,8 +689,8 @@ async def get_logs(
         )
     
 
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+    # Use the current user's tenant ID
+    config_tenant_id = current_user.tenant.tenant_id
     
     # Check if tenant exists
     tenant = db.query(Tenant).filter(Tenant.tenant_id == config_tenant_id).first()
