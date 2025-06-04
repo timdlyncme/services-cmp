@@ -128,18 +128,18 @@ ROLES = [
 # Default tenants with UUID-based tenant_ids
 TENANTS = [
     {
-        "name": "Acme Corp",
-        "description": "Main corporate tenant",
+        "name": "Solutions Development",
+        "description": "Solutions Development tenant",
         "tenant_id": generate_uuid()
     },
     {
-        "name": "Dev Team",
-        "description": "Development team workspace",
+        "name": "Platforms",
+        "description": "Platforms tenant",
         "tenant_id": generate_uuid()
     },
     {
-        "name": "Cloud Ops",
-        "description": "Cloud operations team",
+        "name": "App Dev",
+        "description": "App Dev tenant",
         "tenant_id": generate_uuid()
     }
 ]
@@ -380,9 +380,9 @@ DEFAULT_DASHBOARD_WIDGETS = [
         "default_config": {
             "text_type": "actions",
             "actions": [
-                {"label": "New Deployment", "url": "/deployments/new"},
-                {"label": "Add Cloud Account", "url": "/cloud-accounts/new"},
-                {"label": "Browse Templates", "url": "/templates"}
+                {"label": "New Deployment", "url": "/deployments"},
+                {"label": "Add Cloud Account", "url": "/cloud-accounts"},
+                {"label": "Browse Templates", "url": "/catalog"}
             ]
         },
         "min_width": 3,
