@@ -26,7 +26,7 @@ interface GroupedTemplates {
 }
 
 const Catalog = () => {
-  const { user } = useAuth();
+  const { user, currentTenant } = useAuth();
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<CloudTemplate[]>([]);
   const [filteredTemplates, setFilteredTemplates] = useState<CloudTemplate[]>([]);
@@ -44,15 +44,15 @@ const Catalog = () => {
   });
 
   const fetchTemplates = async () => {
-    if (!user) return;
+    if (!currentTenant) return;
     
     setIsLoading(true);
     setError(null);
     
     try {
       const [templatesData, categoriesData] = await Promise.all([
-        cmpService.getTemplates(user.tenant_id),
-        cmpService.getTemplateCategories(user.tenant_id)
+        cmpService.getTemplates(currentTenant.tenant_id),
+        cmpService.getTemplateCategories(currentTenant.tenant_id)
       ]);
       
       setTemplates(templatesData);
@@ -119,10 +119,10 @@ const Catalog = () => {
   };
 
   useEffect(() => {
-    if (user) {
+    if (currentTenant) {
       fetchTemplates();
     }
-  }, [user]);
+  }, [currentTenant]);
 
   useEffect(() => {
     let result = templates;
