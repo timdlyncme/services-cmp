@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import authenticate_user, create_access_token
+from app.core.permissions import get_user_permissions
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.user import Token, LoginResponse, User as UserSchema
@@ -39,10 +40,13 @@ def login_for_access_token(
         subject=str(user.user_id), expires_delta=access_token_expires
     )
     
-    # Get permissions from user role
-    permissions = []
-    if user.role:
-        permissions = [p.name for p in user.role.permissions]
+    # Get all permissions (role + individual)
+    all_permissions = list(get_user_permissions(user, db))
+    
+    # Get individual permissions
+    individual_permissions = []
+    if user.individual_permissions:
+        individual_permissions = [p.name for p in user.individual_permissions]
     
     # Convert user to UserSchema
     user_schema = UserSchema(
@@ -51,9 +55,12 @@ def login_for_access_token(
         username=user.username,
         full_name=user.full_name,
         email=user.email,
-        role=user.role.name,
-        tenantId=user.tenant.tenant_id,
-        permissions=permissions
+        role=user.role.name if user.role else "user",
+        tenantId=user.tenant.tenant_id if user.tenant else "",
+        permissions=all_permissions,
+        individual_permissions=individual_permissions,
+        is_sso_user=getattr(user, 'is_sso_user', False),
+        sso_provider=getattr(user, 'sso_provider', None)
     )
     
     return {
@@ -76,14 +83,20 @@ def options_login():
 
 
 @router.get("/me", response_model=UserSchema)
-def read_users_me(current_user: User = Depends(get_current_user)) -> Any:
+def read_users_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
     """
     Get current user
     """
-    # Get permissions from user role
-    permissions = []
-    if current_user.role:
-        permissions = [p.name for p in current_user.role.permissions]
+    # Get all permissions (role + individual)
+    all_permissions = list(get_user_permissions(current_user, db))
+    
+    # Get individual permissions
+    individual_permissions = []
+    if current_user.individual_permissions:
+        individual_permissions = [p.name for p in current_user.individual_permissions]
     
     # Convert user to UserSchema
     user_schema = UserSchema(
@@ -92,9 +105,12 @@ def read_users_me(current_user: User = Depends(get_current_user)) -> Any:
         username=current_user.username,
         full_name=current_user.full_name,
         email=current_user.email,
-        role=current_user.role.name,
-        tenantId=current_user.tenant.tenant_id,
-        permissions=permissions
+        role=current_user.role.name if current_user.role else "user",
+        tenantId=current_user.tenant.tenant_id if current_user.tenant else "",
+        permissions=all_permissions,
+        individual_permissions=individual_permissions,
+        is_sso_user=getattr(current_user, 'is_sso_user', False),
+        sso_provider=getattr(current_user, 'sso_provider', None)
     )
     
     return user_schema.model_dump()

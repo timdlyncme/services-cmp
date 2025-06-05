@@ -47,6 +47,12 @@ PERMISSIONS = [
     {"name": "update:users", "description": "Update users"},
     {"name": "delete:users", "description": "Delete users"},
     
+    # Permission management
+    {"name": "view:permissions", "description": "View permissions"},
+    {"name": "create:permissions", "description": "Create permissions"},
+    {"name": "update:permissions", "description": "Update permissions"},
+    {"name": "delete:permissions", "description": "Delete permissions"},
+    
     # Tenant management
     {"name": "view:tenants", "description": "View tenants"},
     {"name": "create:tenants", "description": "Create tenants"},

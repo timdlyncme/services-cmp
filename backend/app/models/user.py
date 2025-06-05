@@ -15,6 +15,19 @@ role_permission = Table(
     Column("permission_id", Integer, ForeignKey("permissions.id"), primary_key=True)
 )
 
+# Association table for many-to-many relationship between User and Permission
+# This allows individual users to have specific permissions beyond their role
+user_permission = Table(
+    "user_permission",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("permission_id", Integer, ForeignKey("permissions.id"), primary_key=True),
+    Column("granted", Boolean, default=True),  # True for granted, False for denied
+    Column("granted_by_id", Integer, ForeignKey("users.id"), nullable=True),  # Who granted this permission
+    Column("granted_at", DateTime, nullable=True),  # When this permission was granted
+    Column("reason", String, nullable=True)  # Reason for granting/denying this permission
+)
+
 
 class Permission(Base):
     __tablename__ = "permissions"
@@ -25,6 +38,7 @@ class Permission(Base):
     
     # Relationships
     roles = relationship("Role", secondary=role_permission, back_populates="permissions")
+    users = relationship("User", secondary=user_permission, back_populates="individual_permissions")
 
 
 class Role(Base):
@@ -81,9 +95,18 @@ class User(Base):
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     
+    # SSO-related fields
+    sso_provider = Column(String, nullable=True)  # e.g., 'azure_ad', 'google', etc.
+    sso_user_id = Column(String, nullable=True)  # External user ID from SSO provider
+    sso_email = Column(String, nullable=True)  # Email from SSO provider
+    is_sso_user = Column(Boolean, default=False)  # Whether this user was created via SSO
+    
     # Relationships
     role_id = Column(Integer, ForeignKey("roles.id"))
     role = relationship("Role", back_populates="users")
+    
+    # Individual permissions (beyond role permissions)
+    individual_permissions = relationship("Permission", secondary=user_permission, back_populates="users")
     
     tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))  # Changed to UUID type
     tenant = relationship("Tenant", back_populates="users")

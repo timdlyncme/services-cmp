@@ -4,7 +4,7 @@ from app.api.endpoints import (
     auth, users, tenants, deployments, environments, 
     cloud_accounts, templates, permissions, integrations,
     template_foundry, health, ai_assistant, nexus_ai,
-    dashboards, widget_data
+    dashboards, widget_data, sso
 )
 
 api_router = APIRouter()
@@ -23,3 +23,5 @@ api_router.include_router(ai_assistant.router, prefix="/ai-assistant", tags=["ai
 api_router.include_router(nexus_ai.router, prefix="/nexus-ai", tags=["nexus-ai"])
 api_router.include_router(dashboards.router, prefix="/dashboards", tags=["dashboards"])
 api_router.include_router(widget_data.router, prefix="/widgets", tags=["widget-data"])
+api_router.include_router(sso.router, prefix="/sso", tags=["sso"])
+
