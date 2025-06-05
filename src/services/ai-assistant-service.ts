@@ -118,7 +118,7 @@ export class AIAssistantService {
     const { signal } = controller;
 
     // Build URL with tenant_id if provided
-    const url = new URL(`${API_URL}/ai-assistant/chat/stream`);
+    const url = new URL(`${API_URL}/ai-assistant/stream`);
     if (tenantId) {
       url.searchParams.append('tenant_id', tenantId);
     }
