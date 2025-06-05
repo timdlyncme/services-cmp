@@ -650,7 +650,8 @@ const TemplateDetails = () => {
         () => {
           // Streaming completed
           setIsAiLoading(false);
-        }
+        },
+        currentTenant?.tenant_id // Pass the current tenant ID for proper filtering
       );
       
       // Store the abort controller for cleanup
