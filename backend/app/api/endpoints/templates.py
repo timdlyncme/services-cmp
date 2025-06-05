@@ -67,13 +67,10 @@ def get_template_categories(
             # Only return templates that belong to the specified tenant
             query = query.filter(Template.tenant_id == tenant.tenant_id)
         else:
-            # No tenant specified, show templates from all tenants the user has access to
+            # No tenant specified, default to user's tenant (like environments and cloud-accounts endpoints)
             user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
-            # Admin and MSP users can see all templates
-            if current_user.role.name not in ["admin", "msp"]:
-                # Regular users can only see templates from their tenant
-                if user_tenant:
-                    query = query.filter(Template.tenant_id == user_tenant.tenant_id)
+            if user_tenant:
+                query = query.filter(Template.tenant_id == user_tenant.tenant_id)
 
         templates = query.all()
 
@@ -165,15 +162,10 @@ def get_templates(
                     detail=f"Invalid tenant ID format: {str(e)}"
                 )
         else:
-            # No tenant specified, show templates from all tenants the user has access to
-            if current_user.role.name == "admin" or current_user.role.name == "msp":
-                # Admin and MSP users can see all templates
-                pass
-            else:
-                # Regular users can only see templates from their tenant
-                if user_tenant:
-                    query = query.filter(Template.tenant_id == user_tenant.tenant_id)
-        
+            # No tenant specified, default to user's tenant (like environments and cloud-accounts endpoints)
+            if user_tenant:
+                query = query.filter(Template.tenant_id == user_tenant.tenant_id)
+
         templates = query.all()
         
         # Get deployment counts for each template
