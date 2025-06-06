@@ -192,8 +192,8 @@ def create_sso_provider(
 @router.post("/login", response_model=SSOLoginResponse)
 async def initiate_sso_login(
     login_request: SSOLoginRequest,
-    tenant_id: Optional[str] = Query(None, description="Target tenant ID"),
     request: Request,
+    tenant_id: Optional[str] = Query(None, description="Target tenant ID"),
     db: Session = Depends(get_db)
 ) -> Any:
     """

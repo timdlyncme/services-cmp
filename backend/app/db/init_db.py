@@ -31,6 +31,7 @@ from app.models.template_foundry_versions import TemplateFoundryVersion
 from app.models.nexus_ai import NexusAIConfig, NexusAILog
 from app.models.ai_assistant import AIAssistantConfig, AIAssistantLog
 from app.models.dashboard import Dashboard, DashboardWidget, UserWidget
+from app.models.sso import SSOProvider
 
 logger = logging.getLogger(__name__)
 
@@ -528,6 +529,31 @@ def init_db(db: Session) -> None:
         if not existing_widget:
             widget = DashboardWidget(**widget_data)
             db.add(widget)
+    
+    # Create default SSO providers
+    logger.info("Creating default SSO providers...")
+    # Note: SSO providers are tenant-specific and will be created when configured by users
+    # This ensures the table exists and is properly initialized
+    existing_sso_provider = db.query(SSOProvider).first()
+    if not existing_sso_provider:
+        # Get the first tenant for the example provider
+        first_tenant = list(tenants.values())[0] if tenants else None
+        if first_tenant:
+            # Create a placeholder/example SSO provider (disabled by default)
+            example_sso_provider = SSOProvider(
+                name="Example Azure AD",
+                provider_type="azure_ad",
+                client_id="example-client-id",
+                client_secret="example-client-secret",  # Will be replaced when actually configured
+                tenant_id="example-tenant-id",  # Azure AD tenant ID
+                tenant_id_fk=first_tenant.tenant_id,  # Link to our internal tenant
+                is_active=False,  # Disabled by default
+                scim_enabled=False,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            db.add(example_sso_provider)
+            logger.info("Example SSO provider created (disabled)")
     
     # Commit all changes
     db.commit()
