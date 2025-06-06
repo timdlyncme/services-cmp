@@ -53,7 +53,7 @@ class UserSchema(User):
 
 
 class UserResponse(UserBase):
-    id: int
+    id: str  # Changed from int to str to accept UUID
     user_id: str
     role: Optional[str] = None
     tenant_id: Optional[str] = None  # Changed to str for UUID
