@@ -11,16 +11,18 @@ import { ProtectedRoute } from "@/components/protected-route";
 import Dashboard from "@/pages/Dashboard";
 import EnhancedDashboard from "@/pages/EnhancedDashboard";
 import Catalog from "@/pages/Catalog";
+import TemplateDetails from "@/pages/TemplateDetails";
+import Approvals from "@/pages/Approvals";
+import ApprovalDetails from "@/pages/ApprovalDetails";
 import Deployments from "@/pages/Deployments";
+import DeploymentDetails from "@/pages/DeploymentDetails";
+import ResourceDetails from "@/pages/ResourceDetails";
 import Environments from "@/pages/Environments";
+import EnvironmentDetails from "@/pages/EnvironmentDetails";
 import TemplateManagement from "@/pages/TemplateManagement";
 import MSPTemplateFoundry from "@/pages/MSPTemplateFoundry";
-import Integrations from "@/pages/Integrations";
 import Settings from "@/pages/Settings";
 import Tenants from "@/pages/Tenants";
-import Permissions from "@/pages/Permissions";
-import Roles from "@/pages/Roles";
-import Users from "@/pages/Users";
 import UsersAndGroups from "@/pages/UsersAndGroups";
 import CloudAccounts from "@/pages/CloudAccounts";
 import NexusAI from "@/pages/NexusAI";
@@ -50,8 +52,14 @@ const App = () => (
                 <Route path="/" element={<EnhancedDashboard />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/catalog" element={<Catalog />} />
+                <Route path="/template-details" element={<TemplateDetails />} />
+                <Route path="/approvals" element={<Approvals />} />
+                <Route path="/approval-details" element={<ApprovalDetails />} />
                 <Route path="/deployments" element={<Deployments />} />
+                <Route path="/deployment-details" element={<DeploymentDetails />} />
+                <Route path="/resource-details" element={<ResourceDetails />} />
                 <Route path="/environments" element={<Environments />} />
+                <Route path="/environment-details" element={<EnvironmentDetails />} />
                 <Route path="/template-management" element={
                   <ProtectedRoute requiredPermission="view:templates">
                     <TemplateManagement />
@@ -62,7 +70,6 @@ const App = () => (
                     <MSPTemplateFoundry />
                   </ProtectedRoute>
                 } />
-                <Route path="/integrations" element={<Integrations />} />
                 <Route path="/settings" element={
                   <ProtectedRoute requiredPermission="view:settings">
                     <Settings />
@@ -71,21 +78,6 @@ const App = () => (
                 <Route path="/tenants" element={
                   <ProtectedRoute requiredPermission="view:tenants">
                     <Tenants />
-                  </ProtectedRoute>
-                } />
-                <Route path="/permissions" element={
-                  <ProtectedRoute requiredPermission="view:permissions">
-                    <Permissions />
-                  </ProtectedRoute>
-                } />
-                <Route path="/roles" element={
-                  <ProtectedRoute requiredPermission="view:roles">
-                    <Roles />
-                  </ProtectedRoute>
-                } />
-                <Route path="/users" element={
-                  <ProtectedRoute requiredPermission="view:users">
-                    <Users />
                   </ProtectedRoute>
                 } />
                 <Route path="/users-and-groups" element={
