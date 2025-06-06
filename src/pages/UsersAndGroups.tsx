@@ -11,6 +11,12 @@ import { toast } from "sonner";
 import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, Users, UserPlus, UserCog } from "lucide-react";
 import { User } from "@/types/auth";
 import { cmpService } from "@/services/cmp-service";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { API_BASE_URL } from "@/config/api";
 
 const UsersAndGroups = () => {
   const { currentTenant, user } = useAuth();
@@ -25,7 +31,19 @@ const UsersAndGroups = () => {
   const [isNewUserDialogOpen, setIsNewUserDialogOpen] = useState(false);
   const [newUserName, setNewUserName] = useState("");
   const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRole, setNewUserRole] = useState("user");
+  
+  // State for permissions and SSO
+  const [availablePermissions, setAvailablePermissions] = useState<any[]>([]);
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
+  const [ssoProviders, setSsoProviders] = useState<any[]>([]);
+  const [selectedSsoProvider, setSelectedSsoProvider] = useState("none");
+  const [ssoUserId, setSsoUserId] = useState("");
+  const [ssoEmail, setSsoEmail] = useState("");
+  const [isEditingUser, setIsEditingUser] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
   
   // Check if user is admin or msp
   const canManageUsers = user?.role === "admin" || user?.role === "msp";
@@ -48,16 +66,68 @@ const UsersAndGroups = () => {
       if (error instanceof Error) {
         toast.error(error.message);
       } else {
-        toast.error("Failed to load users");
+        toast.error("An unexpected error occurred");
       }
     } finally {
       setIsLoading(false);
     }
   };
   
+  // Fetch available permissions
+  const fetchPermissions = async () => {
+    if (!currentTenant) return;
+    
+    setIsLoadingPermissions(true);
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/permissions/?tenant_id=${currentTenant.tenant_id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch permissions');
+      }
+      
+      const permissions = await response.json();
+      setAvailablePermissions(permissions);
+    } catch (error) {
+      console.error("Error fetching permissions:", error);
+      toast.error("Failed to load permissions");
+    } finally {
+      setIsLoadingPermissions(false);
+    }
+  };
+  
+  // Fetch SSO providers
+  const fetchSsoProviders = async () => {
+    if (!currentTenant) return;
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/sso/providers?tenant_id=${currentTenant.tenant_id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch SSO providers');
+      }
+      
+      const providers = await response.json();
+      setSsoProviders(providers);
+    } catch (error) {
+      console.error("Error fetching SSO providers:", error);
+      toast.error("Failed to load SSO providers");
+    }
+  };
+  
   useEffect(() => {
     if (currentTenant) {
       fetchUsers();
+      fetchPermissions();
+      fetchSsoProviders();
     }
   }, [currentTenant]);
   
@@ -91,6 +161,57 @@ const UsersAndGroups = () => {
     }
   };
   
+  // Handle user creation
+  const handleCreateUser = async () => {
+    if (!currentTenant) {
+      toast.error("No tenant selected");
+      return;
+    }
+
+    // Validate required fields
+    if (!newUserName || !newUserEmail || !newUserPassword) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      const userData = {
+        username: newUserName,
+        full_name: newUserName,
+        email: newUserEmail,
+        password: newUserPassword,
+        role: newUserRole,
+        individual_permissions: selectedPermissions,
+        is_sso_user: selectedSsoProvider !== "none",
+        sso_provider_id: selectedSsoProvider !== "none" ? selectedSsoProvider : null
+      };
+
+      await cmpService.createUser(userData, currentTenant.tenant_id);
+      toast.success("User created successfully");
+      
+      // Reset form and close dialog
+      setNewUserName("");
+      setNewUserEmail("");
+      setNewUserPassword("");
+      setNewUserRole("user");
+      setSelectedPermissions([]);
+      setSelectedSsoProvider("none");
+      setSsoUserId("");
+      setSsoEmail("");
+      setIsNewUserDialogOpen(false);
+      
+      // Refresh users list
+      fetchUsers();
+    } catch (error) {
+      console.error("Error creating user:", error);
+      if (error instanceof Error) {
+        toast.error(`Failed to create user: ${error.message}`);
+      } else {
+        toast.error("Failed to create user. Please try again.");
+      }
+    }
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -114,57 +235,179 @@ const UsersAndGroups = () => {
                   New User
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create User</DialogTitle>
                   <DialogDescription>
-                    Add a new user to your organization
+                    Add a new user to your organization with specific role and permissions
                   </DialogDescription>
                 </DialogHeader>
                 
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <label htmlFor="name" className="text-sm font-medium">Name</label>
-                    <Input
-                      id="name"
-                      value={newUserName}
-                      onChange={(e) => setNewUserName(e.target.value)}
-                      placeholder="e.g., John Doe"
-                    />
+                <div className="grid gap-6 py-4">
+                  {/* Basic User Information */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium">Basic Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="name" className="text-sm font-medium">Name</label>
+                        <Input
+                          id="name"
+                          value={newUserName}
+                          onChange={(e) => setNewUserName(e.target.value)}
+                          placeholder="e.g., John Doe"
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <label htmlFor="email" className="text-sm font-medium">Email</label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={newUserEmail}
+                          onChange={(e) => setNewUserEmail(e.target.value)}
+                          placeholder="e.g., john.doe@example.com"
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <label htmlFor="password" className="text-sm font-medium">Password</label>
+                        <Input
+                          id="password"
+                          type="password"
+                          value={newUserPassword}
+                          onChange={(e) => setNewUserPassword(e.target.value)}
+                          placeholder="Enter password"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <label htmlFor="email" className="text-sm font-medium">Email</label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={newUserEmail}
-                      onChange={(e) => setNewUserEmail(e.target.value)}
-                      placeholder="e.g., john.doe@example.com"
-                    />
+
+                  <Separator />
+
+                  {/* Role Selection */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium">Role Assignment</h4>
+                    <div className="space-y-2">
+                      <label htmlFor="role" className="text-sm font-medium">Primary Role</label>
+                      <Select value={newUserRole} onValueChange={setNewUserRole}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="user">User</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          {user?.role === "msp" && <SelectItem value="msp">MSP</SelectItem>}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <label htmlFor="role" className="text-sm font-medium">Role</label>
-                    <select
-                      id="role"
-                      value={newUserRole}
-                      onChange={(e) => setNewUserRole(e.target.value)}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                      {user?.role === "msp" && <option value="msp">MSP</option>}
-                    </select>
+
+                  <Separator />
+
+                  {/* Individual Permissions */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium">Individual Permissions</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Select additional permissions beyond the base role permissions
+                    </p>
+                    {isLoadingPermissions ? (
+                      <div className="flex items-center space-x-2">
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        <span className="text-sm">Loading permissions...</span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto border rounded-md p-3">
+                        {availablePermissions.map((permission) => (
+                          <div key={permission.name} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`perm-${permission.name}`}
+                              checked={selectedPermissions.includes(permission.name)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedPermissions([...selectedPermissions, permission.name]);
+                                } else {
+                                  setSelectedPermissions(selectedPermissions.filter(p => p !== permission.name));
+                                }
+                              }}
+                            />
+                            <Label htmlFor={`perm-${permission.name}`} className="text-sm">
+                              {permission.description || permission.name}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  {/* SSO Configuration */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium">SSO Configuration (Optional)</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Link this user to an SSO provider for single sign-on access
+                    </p>
+                    
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label htmlFor="sso-provider" className="text-sm font-medium">SSO Provider</label>
+                        <Select value={selectedSsoProvider} onValueChange={setSelectedSsoProvider}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select SSO provider (optional)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No SSO Provider</SelectItem>
+                            {ssoProviders.map((provider) => (
+                              <SelectItem key={provider.id} value={provider.id.toString()}>
+                                {provider.name} ({provider.provider_type})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {selectedSsoProvider && selectedSsoProvider !== "none" && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label htmlFor="sso-user-id" className="text-sm font-medium">SSO User ID</label>
+                            <Input
+                              id="sso-user-id"
+                              value={ssoUserId}
+                              onChange={(e) => setSsoUserId(e.target.value)}
+                              placeholder="e.g., user@domain.com"
+                            />
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <label htmlFor="sso-email" className="text-sm font-medium">SSO Email</label>
+                            <Input
+                              id="sso-email"
+                              type="email"
+                              value={ssoEmail}
+                              onChange={(e) => setSsoEmail(e.target.value)}
+                              placeholder="e.g., user@domain.com"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsNewUserDialogOpen(false)}>Cancel</Button>
                   <Button onClick={() => {
-                    toast.success("This functionality would create a new user in a real implementation");
+                    // Reset form
+                    setNewUserName("");
+                    setNewUserEmail("");
+                    setNewUserPassword("");
+                    setNewUserRole("user");
+                    setSelectedPermissions([]);
+                    setSelectedSsoProvider("none");
+                    setSsoUserId("");
+                    setSsoEmail("");
                     setIsNewUserDialogOpen(false);
-                  }}>Create User</Button>
+                  }}>Cancel</Button>
+                  <Button onClick={handleCreateUser}>Create User</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>

@@ -210,7 +210,7 @@ def create_user(
             )
         
         # Determine which tenant to use
-        user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
         if not user_tenant:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -276,7 +276,9 @@ def create_user(
             hashed_password=get_password_hash(user.password),
             is_active=True,
             role_id=role.id,
-            tenant_id=target_tenant_id
+            tenant_id=target_tenant_id,
+            is_sso_user=user.is_sso_user or False,
+            sso_provider_id=user.sso_provider_id
         )
         
         db.add(new_user)
@@ -531,4 +533,3 @@ def delete_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting user: {str(e)}"
         )
-

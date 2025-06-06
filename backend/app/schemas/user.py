@@ -24,6 +24,9 @@ class UserCreate(UserBase):
     password: str
     role: str
     tenant_id: Optional[str] = None
+    individual_permissions: Optional[List[str]] = []  # List of permission names to grant individually
+    is_sso_user: Optional[bool] = False
+    sso_provider_id: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -34,6 +37,9 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     role: Optional[str] = None
     tenant_id: Optional[str] = None
+    individual_permissions: Optional[List[str]] = None  # List of permission names to grant individually
+    is_sso_user: Optional[bool] = None
+    sso_provider_id: Optional[str] = None
 
 
 class User(BaseModel):
@@ -45,6 +51,9 @@ class User(BaseModel):
     role: str
     tenantId: str
     permissions: List[str]
+    individual_permissions: Optional[List[str]] = []  # Individual permissions beyond role
+    is_sso_user: Optional[bool] = False
+    sso_provider: Optional[str] = None
 
 
 class UserSchema(User):
@@ -57,6 +66,9 @@ class UserResponse(UserBase):
     user_id: str
     role: Optional[str] = None
     tenant_id: Optional[str] = None  # Changed to str for UUID
+    individual_permissions: Optional[List[str]] = []  # Individual permissions beyond role
+    is_sso_user: Optional[bool] = False
+    sso_provider: Optional[str] = None
     
     class Config:
         from_attributes = True
