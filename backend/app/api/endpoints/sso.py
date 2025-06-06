@@ -298,7 +298,7 @@ async def handle_sso_callback(
         
         # Generate redirect URI (should match the one used in login)
         base_url = str(request.base_url).rstrip('/')
-        redirect_uri = f"{base_url}/api/sso/callback"
+        redirect_uri = callback_request.redirect_uri or f"{base_url}/api/sso/callback"
         
         # Handle Azure AD callback
         if provider.provider_type == "azure_ad":

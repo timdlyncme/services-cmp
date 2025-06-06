@@ -14,6 +14,7 @@ export interface SSOCallbackRequest {
   code: string;
   state: string;
   provider_type: string;
+  redirect_uri?: string;
 }
 
 export interface SSOCallbackResponse {
@@ -214,6 +215,7 @@ class SSOService {
     // Store state for validation
     sessionStorage.setItem('sso_state', response.state);
     sessionStorage.setItem('sso_provider', 'azure_ad');
+    sessionStorage.setItem('sso_redirect_uri', redirectUri);
 
     return response.authorization_url;
   }
@@ -239,6 +241,7 @@ class SSOService {
     // Validate state
     const storedState = sessionStorage.getItem('sso_state');
     const storedProvider = sessionStorage.getItem('sso_provider');
+    const storedRedirectUri = sessionStorage.getItem('sso_redirect_uri');
 
     if (state !== storedState) {
       throw new Error('Invalid state parameter - possible CSRF attack');
@@ -251,12 +254,14 @@ class SSOService {
     // Clean up session storage
     sessionStorage.removeItem('sso_state');
     sessionStorage.removeItem('sso_provider');
+    sessionStorage.removeItem('sso_redirect_uri');
 
     // Handle callback
     return this.handleCallback({
       code,
       state,
       provider_type: storedProvider,
+      redirect_uri: storedRedirectUri,
     });
   }
 

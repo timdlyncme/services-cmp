@@ -103,6 +103,7 @@ class SSOCallbackRequest(BaseModel):
     code: str
     state: str
     provider_type: str
+    redirect_uri: Optional[str] = None  # Include redirect URI for token exchange
 
 
 class SSOCallbackResponse(BaseModel):
