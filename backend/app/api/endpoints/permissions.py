@@ -26,7 +26,7 @@ def get_permissions(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view permissions
-    # MSP and admin roles should have access to view permissions
+    # MSP and admin roles should have access to view permissions (like in templates.py)
     has_permission = (
         current_user.role and (
             current_user.role.name in ["admin", "msp"] or
@@ -126,4 +126,3 @@ def options_permissions():
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
-

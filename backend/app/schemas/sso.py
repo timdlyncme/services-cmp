@@ -89,6 +89,7 @@ class SSOUserMappingResponse(SSOUserMappingBase):
 
 class SSOLoginRequest(BaseModel):
     provider_type: str
+    tenant_id: str  # Required for tenant-specific SSO
     domain: Optional[str] = None  # For domain-based provider selection
     redirect_uri: Optional[str] = None
 
@@ -169,4 +170,3 @@ class SCIMErrorResponse(BaseModel):
     schemas: List[str] = ["urn:ietf:params:scim:api:messages:2.0:Error"]
     status: str
     detail: str
-

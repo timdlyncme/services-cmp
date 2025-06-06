@@ -1,9 +1,8 @@
-import { API_BASE_URL } from './api-config';
+import { API_BASE_URL } from '../config/api';
 
 export interface SSOLoginRequest {
   provider_type: string;
-  domain?: string;
-  redirect_uri?: string;
+  tenant_id: string; // Make tenant_id required for all SSO operations
 }
 
 export interface SSOLoginResponse {
@@ -25,22 +24,16 @@ export interface SSOCallbackResponse {
 }
 
 export interface SSOProvider {
-  id: number;
-  provider_id: string;
+  id: string;
   name: string;
-  provider_type: string;
+  type: string;
+  tenant_id: string;
+  config: {
+    client_id: string;
+    tenant_id: string; // Azure AD tenant ID
+    authority?: string;
+  };
   is_active: boolean;
-  client_id: string;
-  tenant_id?: string;
-  authority?: string;
-  discovery_url?: string;
-  scim_enabled: boolean;
-  scim_base_url?: string;
-  attribute_mappings?: Record<string, string>;
-  default_role_id?: number;
-  tenant_id_fk: string;
-  created_at: string;
-  updated_at: string;
 }
 
 class SSOService {
@@ -53,54 +46,58 @@ class SSOService {
   /**
    * Get available SSO providers for the current tenant
    */
-  async getProviders(): Promise<SSOProvider[]> {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${this.baseUrl}/providers`, {
+  async getProviders(tenantId: string): Promise<SSOProvider[]> {
+    const response = await fetch(`${API_BASE_URL}/sso/providers?tenant_id=${tenantId}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
-      },
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to get SSO providers: ${response.statusText}`);
+      throw new Error(`Failed to fetch SSO providers: ${response.statusText}`);
     }
 
     return response.json();
   }
 
   /**
-   * Create a new SSO provider
+   * Create or update SSO provider configuration for a tenant
    */
-  async createProvider(provider: Partial<SSOProvider>): Promise<SSOProvider> {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${this.baseUrl}/providers`, {
+  async configureProvider(tenantId: string, provider: Omit<SSOProvider, 'id' | 'tenant_id'>): Promise<SSOProvider> {
+    const response = await fetch(`${API_BASE_URL}/sso/providers?tenant_id=${tenantId}`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
       },
-      body: JSON.stringify(provider),
+      body: JSON.stringify({
+        ...provider,
+        tenant_id: tenantId
+      })
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to create SSO provider: ${response.statusText}`);
+      throw new Error(`Failed to configure SSO provider: ${response.statusText}`);
     }
 
     return response.json();
   }
 
   /**
-   * Initiate SSO login flow
+   * Initiate SSO login for a specific tenant and provider
    */
-  async initiateLogin(request: SSOLoginRequest): Promise<SSOLoginResponse> {
-    const response = await fetch(`${this.baseUrl}/login`, {
+  async initiateLogin(tenantId: string, providerType: string): Promise<{ authorization_url: string }> {
+    const response = await fetch(`${API_BASE_URL}/sso/login?tenant_id=${tenantId}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify(request),
+      body: JSON.stringify({
+        provider_type: providerType,
+        tenant_id: tenantId
+      })
     });
 
     if (!response.ok) {
@@ -230,4 +227,3 @@ class SSOService {
 }
 
 export const ssoService = new SSOService();
-

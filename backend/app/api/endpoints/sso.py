@@ -1,10 +1,10 @@
 from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.orm import Session
 
 from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
-from app.models.user import User
+from app.models.user import User, Tenant
 from app.models.sso import SSOProvider
 from app.schemas.sso import (
     SSOProviderCreate, SSOProviderUpdate, SSOProviderResponse,
@@ -20,22 +20,41 @@ router = APIRouter()
 
 @router.get("/providers", response_model=List[SSOProviderResponse])
 def get_sso_providers(
+    tenant_id: Optional[str] = Query(None, description="Filter by tenant ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Get all SSO providers for the current tenant
+    Get all SSO providers for the specified tenant
     """
-    # Check permissions
-    if not has_permission(current_user, "view:settings", db):
+    # Check permissions - only admin and MSP users can view SSO settings
+    if not (current_user.role and current_user.role.name in ["admin", "msp"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
     
     try:
+        # Use provided tenant_id or default to user's tenant
+        target_tenant_id = tenant_id if tenant_id else current_user.tenant_id
+        
+        # Verify tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == target_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {target_tenant_id} not found"
+            )
+        
+        # Check if user has access to this tenant (admin/MSP can access all)
+        if current_user.role.name not in ["admin", "msp"] and target_tenant_id != current_user.tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view SSO providers for this tenant"
+            )
+        
         providers = db.query(SSOProvider).filter(
-            SSOProvider.tenant_id_fk == current_user.tenant_id
+            SSOProvider.tenant_id_fk == target_tenant_id
         ).all()
         
         return [
@@ -71,11 +90,12 @@ def get_sso_providers(
 @router.post("/providers", response_model=SSOProviderResponse)
 def create_sso_provider(
     provider: SSOProviderCreate,
+    tenant_id: Optional[str] = Query(None, description="Target tenant ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Create a new SSO provider
+    Create a new SSO provider for the specified tenant
     """
     # Check permissions - only admin and msp can create SSO providers
     if not (current_user.role and current_user.role.name in ["admin", "msp"]):
@@ -85,9 +105,27 @@ def create_sso_provider(
         )
     
     try:
+        # Use provided tenant_id or default to user's tenant
+        target_tenant_id = tenant_id if tenant_id else current_user.tenant_id
+        
+        # Verify tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == target_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {target_tenant_id} not found"
+            )
+        
+        # Check if user has access to this tenant (admin/MSP can access all)
+        if current_user.role.name not in ["admin", "msp"] and target_tenant_id != current_user.tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to create SSO providers for this tenant"
+            )
+        
         # Check if provider already exists for this tenant
         existing_provider = db.query(SSOProvider).filter(
-            SSOProvider.tenant_id_fk == provider.tenant_id_fk,
+            SSOProvider.tenant_id_fk == target_tenant_id,
             SSOProvider.provider_type == provider.provider_type
         ).first()
         
@@ -154,16 +192,35 @@ def create_sso_provider(
 @router.post("/login", response_model=SSOLoginResponse)
 async def initiate_sso_login(
     login_request: SSOLoginRequest,
+    tenant_id: Optional[str] = Query(None, description="Target tenant ID"),
     request: Request,
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Initiate SSO login flow
+    Initiate SSO login flow for the specified tenant
     """
     try:
-        # Find SSO provider by type and domain (if provided)
+        # Use tenant_id from query parameter or from request body
+        target_tenant_id = tenant_id or login_request.tenant_id
+        
+        if not target_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tenant ID is required for SSO login"
+            )
+        
+        # Verify tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == target_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {target_tenant_id} not found"
+            )
+        
+        # Find SSO provider by type for this specific tenant
         query = db.query(SSOProvider).filter(
             SSOProvider.provider_type == login_request.provider_type,
+            SSOProvider.tenant_id_fk == target_tenant_id,
             SSOProvider.is_active == True
         )
         
@@ -306,4 +363,3 @@ async def handle_sso_callback(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error handling SSO callback: {str(e)}"
         )
-
