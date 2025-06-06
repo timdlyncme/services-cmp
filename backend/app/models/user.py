@@ -38,7 +38,13 @@ class Permission(Base):
     
     # Relationships
     roles = relationship("Role", secondary=role_permission, back_populates="permissions")
-    users = relationship("User", secondary=user_permission, back_populates="individual_permissions")
+    users = relationship(
+        "User", 
+        secondary=user_permission, 
+        back_populates="individual_permissions",
+        primaryjoin="Permission.id == user_permission.c.permission_id",
+        secondaryjoin="User.id == user_permission.c.user_id"
+    )
 
 
 class Role(Base):
@@ -106,7 +112,13 @@ class User(Base):
     role = relationship("Role", back_populates="users")
     
     # Individual permissions (beyond role permissions)
-    individual_permissions = relationship("Permission", secondary=user_permission, back_populates="users")
+    individual_permissions = relationship(
+        "Permission", 
+        secondary=user_permission, 
+        back_populates="users",
+        primaryjoin="User.id == user_permission.c.user_id",
+        secondaryjoin="Permission.id == user_permission.c.permission_id"
+    )
     
     tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))  # Changed to UUID type
     tenant = relationship("Tenant", back_populates="users")
