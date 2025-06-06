@@ -43,6 +43,7 @@ const App = () => (
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/sso/callback" element={<SSOCallback />} />
+              <Route path="/auth/callback" element={<SSOCallback />} />
               
               <Route element={
                 <ProtectedRoute>

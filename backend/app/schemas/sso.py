@@ -89,7 +89,7 @@ class SSOUserMappingResponse(SSOUserMappingBase):
 
 class SSOLoginRequest(BaseModel):
     provider_type: str
-    tenant_id: str  # Required for tenant-specific SSO
+    tenant_id: Optional[str] = None  # Optional - backend will use first available tenant if not provided
     domain: Optional[str] = None  # For domain-based provider selection
     redirect_uri: Optional[str] = None
 
