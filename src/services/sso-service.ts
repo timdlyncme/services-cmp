@@ -86,6 +86,37 @@ class SSOService {
   }
 
   /**
+   * Create SSO provider configuration for a tenant
+   * Alias for configureProvider to match Settings page expectations
+   */
+  async createProvider(tenantId: string, providerConfig: any): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/sso/providers?tenant_id=${tenantId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        name: providerConfig.name || `${providerConfig.provider_type} Provider`,
+        provider_type: providerConfig.provider_type,
+        client_id: providerConfig.client_id,
+        client_secret: providerConfig.client_secret,
+        tenant_id: providerConfig.tenant_id, // Azure AD tenant ID
+        is_active: providerConfig.is_active,
+        scim_enabled: providerConfig.scim_enabled || false,
+        tenant_id_fk: tenantId // Our internal tenant ID
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to create SSO provider: ${response.statusText} - ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
    * Initiate SSO login for a specific tenant and provider
    */
   async initiateLogin(tenantId: string, providerType: string): Promise<{ authorization_url: string }> {
