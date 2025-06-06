@@ -517,6 +517,18 @@ def delete_user(
                 detail="Cannot delete your own user account"
             )
         
+        # Handle related records before deleting the user
+        # Import Dashboard model here to avoid circular imports
+        from app.models.dashboard import Dashboard
+        
+        # Delete user's dashboards first (since they have NOT NULL constraint)
+        user_dashboards = db.query(Dashboard).filter(Dashboard.user_id == user.user_id).all()
+        for dashboard in user_dashboards:
+            db.delete(dashboard)
+        
+        # For other tables with nullable foreign keys, we could set them to NULL
+        # but since they're already nullable=True, SQLAlchemy should handle this automatically
+        
         # Delete user
         db.delete(user)
         db.commit()
