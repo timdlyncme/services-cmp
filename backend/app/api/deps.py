@@ -7,7 +7,7 @@ This module contains dependencies used across API endpoints.
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 import uuid
 
 from app.core.config import settings
@@ -50,12 +50,18 @@ def get_current_user(
         # Try to parse as UUID
         try:
             uuid_obj = uuid.UUID(user_id)
-            user = db.query(User).filter(User.user_id == str(uuid_obj)).first()
+            user = db.query(User).options(
+                joinedload(User.role).joinedload("permissions"),
+                joinedload(User.individual_permissions)
+            ).filter(User.user_id == str(uuid_obj)).first()
         except ValueError:
             # Not a valid UUID, try to find by numeric ID
             try:
                 id_value = int(user_id)
-                user = db.query(User).filter(User.id == id_value).first()
+                user = db.query(User).options(
+                    joinedload(User.role).joinedload("permissions"),
+                    joinedload(User.individual_permissions)
+                ).filter(User.id == id_value).first()
             except (ValueError, TypeError):
                 user = None
     except Exception as e:
