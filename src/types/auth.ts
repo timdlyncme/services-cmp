@@ -29,7 +29,7 @@ export interface User {
   role: UserRole;
   tenantId: string;
   avatar?: string;
-  permissions?: Permission[];
+  permissions?: (Permission | string)[];  // Allow both Permission objects and strings
 }
 
 // Badge variants for consistency

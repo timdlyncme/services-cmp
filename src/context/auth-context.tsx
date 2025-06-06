@@ -219,6 +219,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
     
+    // Debug logging to understand what's happening
+    console.log('hasPermission check:', {
+      permission,
+      userRole: user.role,
+      userPermissions: user.permissions,
+      hasPermissionsArray: !!user.permissions,
+      permissionsLength: user.permissions?.length || 0
+    });
+    
     // For development, if user has no permissions, grant all permissions
     if (!user.permissions || user.permissions.length === 0) {
       console.warn(`No permissions found for user, granting permission: ${permission}`);
@@ -226,7 +235,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     // Check if the user has the specific permission
-    const hasSpecificPermission = user.permissions.some(p => p.name === permission);
+    // Handle both string array (from backend) and Permission object array (for compatibility)
+    const hasSpecificPermission = user.permissions.some(p => 
+      typeof p === 'string' ? p === permission : p.name === permission
+    );
+    
+    console.log('Permission check result:', {
+      permission,
+      hasSpecificPermission,
+      userRole: user.role
+    });
     
     if (hasSpecificPermission) {
       return true;
