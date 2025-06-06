@@ -28,6 +28,9 @@ import CloudAccounts from "@/pages/CloudAccounts";
 import NexusAI from "@/pages/NexusAI";
 import Login from "@/pages/Login";
 import NotFound from "./pages/NotFound";
+import { MSPTenants } from "@/pages/msp/MSPTenants";
+import { MSPUsers } from "@/pages/msp/MSPUsers";
+import { MSPAnalytics } from "@/pages/msp/MSPAnalytics";
 
 const queryClient = new QueryClient();
 
@@ -99,6 +102,21 @@ const App = () => (
                 <Route path="/nexus-ai" element={
                   <ProtectedRoute requiredPermission="use:nexus-ai">
                     <NexusAI />
+                  </ProtectedRoute>
+                } />
+                <Route path="/msp/tenants" element={
+                  <ProtectedRoute requiredPermission="view:all-tenants">
+                    <MSPTenants />
+                  </ProtectedRoute>
+                } />
+                <Route path="/msp/users" element={
+                  <ProtectedRoute requiredPermission="view:msp-users">
+                    <MSPUsers />
+                  </ProtectedRoute>
+                } />
+                <Route path="/msp/analytics" element={
+                  <ProtectedRoute requiredPermission="view:platform-analytics">
+                    <MSPAnalytics />
                   </ProtectedRoute>
                 } />
               </Route>
