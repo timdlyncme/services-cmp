@@ -16,7 +16,7 @@ class UserTenantAssignment(Base):
     id = Column(Integer, primary_key=True, index=True)
     
     # Foreign keys
-    user_id = Column(UUID(as_uuid=False), ForeignKey("users.user_id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"), nullable=False)
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
     
@@ -40,4 +40,3 @@ class UserTenantAssignment(Base):
     
     def __repr__(self):
         return f"<UserTenantAssignment(user_id={self.user_id}, tenant_id={self.tenant_id}, role={self.role.name if self.role else 'None'}, is_primary={self.is_primary})>"
-

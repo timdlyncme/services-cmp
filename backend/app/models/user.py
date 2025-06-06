@@ -68,31 +68,6 @@ class Tenant(Base):
     ai_assistant_logs = relationship("AIAssistantLog", back_populates="tenant")
 
 
-class UserTenantAssignment(Base):
-    """Many-to-many relationship between users and tenants with additional metadata"""
-    __tablename__ = "user_tenant_assignments"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"), nullable=False)
-    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
-    is_primary = Column(Boolean, default=False, nullable=False)  # Primary tenant for the user
-    is_active = Column(Boolean, default=True, nullable=False)
-    date_created = Column(DateTime, default=datetime.datetime.utcnow)
-    date_modified = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-    
-    # Relationships
-    user = relationship("User", back_populates="tenant_assignments")
-    tenant = relationship("Tenant", back_populates="user_assignments")
-    role = relationship("Role")
-    
-    # Unique constraint to prevent duplicate assignments
-    __table_args__ = (
-        # Ensure a user can only have one assignment per tenant
-        # and only one primary tenant assignment
-    )
-
-
 class User(Base):
     __tablename__ = "users"
     
