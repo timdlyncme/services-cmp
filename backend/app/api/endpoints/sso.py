@@ -14,9 +14,10 @@ from app.services.azure_ad import AzureADService
 from app.core.permissions import has_permission
 from app.core.security import create_access_token
 from app.core.config import settings
+import logging
 
 router = APIRouter()
-
+logger = logging.getLogger(__name__)
 
 @router.get("/providers", response_model=List[SSOProviderResponse])
 def get_sso_providers(
@@ -204,10 +205,15 @@ async def initiate_sso_login(
         target_tenant_id = tenant_id or login_request.tenant_id
         
         if not target_tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Tenant ID is required for SSO login"
-            )
+            # If no tenant ID provided, use the first available tenant
+            first_tenant = db.query(Tenant).filter(Tenant.is_active == True).first()
+            if not first_tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No active tenants found"
+                )
+            target_tenant_id = first_tenant.tenant_id
+            logger.info(f"No tenant ID provided, using first available tenant: {target_tenant_id}")
         
         # Verify tenant exists
         tenant = db.query(Tenant).filter(Tenant.tenant_id == target_tenant_id).first()

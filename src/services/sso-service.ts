@@ -120,22 +120,59 @@ class SSOService {
   }
 
   /**
+   * Get available tenants for SSO login (public endpoint)
+   */
+  async getAvailableTenantsForSSO(): Promise<any[]> {
+    try {
+      // For now, we'll use a hardcoded approach since we need tenant info before login
+      // In production, you might want a public endpoint that returns tenant info
+      // or implement domain-based tenant detection
+      return [
+        {
+          tenant_id: 'default-tenant',
+          name: 'Default Tenant',
+          description: 'Default tenant for SSO login'
+        }
+      ];
+    } catch (error) {
+      console.error('Error getting available tenants:', error);
+      return [];
+    }
+  }
+
+  /**
    * Initiate SSO login for a specific tenant and provider
    */
-  async initiateLogin(tenantId: string, providerType: string): Promise<{ authorization_url: string }> {
-    const response = await fetch(`${API_BASE_URL}/sso/login?tenant_id=${tenantId}`, {
+  async initiateLogin(request: {
+    provider_type: string;
+    tenant_id?: string;
+    domain?: string;
+    redirect_uri?: string;
+  }): Promise<{ authorization_url: string; state: string }> {
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+    if (request.tenant_id) {
+      queryParams.append('tenant_id', request.tenant_id);
+    }
+    
+    const url = `${API_BASE_URL}/sso/login${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        provider_type: providerType,
-        tenant_id: tenantId
+        provider_type: request.provider_type,
+        tenant_id: request.tenant_id,
+        domain: request.domain,
+        redirect_uri: request.redirect_uri
       })
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to initiate SSO login: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Failed to initiate SSO login: ${response.statusText} - ${errorText}`);
     }
 
     return response.json();
@@ -163,12 +200,13 @@ class SSOService {
   /**
    * Get SSO login URL for Azure AD
    */
-  async getAzureADLoginUrl(domain?: string): Promise<string> {
+  async getAzureADLoginUrl(domain?: string, tenantId?: string): Promise<string> {
     const currentUrl = window.location.origin;
     const redirectUri = `${currentUrl}/sso/callback`;
     
     const response = await this.initiateLogin({
       provider_type: 'azure_ad',
+      tenant_id: tenantId, // Optional - backend will use first available tenant if not provided
       domain,
       redirect_uri: redirectUri,
     });
