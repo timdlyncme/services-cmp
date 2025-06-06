@@ -75,7 +75,7 @@ def get_users(
             # Default to current user's tenant
             # MSP users can see all users
             if current_user.role.name != "msp":
-                user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+                user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
                 if user_tenant:
                     query = query.filter(User.tenant_id == user_tenant.tenant_id)
         
@@ -96,7 +96,7 @@ def get_users(
             
             result.append(
                 UserResponse(
-                    id=user.id,
+                    id=user.user_id,  # Use UUID as id, not internal integer
                     user_id=user.user_id,
                     username=user.username,
                     full_name=user.full_name,
@@ -118,12 +118,12 @@ def get_users(
 
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user(
-    user_id: int,
+    user_id: str,  # Changed from int to str to accept UUID
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Get a specific user by ID
+    Get a specific user by UUID
     """
     # Check if user has permission to view users
     has_permission = any(p.name == "view:users" for p in current_user.role.permissions)
@@ -134,7 +134,8 @@ def get_user(
         )
     
     try:
-        user = db.query(User).filter(User.id == user_id).first()
+        # Look up user by UUID (user_id field), not internal integer id
+        user = db.query(User).filter(User.user_id == user_id).first()
         
         if not user:
             raise HTTPException(
@@ -160,7 +161,7 @@ def get_user(
             tenant_id = user.tenant.tenant_id
         
         return UserResponse(
-            id=user.id,
+            id=user.user_id,  # Use UUID as id, not internal integer
             user_id=user.user_id,
             username=user.username,
             full_name=user.full_name,
@@ -210,7 +211,7 @@ def create_user(
             )
         
         # Determine which tenant to use
-        user_tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
         if not user_tenant:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -294,7 +295,7 @@ def create_user(
             tenant_id = new_user.tenant.tenant_id
         
         return UserResponse(
-            id=new_user.id,
+            id=new_user.user_id,  # Use UUID as id, not internal integer
             user_id=new_user.user_id,
             username=new_user.username,
             full_name=new_user.full_name,
@@ -317,7 +318,7 @@ def create_user(
 
 @router.put("/{user_id}", response_model=UserResponse)
 def update_user(
-    user_id: int,
+    user_id: str,  # Changed from int to str to accept UUID
     user_update: UserUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -334,8 +335,8 @@ def update_user(
         )
     
     try:
-        # Get the user
-        user = db.query(User).filter(User.id == user_id).first()
+        # Get the user by UUID (user_id field), not internal integer id
+        user = db.query(User).filter(User.user_id == user_id).first()
         
         if not user:
             raise HTTPException(
@@ -354,7 +355,7 @@ def update_user(
         if user_update.username is not None:
             # Check if username already exists
             existing_user = db.query(User).filter(
-                (User.username == user_update.username) & (User.id != user_id)
+                (User.username == user_update.username) & (User.user_id != user_id)
             ).first()
             
             if existing_user:
@@ -371,7 +372,7 @@ def update_user(
         if user_update.email is not None:
             # Check if email already exists
             existing_user = db.query(User).filter(
-                (User.email == user_update.email) & (User.id != user_id)
+                (User.email == user_update.email) & (User.user_id != user_id)
             ).first()
             
             if existing_user:
@@ -454,7 +455,7 @@ def update_user(
             tenant_id = user.tenant.tenant_id
         
         return UserResponse(
-            id=user.id,
+            id=user.user_id,  # Use UUID as id, not internal integer
             user_id=user.user_id,
             username=user.username,
             full_name=user.full_name,
@@ -477,7 +478,7 @@ def update_user(
 
 @router.delete("/{user_id}")
 def delete_user(
-    user_id: int,
+    user_id: str,  # Changed from int to str to accept UUID
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -493,8 +494,8 @@ def delete_user(
         )
     
     try:
-        # Get the user
-        user = db.query(User).filter(User.id == user_id).first()
+        # Get the user by UUID (user_id field), not internal integer id
+        user = db.query(User).filter(User.user_id == user_id).first()
         
         if not user:
             raise HTTPException(
@@ -510,7 +511,7 @@ def delete_user(
             )
         
         # Prevent deleting yourself
-        if user.id == current_user.id:
+        if user.user_id == current_user.user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot delete your own user account"
@@ -532,3 +533,26 @@ def delete_user(
             detail=f"Error deleting user: {str(e)}"
         )
 
+
+@router.get("/debug/list", include_in_schema=False)
+def debug_list_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Debug endpoint to see raw user data
+    """
+    try:
+        users = db.query(User).limit(10).all()
+        result = []
+        for user in users:
+            result.append({
+                "internal_id": user.id,
+                "user_id": user.user_id,
+                "user_id_type": type(user.user_id).__name__,
+                "username": user.username,
+                "tenant_id": user.tenant_id
+            })
+        return {"users": result, "count": len(result)}
+    except Exception as e:
+        return {"error": str(e)}
