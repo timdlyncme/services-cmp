@@ -64,7 +64,7 @@ def get_azure_credentials(
     Get all Azure credentials for the tenant
     """
     # Check if user has permission to view credentials
-    if not current_user.role or "deployment:read" not in [p.name for p in current_user.role.permissions]:
+    if not current_user.role or "view:deployments" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -157,7 +157,7 @@ def set_azure_credentials(
     Set Azure credentials for deployments
     """
     # Check if user has permission to manage credentials
-    if not current_user.role or "deployment:manage" not in [p.name for p in current_user.role.permissions]:
+    if not current_user.role or "manage:deployments" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -229,7 +229,7 @@ def get_azure_credential(
     Get a specific Azure credential by settings_id
     """
     # Check if user has permission to view credentials
-    if not current_user.role or "deployment:read" not in [p.name for p in current_user.role.permissions]:
+    if not current_user.role or "view:deployments" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -311,7 +311,7 @@ def delete_azure_credential(
     Delete a specific Azure credential by settings_id
     """
     # Check if user has permission to manage credentials
-    if not current_user.role or "deployment:manage" not in [p.name for p in current_user.role.permissions]:
+    if not current_user.role or "manage:deployments" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -523,7 +523,7 @@ def list_azure_subscriptions(
     Otherwise, the current user's tenant ID will be used.
     """
     # Check if user has permission to view credentials
-    if not current_user.role or "deployment:read" not in [p.name for p in current_user.role.permissions]:
+    if not current_user.role or "view:deployments" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:

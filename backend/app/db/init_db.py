@@ -88,13 +88,8 @@ PERMISSIONS = [
     {"name": "create:deployments", "description": "Create deployments"},
     {"name": "update:deployments", "description": "Update deployments"},
     {"name": "delete:deployments", "description": "Delete deployments"},
+    {"name": "manage:deployments", "description": "Manage deployment engine credentials and resources"},
     
-    # Deployment Engine
-    {"name": "deployment:read", "description": "View deployment engine resources"},
-    {"name": "deployment:create", "description": "Create deployment engine resources"},
-    {"name": "deployment:update", "description": "Update deployment engine resources"},
-    {"name": "deployment:delete", "description": "Delete deployment engine resources"},
-    {"name": "deployment:manage", "description": "Manage deployment engine credentials"},
     
     # NexusAI
     {"name": "use:nexus_ai", "description": "Use NexusAI"},
@@ -114,7 +109,6 @@ ROLES = [
             "view:users", "view:tenants", 
             "view:cloud-accounts", "view:environments", "view:templates", "view:deployments",
             "create:deployments", "update:deployments", "delete:deployments",
-            "deployment:read", "deployment:create", "deployment:update", "deployment:delete",
             "use:nexus_ai"
         ]
     },

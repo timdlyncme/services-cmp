@@ -206,24 +206,8 @@ def check_permission(required_permission: str):
         if required_permission in user["permissions"]:
             return user
         
-        # Check for view:deployments permission for deployment:read
-        if required_permission == "deployment:read" and "view:deployments" in user["permissions"]:
-            return user
-        
-        # Check for create:deployments permission for deployment:create
-        if required_permission == "deployment:create" and "create:deployments" in user["permissions"]:
-            return user
-        
-        # Check for update:deployments permission for deployment:update
-        if required_permission == "deployment:update" and "update:deployments" in user["permissions"]:
-            return user
-        
-        # Check for delete:deployments permission for deployment:delete
-        if required_permission == "deployment:delete" and "delete:deployments" in user["permissions"]:
-            return user
-        
-        # Check for admin or msp role for deployment:manage
-        if required_permission == "deployment:manage" and user["role"] in ["admin", "msp"]:
+        # Check for admin or msp role for manage:deployments
+        if required_permission == "manage:deployments" and user["role"] in ["admin", "msp"]:
             return user
         
         raise HTTPException(status_code=403, detail=f"Insufficient permissions. Required: {required_permission}")
@@ -249,7 +233,7 @@ def debug_token(user: dict = Depends(get_current_user)):
 @app.post("/credentials", tags=["credentials"])
 def set_credentials(
     credentials: Dict[str, str],
-    user: dict = Depends(check_permission("deployment:manage"))
+    user: dict = Depends(check_permission("manage:deployments"))
 ):
     """
     DEPRECATED: This endpoint is deprecated in favor of database-driven credential management.
@@ -263,7 +247,7 @@ def set_credentials(
 def get_credentials(
     settings_id: Optional[str] = None,
     target_tenant_id: Optional[str] = None,
-    user: dict = Depends(check_permission("deployment:read"))
+    user: dict = Depends(check_permission("view:deployments"))
 ):
     """
     Get Azure credentials status for the current tenant or a target tenant.
@@ -302,7 +286,7 @@ def get_credentials(
 @app.post("/credentials/subscription", tags=["credentials"])
 def set_subscription(
     subscription: Dict[str, str],
-    user: dict = Depends(check_permission("deployment:manage"))
+    user: dict = Depends(check_permission("manage:deployments"))
 ):
     """
     DEPRECATED: Subscription management is now handled automatically.
@@ -315,7 +299,7 @@ def set_subscription(
 def list_subscriptions(
     settings_id: Optional[str] = None,
     target_tenant_id: Optional[str] = None,
-    user: dict = Depends(check_permission("deployment:read"))
+    user: dict = Depends(check_permission("view:deployments"))
 ):
     """
     List Azure subscriptions for the current tenant or a target tenant.
@@ -367,7 +351,7 @@ def create_deployment(
     deployment: Dict[str, Any],
     background_tasks: BackgroundTasks,
     target_tenant_id: Optional[str] = None,
-    user: dict = Depends(check_permission("deployment:create"))
+    user: dict = Depends(check_permission("create:deployments"))
 ):
     try:
         # Determine which tenant to use for this deployment
@@ -553,7 +537,7 @@ def get_resource_details(
     resource_id: str,
     target_tenant_id: Optional[str] = None,
     settings_id: Optional[str] = None,
-    user: dict = Depends(check_permission("deployment:read"))
+    user: dict = Depends(check_permission("view:deployments"))
 ):
     """
     Get Azure resource details by resource ID.
@@ -660,7 +644,7 @@ def get_resource_details(
 def list_resource_providers(
     target_tenant_id: Optional[str] = None,
     settings_id: Optional[str] = None,
-    user: dict = Depends(check_permission("deployment:read"))
+    user: dict = Depends(check_permission("view:deployments"))
 ):
     """
     List all Azure resource providers available in the subscription.
@@ -768,7 +752,7 @@ def get_resource_provider(
     namespace: str,
     target_tenant_id: Optional[str] = None,
     settings_id: Optional[str] = None,
-    user: dict = Depends(check_permission("deployment:read"))
+    user: dict = Depends(check_permission("view:deployments"))
 ):
     """
     Get details for a specific Azure resource provider by namespace.
@@ -874,7 +858,7 @@ def query_azure_resource_graph(
     query: str,
     target_tenant_id: Optional[str] = None,
     settings_id: Optional[str] = None,
-    user: dict = Depends(check_permission("deployment:read"))
+    user: dict = Depends(check_permission("view:deployments"))
 ):
     """
     Query Azure Resource Graph.
@@ -965,7 +949,7 @@ def query_azure_resource_graph(
 def get_subscription_locations(
     target_tenant_id: Optional[str] = None,
     settings_id: Optional[str] = None,
-    user: dict = Depends(check_permission("deployment:read"))
+    user: dict = Depends(check_permission("view:deployments"))
 ):
     """
     Get all available locations for the Azure subscription.
