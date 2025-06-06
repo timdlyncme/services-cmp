@@ -8,9 +8,9 @@ class Token(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    user: Dict[str, Any]
-    token: str
+    access_token: str
     token_type: str
+    user: "UserSchema"
 
 
 class UserBase(BaseModel):
@@ -24,6 +24,8 @@ class UserCreate(UserBase):
     password: str
     role: str
     tenant_id: Optional[str] = None
+    additional_tenant_ids: Optional[List[str]] = []  # For multi-tenant assignments
+    is_msp_user: Optional[bool] = False
 
 
 class UserUpdate(BaseModel):
@@ -34,21 +36,23 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     role: Optional[str] = None
     tenant_id: Optional[str] = None
+    additional_tenant_ids: Optional[List[str]] = None
+    is_msp_user: Optional[bool] = None
 
 
 class User(BaseModel):
-    id: int
-    user_id: str
-    username: str
-    full_name: Optional[str] = None
+    id: str  # Changed to str for UUID
+    name: str  # Changed from full_name for consistency
     email: EmailStr
     role: str
-    tenantId: str
-    permissions: List[str]
+    tenantId: Optional[str] = None  # Current/primary tenant
+    permissions: List[str] = []
+    accessibleTenants: List[str] = []  # List of tenant IDs user can access
+    isMspUser: bool = False
 
 
 class UserSchema(User):
-    """Alias for User schema for backward compatibility"""
+    """Main user schema for API responses"""
     pass
 
 
@@ -57,6 +61,7 @@ class UserResponse(UserBase):
     user_id: str
     role: Optional[str] = None
     tenant_id: Optional[str] = None  # Changed to str for UUID
+    is_msp_user: Optional[bool] = False
     
     class Config:
         from_attributes = True
