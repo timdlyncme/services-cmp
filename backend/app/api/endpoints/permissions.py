@@ -2,7 +2,6 @@ from typing import Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
-from pydantic import ValidationError
 
 from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
@@ -106,12 +105,6 @@ def create_permission(
             description=new_permission.description
         )
         
-    except ValidationError as e:
-        # Handle Pydantic validation errors
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Validation error: {str(e)}"
-        )
     except HTTPException:
         # Re-raise HTTP exceptions
         raise
@@ -133,3 +126,4 @@ def options_permissions():
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
+

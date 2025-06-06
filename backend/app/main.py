@@ -1,6 +1,8 @@
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 from app.core.config import settings
 from app.api.api import api_router
@@ -44,6 +46,23 @@ app.add_middleware(CORSMiddlewareWithOptions)
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Custom handler for Pydantic validation errors to simplify error messages
+    """
+    error_messages = []
+    for error in exc.errors():
+        error_messages.append(error.get('msg', 'Validation error'))
+    
+    # Join multiple error messages with semicolons for clarity
+    simplified_error = "; ".join(error_messages)
+    
+    return JSONResponse(
+        status_code=422,
+        content={"detail": simplified_error}
+    )
 
 @app.get("/")
 def root():
