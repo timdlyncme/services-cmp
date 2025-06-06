@@ -532,3 +532,27 @@ def delete_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting user: {str(e)}"
         )
+
+
+@router.get("/debug/list", include_in_schema=False)
+def debug_list_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Debug endpoint to see raw user data
+    """
+    try:
+        users = db.query(User).limit(10).all()
+        result = []
+        for user in users:
+            result.append({
+                "internal_id": user.id,
+                "user_id": user.user_id,
+                "user_id_type": type(user.user_id).__name__,
+                "username": user.username,
+                "tenant_id": user.tenant_id
+            })
+        return {"users": result, "count": len(result)}
+    except Exception as e:
+        return {"error": str(e)}
