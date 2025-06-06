@@ -571,7 +571,7 @@ export class CMPService {
   /**
    * Get a specific user
    */
-  async getUser(userId: number): Promise<any> {
+  async getUser(userId: string): Promise<any> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -620,7 +620,7 @@ export class CMPService {
   /**
    * Update a user
    */
-  async updateUser(userId: number, user: any): Promise<any> {
+  async updateUser(userId: string, user: any): Promise<any> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -644,7 +644,7 @@ export class CMPService {
   /**
    * Delete a user
    */
-  async deleteUser(userId: number): Promise<void> {
+  async deleteUser(userId: string): Promise<void> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {

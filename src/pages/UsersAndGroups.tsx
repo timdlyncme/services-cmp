@@ -12,6 +12,30 @@ import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, Users, UserPlus, Use
 import { User } from "@/types/auth";
 import { cmpService } from "@/services/cmp-service";
 
+// Data mapping utilities
+const mapBackendUserToFrontend = (backendUser: any): User => {
+  return {
+    id: backendUser.user_id || backendUser.id,
+    full_name: backendUser.full_name || backendUser.name || '',
+    email: backendUser.email,
+    role: backendUser.role,
+    tenantId: backendUser.tenant_id,
+    avatar: undefined,
+    permissions: undefined
+  };
+};
+
+const mapFrontendUserToBackend = (frontendUser: any) => {
+  return {
+    username: frontendUser.username || frontendUser.email?.split('@')[0] || '',
+    full_name: frontendUser.full_name || frontendUser.name || '',
+    email: frontendUser.email,
+    role: frontendUser.role,
+    password: frontendUser.password,
+    is_active: frontendUser.is_active !== undefined ? frontendUser.is_active : true
+  };
+};
+
 const UsersAndGroups = () => {
   const { currentTenant, user } = useAuth();
   const [activeTab, setActiveTab] = useState("users");
@@ -26,6 +50,22 @@ const UsersAndGroups = () => {
   const [newUserName, setNewUserName] = useState("");
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserRole, setNewUserRole] = useState("user");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  
+  // State for the edit user dialog
+  const [isEditUserDialogOpen, setIsEditUserDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editUserName, setEditUserName] = useState("");
+  const [editUserEmail, setEditUserEmail] = useState("");
+  const [editUserRole, setEditUserRole] = useState("user");
+  const [editUserActive, setEditUserActive] = useState(true);
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+  
+  // State for delete confirmation
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
   
   // Check if user is admin or msp
   const canManageUsers = user?.role === "admin" || user?.role === "msp";
@@ -38,9 +78,10 @@ const UsersAndGroups = () => {
     setError(null);
     
     try {
-      const users = await cmpService.getUsers(currentTenant.tenant_id);
-      setUsers(users);
-      setFilteredUsers(users);
+      const backendUsers = await cmpService.getUsers(currentTenant.tenant_id);
+      const mappedUsers = backendUsers.map(mapBackendUserToFrontend);
+      setUsers(mappedUsers);
+      setFilteredUsers(mappedUsers);
     } catch (error) {
       console.error("Error fetching users:", error);
       setError("Failed to load users. Please try again.");
@@ -65,7 +106,7 @@ const UsersAndGroups = () => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       const filtered = users.filter(user => 
-        user.name.toLowerCase().includes(query) || 
+        user.full_name.toLowerCase().includes(query) || 
         user.email.toLowerCase().includes(query) ||
         user.role.toLowerCase().includes(query)
       );
@@ -78,6 +119,137 @@ const UsersAndGroups = () => {
   const handleRefresh = () => {
     fetchUsers();
     toast.success("Refreshing users...");
+  };
+  
+  const handleCreateUser = async () => {
+    if (!currentTenant) return;
+    
+    // Validation
+    if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword.trim()) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+    
+    setIsCreatingUser(true);
+    
+    try {
+      const userData = mapFrontendUserToBackend({
+        full_name: newUserName,
+        email: newUserEmail,
+        role: newUserRole,
+        password: newUserPassword
+      });
+      
+      await cmpService.createUser(userData, currentTenant.tenant_id);
+      
+      // Reset form
+      setNewUserName("");
+      setNewUserEmail("");
+      setNewUserRole("user");
+      setNewUserPassword("");
+      setIsNewUserDialogOpen(false);
+      
+      // Refresh users list
+      await fetchUsers();
+      
+      toast.success("User created successfully");
+    } catch (error) {
+      console.error("Error creating user:", error);
+      if (error instanceof Error) {
+        toast.error(`Failed to create user: ${error.message}`);
+      } else {
+        toast.error("Failed to create user");
+      }
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
+  
+  const handleEditUser = (userToEdit: User) => {
+    setEditingUser(userToEdit);
+    setEditUserName(userToEdit.full_name);
+    setEditUserEmail(userToEdit.email);
+    setEditUserRole(userToEdit.role);
+    setEditUserActive(true); // Default to active since we don't have this field in the current User type
+    setIsEditUserDialogOpen(true);
+  };
+  
+  const handleUpdateUser = async () => {
+    if (!editingUser) return;
+    
+    // Validation
+    if (!editUserName.trim() || !editUserEmail.trim()) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+    
+    setIsUpdatingUser(true);
+    
+    try {
+      const updateData = {
+        full_name: editUserName,
+        email: editUserEmail,
+        role: editUserRole,
+        is_active: editUserActive
+      };
+      
+      await cmpService.updateUser(editingUser.id, updateData);
+      
+      // Reset form
+      setEditingUser(null);
+      setEditUserName("");
+      setEditUserEmail("");
+      setEditUserRole("user");
+      setEditUserActive(true);
+      setIsEditUserDialogOpen(false);
+      
+      // Refresh users list
+      await fetchUsers();
+      
+      toast.success("User updated successfully");
+    } catch (error) {
+      console.error("Error updating user:", error);
+      if (error instanceof Error) {
+        toast.error(`Failed to update user: ${error.message}`);
+      } else {
+        toast.error("Failed to update user");
+      }
+    } finally {
+      setIsUpdatingUser(false);
+    }
+  };
+  
+  const handleDeleteUser = (userToDelete: User) => {
+    setUserToDelete(userToDelete);
+    setIsDeleteDialogOpen(true);
+  };
+  
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    
+    setIsDeletingUser(true);
+    
+    try {
+      await cmpService.deleteUser(userToDelete.id);
+      
+      // Reset state
+      setUserToDelete(null);
+      setIsDeleteDialogOpen(false);
+      
+      // Refresh users list
+      await fetchUsers();
+      
+      toast.success("User deleted successfully");
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      if (error instanceof Error) {
+        toast.error(`Failed to delete user: ${error.message}`);
+      } else {
+        toast.error("Failed to delete user");
+      }
+    } finally {
+      setIsDeletingUser(false);
+    }
   };
   
   const getRoleBadge = (role: string) => {
@@ -157,20 +329,116 @@ const UsersAndGroups = () => {
                       {user?.role === "msp" && <option value="msp">MSP</option>}
                     </select>
                   </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="password" className="text-sm font-medium">Password</label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={newUserPassword}
+                      onChange={(e) => setNewUserPassword(e.target.value)}
+                      placeholder="Enter a password"
+                    />
+                  </div>
                 </div>
                 
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setIsNewUserDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={() => {
-                    toast.success("This functionality would create a new user in a real implementation");
-                    setIsNewUserDialogOpen(false);
-                  }}>Create User</Button>
+                  <Button onClick={handleCreateUser} disabled={isCreatingUser}>
+                    {isCreatingUser ? "Creating..." : "Create User"}
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
           )}
         </div>
       </div>
+      
+      {/* Edit User Dialog */}
+      <Dialog open={isEditUserDialogOpen} onOpenChange={setIsEditUserDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>
+              Update user information
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="edit-name" className="text-sm font-medium">Name</label>
+              <Input
+                id="edit-name"
+                value={editUserName}
+                onChange={(e) => setEditUserName(e.target.value)}
+                placeholder="e.g., John Doe"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="edit-email" className="text-sm font-medium">Email</label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editUserEmail}
+                onChange={(e) => setEditUserEmail(e.target.value)}
+                placeholder="e.g., john.doe@example.com"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="edit-role" className="text-sm font-medium">Role</label>
+              <select
+                id="edit-role"
+                value={editUserRole}
+                onChange={(e) => setEditUserRole(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+                {user?.role === "msp" && <option value="msp">MSP</option>}
+              </select>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <input
+                id="edit-active"
+                type="checkbox"
+                checked={editUserActive}
+                onChange={(e) => setEditUserActive(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <label htmlFor="edit-active" className="text-sm font-medium">Active</label>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditUserDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdateUser} disabled={isUpdatingUser}>
+              {isUpdatingUser ? "Updating..." : "Update User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete User</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {userToDelete?.full_name}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDeleteUser} disabled={isDeletingUser}>
+              {isDeletingUser ? "Deleting..." : "Delete User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       <Tabs defaultValue="users" onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2">
@@ -217,15 +485,15 @@ const UsersAndGroups = () => {
                 <TableBody>
                   {filteredUsers.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
+                      <TableCell className="font-medium">{user.full_name}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{getRoleBadge(user.role)}</TableCell>
                       {canManageUsers && (
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => toast.info("Delete user functionality would be implemented here")}>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(user)}>
                             <Trash className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => toast.info("Edit user functionality would be implemented here")}>
+                          <Button variant="ghost" size="icon" onClick={() => handleEditUser(user)}>
                             <Edit className="h-4 w-4" />
                           </Button>
                         </TableCell>
