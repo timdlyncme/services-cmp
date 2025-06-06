@@ -3,7 +3,7 @@ from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 
-from app.api.endpoints.auth import get_current_user
+from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import Permission, User
 from app.schemas.permission import PermissionResponse, PermissionCreate
