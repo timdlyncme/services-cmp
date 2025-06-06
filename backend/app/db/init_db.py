@@ -53,6 +53,12 @@ PERMISSIONS = [
     {"name": "update:tenants", "description": "Update tenants"},
     {"name": "delete:tenants", "description": "Delete tenants"},
     
+    # Permissions management
+    {"name": "view:permissions", "description": "View permissions"},
+    {"name": "create:permissions", "description": "Create permissions"},
+    {"name": "update:permissions", "description": "Update permissions"},
+    {"name": "delete:permissions", "description": "Delete permissions"},
+    
     # Cloud accounts
     {"name": "view:cloud-accounts", "description": "View cloud accounts"},
     {"name": "create:cloud-accounts", "description": "Create cloud accounts"},
