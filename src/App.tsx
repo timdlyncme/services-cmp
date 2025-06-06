@@ -13,8 +13,8 @@ import EnhancedDashboard from "@/pages/EnhancedDashboard";
 import Catalog from "@/pages/Catalog";
 import Deployments from "@/pages/Deployments";
 import Environments from "@/pages/Environments";
-import Templates from "@/pages/Templates";
-import TemplateFoundry from "@/pages/TemplateFoundry";
+import TemplateManagement from "@/pages/TemplateManagement";
+import MSPTemplateFoundry from "@/pages/MSPTemplateFoundry";
 import Integrations from "@/pages/Integrations";
 import Settings from "@/pages/Settings";
 import Tenants from "@/pages/Tenants";
@@ -52,8 +52,16 @@ const App = () => (
                 <Route path="/catalog" element={<Catalog />} />
                 <Route path="/deployments" element={<Deployments />} />
                 <Route path="/environments" element={<Environments />} />
-                <Route path="/templates" element={<Templates />} />
-                <Route path="/template-foundry" element={<TemplateFoundry />} />
+                <Route path="/template-management" element={
+                  <ProtectedRoute requiredPermission="view:templates">
+                    <TemplateManagement />
+                  </ProtectedRoute>
+                } />
+                <Route path="/msp-template-foundry" element={
+                  <ProtectedRoute requiredPermission="manage:templates">
+                    <MSPTemplateFoundry />
+                  </ProtectedRoute>
+                } />
                 <Route path="/integrations" element={<Integrations />} />
                 <Route path="/settings" element={
                   <ProtectedRoute requiredPermission="view:settings">
