@@ -34,6 +34,7 @@ import { Separator } from "@/components/ui/separator";
 import { AIAssistantService, AzureOpenAIConfigUpdate } from "@/services/ai-assistant-service";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ssoService } from "@/services/sso-service";
 
 // Interface for Azure credentials
 interface AzureCredential {
@@ -73,6 +74,20 @@ const Settings = () => {
   // Subscription test state
   const [subscriptions, setSubscriptions] = useState<Record<string, AzureSubscription[]>>({});
   const [isTestingConnection, setIsTestingConnection] = useState<Record<string, boolean>>({});
+  
+  // SSO Settings state
+  const [ssoProviders, setSsoProviders] = useState<any[]>([]);
+  const [isLoadingSsoProviders, setIsLoadingSsoProviders] = useState(false);
+  const [ssoConfig, setSsoConfig] = useState({
+    provider_type: "azure_ad",
+    name: "Azure AD SSO",
+    client_id: "",
+    client_secret: "",
+    tenant_id: "",
+    is_active: false,
+    scim_enabled: false
+  });
+  const [isSavingSsoConfig, setIsSavingSsoConfig] = useState(false);
   
   const [githubSettings, setGithubSettings] = useState({
     enabled: false,
@@ -182,6 +197,41 @@ const Settings = () => {
         model: "gpt-4",
         apiVersion: "2023-05-15"
       });
+    }
+  };
+  
+  // Load SSO providers
+  const loadSsoProviders = async () => {
+    if (!currentTenant) return;
+    
+    setIsLoadingSsoProviders(true);
+    addLog("Loading SSO providers...");
+    
+    try {
+      const providers = await ssoService.getProviders(currentTenant.tenant_id);
+      setSsoProviders(providers);
+      
+      // If there's an existing Azure AD provider, populate the form
+      const azureProvider = providers.find(p => p.provider_type === 'azure_ad');
+      if (azureProvider) {
+        setSsoConfig({
+          provider_type: azureProvider.provider_type,
+          name: azureProvider.name,
+          client_id: azureProvider.client_id,
+          client_secret: azureProvider.client_secret || "",
+          tenant_id: azureProvider.tenant_id,
+          is_active: azureProvider.is_active,
+          scim_enabled: azureProvider.scim_enabled || false
+        });
+      }
+      
+      addLog(`Loaded ${providers.length} SSO provider(s)`, "success");
+    } catch (error) {
+      console.error("Error loading SSO providers:", error);
+      addLog("Failed to load SSO providers", "error");
+      toast.error("Failed to load SSO providers");
+    } finally {
+      setIsLoadingSsoProviders(false);
     }
   };
   
@@ -386,7 +436,6 @@ const Settings = () => {
   };
   
   // Save Azure OpenAI settings
-  // Save Azure OpenAI settings
   const handleSaveAISettings = async (showToast: boolean = true) => {
     if (!azureOpenAISettings.enabled) {
       // If disabled, just save empty settings
@@ -493,11 +542,34 @@ const Settings = () => {
     }
   };
 
-  
+  // Save SSO configuration
+  const saveSsoConfig = async () => {
+    if (!currentTenant) return;
+    
+    setIsSavingSsoConfig(true);
+    addLog("Saving SSO configuration...");
+    
+    try {
+      await ssoService.createProvider(currentTenant.tenant_id, ssoConfig);
+      addLog("SSO configuration saved successfully", "success");
+      toast.success("SSO configuration saved successfully");
+      
+      // Reload providers to get updated data
+      await loadSsoProviders();
+    } catch (error) {
+      console.error("Error saving SSO configuration:", error);
+      addLog("Failed to save SSO configuration", "error");
+      toast.error("Failed to save SSO configuration");
+    } finally {
+      setIsSavingSsoConfig(false);
+    }
+  };
+
   useEffect(() => {
     if (currentTenant) {
       loadAzureCredentials();
       loadAzureOpenAISettings();
+      loadSsoProviders();
       addLog("Settings page initialized", "info");
     }
   }, [currentTenant]);
@@ -772,7 +844,7 @@ const Settings = () => {
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="sso-provider">SSO Provider</Label>
-                    <Select>
+                    <Select value={ssoConfig.provider_type} onValueChange={(value) => setSsoConfig({...ssoConfig, provider_type: value})}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select SSO Provider" />
                       </SelectTrigger>
@@ -791,6 +863,8 @@ const Settings = () => {
                         id="sso-client-id"
                         placeholder="Enter your Azure AD Client ID"
                         type="text"
+                        value={ssoConfig.client_id}
+                        onChange={(e) => setSsoConfig({...ssoConfig, client_id: e.target.value})}
                       />
                     </div>
                     <div>
@@ -799,6 +873,8 @@ const Settings = () => {
                         id="sso-client-secret"
                         placeholder="Enter your Azure AD Client Secret"
                         type="password"
+                        value={ssoConfig.client_secret}
+                        onChange={(e) => setSsoConfig({...ssoConfig, client_secret: e.target.value})}
                       />
                     </div>
                   </div>
@@ -809,18 +885,47 @@ const Settings = () => {
                       id="sso-tenant-id"
                       placeholder="Enter your Azure Tenant ID"
                       type="text"
+                      value={ssoConfig.tenant_id}
+                      onChange={(e) => setSsoConfig({...ssoConfig, tenant_id: e.target.value})}
                     />
                   </div>
                   
                   <div className="flex items-center space-x-2">
-                    <Switch id="sso-enabled" />
+                    <Switch 
+                      id="sso-enabled" 
+                      checked={ssoConfig.is_active}
+                      onCheckedChange={(checked) => setSsoConfig({...ssoConfig, is_active: checked})}
+                    />
                     <Label htmlFor="sso-enabled">Enable SSO for this organization</Label>
                   </div>
                   
                   <div className="flex items-center space-x-2">
-                    <Switch id="scim-enabled" />
+                    <Switch 
+                      id="scim-enabled"
+                      checked={ssoConfig.scim_enabled}
+                      onCheckedChange={(checked) => setSsoConfig({...ssoConfig, scim_enabled: checked})}
+                    />
                     <Label htmlFor="scim-enabled">Enable SCIM user provisioning</Label>
                   </div>
+
+                  {/* Azure AD Configuration Instructions */}
+                  <Alert>
+                    <Info className="h-4 w-4" />
+                    <AlertTitle>Azure AD Configuration Required</AlertTitle>
+                    <AlertDescription className="space-y-2">
+                      <p>To configure Azure AD SSO, you'll need to:</p>
+                      <ol className="list-decimal list-inside space-y-1 text-sm">
+                        <li>Register an application in Azure Portal</li>
+                        <li>Set redirect URI to: <code className="bg-muted px-1 rounded">{window.location.origin}/auth/callback</code></li>
+                        <li>Configure API permissions for OpenID Connect</li>
+                        <li>Generate a client secret</li>
+                        <li>Copy the Application (client) ID, client secret, and Directory (tenant) ID</li>
+                      </ol>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        For detailed setup instructions, see our <a href="#" className="text-primary hover:underline">Azure AD SSO Setup Guide</a>.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
                 </div>
                 
                 <Alert>
@@ -832,7 +937,10 @@ const Settings = () => {
                 </Alert>
               </CardContent>
               <CardFooter>
-                <Button>Save SSO Configuration</Button>
+                <Button onClick={saveSsoConfig} disabled={isSavingSsoConfig}>
+                  {isSavingSsoConfig && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isSavingSsoConfig ? "Saving..." : "Save SSO Configuration"}
+                </Button>
               </CardFooter>
             </Card>
           </div>
