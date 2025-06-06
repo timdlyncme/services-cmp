@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../context/auth-context';
 import { ssoService } from '../services/sso-service';
 
 const Login: React.FC = () => {
@@ -278,4 +278,3 @@ const Login: React.FC = () => {
 };
 
 export default Login;
-
