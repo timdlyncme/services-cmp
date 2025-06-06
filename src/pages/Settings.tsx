@@ -22,7 +22,8 @@ import {
   BrainCircuit,
   CheckCircle2,
   AlertCircle,
-  Info
+  Info,
+  Shield
 } from "lucide-react";
 import { toast } from "sonner";
 import { cmpService } from "@/services/cmp-service";
@@ -534,11 +535,16 @@ const Settings = () => {
       </div>
       
       <Tabs defaultValue="azure" className="space-y-4">
-        <TabsList className="grid grid-cols-4 md:w-[600px]">
+        <TabsList className="grid grid-cols-5 md:w-[750px]">
           <TabsTrigger value="azure" className="flex items-center">
             <CloudCog className="h-4 w-4 mr-2" />
             <span className="hidden sm:inline">Azure</span>
             <span className="sm:hidden">Azure</span>
+          </TabsTrigger>
+          <TabsTrigger value="sso" className="flex items-center">
+            <Shield className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">SSO Setup</span>
+            <span className="sm:hidden">SSO</span>
           </TabsTrigger>
           <TabsTrigger value="ai" className="flex items-center">
             <BrainCircuit className="h-4 w-4 mr-2" />
@@ -743,6 +749,92 @@ const Settings = () => {
                 </Button>
               </CardFooter>
             </Card>            
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="sso" className="space-y-6">
+          <div className="grid grid-cols-1 gap-6">
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle className="flex items-center">
+                      <Shield className="h-5 w-5 mr-2" />
+                      Single Sign-On Configuration
+                    </CardTitle>
+                    <CardDescription>
+                      Configure SSO providers for your organization. Users will be able to log in using their SSO credentials.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="sso-provider">SSO Provider</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select SSO Provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="azure_ad">Microsoft Entra ID (Azure AD)</SelectItem>
+                        <SelectItem value="google" disabled>Google Workspace (Coming Soon)</SelectItem>
+                        <SelectItem value="okta" disabled>Okta (Coming Soon)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="sso-client-id">Client ID</Label>
+                      <Input
+                        id="sso-client-id"
+                        placeholder="Enter your Azure AD Client ID"
+                        type="text"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="sso-client-secret">Client Secret</Label>
+                      <Input
+                        id="sso-client-secret"
+                        placeholder="Enter your Azure AD Client Secret"
+                        type="password"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="sso-tenant-id">Azure Tenant ID</Label>
+                    <Input
+                      id="sso-tenant-id"
+                      placeholder="Enter your Azure Tenant ID"
+                      type="text"
+                    />
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Switch id="sso-enabled" />
+                    <Label htmlFor="sso-enabled">Enable SSO for this organization</Label>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Switch id="scim-enabled" />
+                    <Label htmlFor="scim-enabled">Enable SCIM user provisioning</Label>
+                  </div>
+                </div>
+                
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>Setup Instructions</AlertTitle>
+                  <AlertDescription>
+                    To configure Azure AD SSO, you'll need to register an application in your Azure portal and configure the redirect URI to: <code>https://your-domain.com/auth/sso/callback</code>
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+              <CardFooter>
+                <Button>Save SSO Configuration</Button>
+              </CardFooter>
+            </Card>
           </div>
         </TabsContent>
         
