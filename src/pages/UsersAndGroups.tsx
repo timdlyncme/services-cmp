@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { API_BASE_URL } from "@/config/api";
 
 const UsersAndGroups = () => {
   const { currentTenant, user } = useAuth();
@@ -37,7 +38,7 @@ const UsersAndGroups = () => {
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
   const [ssoProviders, setSsoProviders] = useState<any[]>([]);
-  const [selectedSsoProvider, setSelectedSsoProvider] = useState("");
+  const [selectedSsoProvider, setSelectedSsoProvider] = useState("none");
   const [ssoUserId, setSsoUserId] = useState("");
   const [ssoEmail, setSsoEmail] = useState("");
   const [isEditingUser, setIsEditingUser] = useState(false);
@@ -78,7 +79,7 @@ const UsersAndGroups = () => {
     setIsLoadingPermissions(true);
     
     try {
-      const response = await fetch(`/api/permissions/?tenant_id=${currentTenant.tenant_id}`, {
+      const response = await fetch(`${API_BASE_URL}/permissions/?tenant_id=${currentTenant.tenant_id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -103,7 +104,7 @@ const UsersAndGroups = () => {
     if (!currentTenant) return;
     
     try {
-      const response = await fetch(`/api/sso/providers?tenant_id=${currentTenant.tenant_id}`, {
+      const response = await fetch(`${API_BASE_URL}/sso/providers?tenant_id=${currentTenant.tenant_id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -292,7 +293,7 @@ const UsersAndGroups = () => {
                             <SelectValue placeholder="Select SSO provider (optional)" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">No SSO Provider</SelectItem>
+                            <SelectItem value="none">No SSO Provider</SelectItem>
                             {ssoProviders.map((provider) => (
                               <SelectItem key={provider.id} value={provider.id.toString()}>
                                 {provider.name} ({provider.provider_type})
@@ -302,7 +303,7 @@ const UsersAndGroups = () => {
                         </Select>
                       </div>
 
-                      {selectedSsoProvider && (
+                      {selectedSsoProvider && selectedSsoProvider !== "none" && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <label htmlFor="sso-user-id" className="text-sm font-medium">SSO User ID</label>
@@ -338,7 +339,7 @@ const UsersAndGroups = () => {
                     setNewUserEmail("");
                     setNewUserRole("user");
                     setSelectedPermissions([]);
-                    setSelectedSsoProvider("");
+                    setSelectedSsoProvider("none");
                     setSsoUserId("");
                     setSsoEmail("");
                   }}>Cancel</Button>

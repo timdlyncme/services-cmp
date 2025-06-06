@@ -84,6 +84,8 @@ const Settings = () => {
     client_id: "",
     client_secret: "",
     tenant_id: "",
+    authority: "",
+    discovery_url: "",
     is_active: false,
     scim_enabled: false
   });
@@ -220,6 +222,8 @@ const Settings = () => {
           client_id: azureProvider.client_id,
           client_secret: azureProvider.client_secret || "",
           tenant_id: azureProvider.tenant_id,
+          authority: azureProvider.authority,
+          discovery_url: azureProvider.discovery_url,
           is_active: azureProvider.is_active,
           scim_enabled: azureProvider.scim_enabled || false
         });
@@ -888,6 +892,34 @@ const Settings = () => {
                       value={ssoConfig.tenant_id}
                       onChange={(e) => setSsoConfig({...ssoConfig, tenant_id: e.target.value})}
                     />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="sso-authority">Authority URL (Optional)</Label>
+                    <Input
+                      id="sso-authority"
+                      placeholder="https://login.microsoftonline.com/{tenant-id}"
+                      type="text"
+                      value={ssoConfig.authority}
+                      onChange={(e) => setSsoConfig({...ssoConfig, authority: e.target.value})}
+                    />
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Leave empty to use default Azure AD authority
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="sso-discovery-url">Discovery URL (Optional)</Label>
+                    <Input
+                      id="sso-discovery-url"
+                      placeholder="https://login.microsoftonline.com/{tenant-id}/v2.0/.well-known/openid_configuration"
+                      type="text"
+                      value={ssoConfig.discovery_url}
+                      onChange={(e) => setSsoConfig({...ssoConfig, discovery_url: e.target.value})}
+                    />
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Leave empty to use default OIDC discovery endpoint
+                    </p>
                   </div>
                   
                   <div className="flex items-center space-x-2">

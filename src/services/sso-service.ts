@@ -32,6 +32,7 @@ export interface SSOProvider {
     client_id: string;
     tenant_id: string; // Azure AD tenant ID
     authority?: string;
+    discovery_url?: string;
   };
   is_active: boolean;
 }
@@ -102,6 +103,8 @@ class SSOService {
         client_id: providerConfig.client_id,
         client_secret: providerConfig.client_secret,
         tenant_id: providerConfig.tenant_id, // Azure AD tenant ID
+        authority: providerConfig.authority || null,
+        discovery_url: providerConfig.discovery_url || null,
         is_active: providerConfig.is_active,
         scim_enabled: providerConfig.scim_enabled || false,
         tenant_id_fk: tenantId // Our internal tenant ID
