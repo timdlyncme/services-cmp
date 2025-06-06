@@ -2,10 +2,11 @@ from typing import Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
+from pydantic import ValidationError
 
 from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
-from app.models.user import Permission, User
+from app.models.user import Permission, User, Role
 from app.schemas.permission import PermissionResponse, PermissionCreate
 
 router = APIRouter()
@@ -56,7 +57,7 @@ def create_permission(
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Create a new permission
+    Create a new permission with role assignment
     """
     # Check if user has permission to create permissions
     has_permission = any(p.name == "create:permissions" for p in current_user.role.permissions)
@@ -75,11 +76,25 @@ def create_permission(
                 detail=f"Permission with name '{permission_data.name}' already exists"
             )
         
+        # Validate that all specified roles exist in the database
+        roles_to_assign = []
+        for role_name in permission_data.roles:
+            role = db.query(Role).filter(Role.name == role_name).first()
+            if not role:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Role '{role_name}' does not exist"
+                )
+            roles_to_assign.append(role)
+        
         # Create new permission
         new_permission = Permission(
             name=permission_data.name,
             description=permission_data.description
         )
+        
+        # Assign the permission to the specified roles
+        new_permission.roles = roles_to_assign
         
         db.add(new_permission)
         db.commit()
@@ -91,6 +106,12 @@ def create_permission(
             description=new_permission.description
         )
         
+    except ValidationError as e:
+        # Handle Pydantic validation errors
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Validation error: {str(e)}"
+        )
     except HTTPException:
         # Re-raise HTTP exceptions
         raise
