@@ -150,8 +150,8 @@ export function AppSidebar() {
             </div>
           </SidebarSection>
 
-          {/* Tenant Management Section - visible to admin and user roles within their tenant */}
-          {(isAdmin || isRegularUser) && (
+          {/* Tenant Management Section - visible to admin and MSP roles only */}
+          {(isAdmin || isMSP) && (
             <>
               <SidebarSeparator />
               <SidebarSection title="Tenant Management" collapsed={collapsed}>
