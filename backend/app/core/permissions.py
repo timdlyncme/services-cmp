@@ -9,7 +9,8 @@ This module provides utilities for:
 
 from typing import List, Optional, Set
 from sqlalchemy.orm import Session
-from app.models.user import User, Permission, UserTenantAssignment
+from app.models.user import User, Permission
+from app.models.user_tenant_assignment import UserTenantAssignment
 
 
 # Global permissions that apply across all tenants (primarily for MSP users)
@@ -258,4 +259,3 @@ def get_user_role_in_tenant(user: User, tenant_id: str) -> Optional[str]:
     
     role = user.get_role_in_tenant(tenant_id)
     return role.name if role else None
-
