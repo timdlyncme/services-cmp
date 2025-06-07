@@ -78,6 +78,7 @@ PERMISSIONS = [
     {"name": "delete:environments", "description": "Delete environments", "scope": "tenant"},
     
     # Templates (tenant-scoped)
+    {"name": "view:catalog", "description": "View template catalog", "scope": "tenant"},
     {"name": "view:templates", "description": "View templates", "scope": "tenant"},
     {"name": "create:templates", "description": "Create templates", "scope": "tenant"},
     {"name": "update:templates", "description": "Update templates", "scope": "tenant"},
@@ -116,7 +117,7 @@ ROLES = [
         "name": "user",
         "description": "Regular user with limited permissions within assigned tenants",
         "permissions": [
-            "view:cloud-accounts", "view:environments", "view:templates", "view:deployments",
+            "view:catalog", "view:deployments",
             "create:deployments", "update:deployments", "delete:deployments",
             "use:nexus_ai", "use:ai_assistant"
         ]
@@ -128,7 +129,7 @@ ROLES = [
             "view:users", "create:users", "update:users", "delete:users",
             "view:cloud-accounts", "create:cloud-accounts", "update:cloud-accounts", "delete:cloud-accounts",
             "view:environments", "create:environments", "update:environments", "delete:environments",
-            "view:templates", "create:templates", "update:templates", "delete:templates",
+            "view:catalog", "view:templates", "create:templates", "update:templates", "delete:templates",
             "view:template-foundry", "create:template-foundry", "update:template-foundry", "delete:template-foundry",
             "view:deployments", "create:deployments", "update:deployments", "delete:deployments", "manage:deployments",
             "view:settings", "update:settings", "use:ai_assistant", "use:nexus_ai", "manage:nexus_ai"
