@@ -175,7 +175,7 @@ export function AppSidebar() {
                   <NavItem to="/msp/tenants" icon={Users} label="All Tenants" collapsed={collapsed} permission="view:all-tenants" />
                   <NavItem to="/msp/users" icon={Shield} label="MSP Users" collapsed={collapsed} permission="view:msp-users" />
                   <NavItem to="/msp/analytics" icon={Activity} label="Platform Analytics" collapsed={collapsed} permission="view:platform-analytics" />
-                  <NavItem to="/msp-template-foundry" icon={Pickaxe} label="Template Foundry" collapsed={collapsed} permission="manage:templates" />
+                  <NavItem to="/msp-template-foundry" icon={Pickaxe} label="Template Foundry" collapsed={collapsed} permission="view:templates" />
                   <NavItem to="/nexus-ai" icon={Brain} label="NexusAI" collapsed={collapsed} permission="use:nexus_ai" />
                 </div>
               </SidebarSection>
