@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.security import authenticate_user, create_access_token
 from app.core.permissions import get_user_accessible_tenants, get_user_permissions_in_tenant, can_user_switch_to_tenant
 from app.models.user import User
-from app.schemas.user import Token, LoginResponse, User as UserSchema
+from app.schemas.user import Token, LoginResponse, User
 from app.db.session import get_db
 
 router = APIRouter()
@@ -65,7 +65,7 @@ def login_for_access_token(
     return LoginResponse(
         access_token=access_token,
         token_type="bearer",
-        user=UserSchema(
+        user=User(
             id=user.user_id,
             name=user.full_name,
             email=user.email,
@@ -90,7 +90,7 @@ def options_login():
     return response
 
 
-@router.get("/me", response_model=UserSchema)
+@router.get("/me", response_model=User)
 def read_users_me(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -126,7 +126,7 @@ def read_users_me(
         # Fallback to role permissions if no tenant context
         permissions = [p.name for p in current_user.role.permissions]
 
-    return UserSchema(
+    return User(
         id=current_user.user_id,
         name=current_user.full_name,
         email=current_user.email,
@@ -170,7 +170,7 @@ def switch_tenant(
     # Get user's accessible tenants
     accessible_tenants = get_user_accessible_tenants(current_user, db)
     
-    return UserSchema(
+    return User(
         id=current_user.user_id,
         name=current_user.full_name,
         email=current_user.email,

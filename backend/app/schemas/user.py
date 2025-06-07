@@ -10,7 +10,7 @@ class Token(BaseModel):
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str
-    user: "UserSchema"
+    user: "User"  # Use User instead of UserSchema
 
 
 class UserBase(BaseModel):
@@ -50,10 +50,6 @@ class User(BaseModel):
     accessibleTenants: List[str] = []  # List of tenant IDs user can access
     isMspUser: bool = False
 
-
-class UserSchema(User):
-    """Main user schema for API responses"""
-    pass
 
 
 class UserResponse(UserBase):
