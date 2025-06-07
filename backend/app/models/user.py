@@ -79,6 +79,7 @@ class User(Base):
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     is_msp_user = Column(Boolean, default=False)  # Flag to identify MSP users
+    api_enabled = Column(Boolean, default=False)  # Flag to control direct API access
     
     # Relationships
     role_id = Column(Integer, ForeignKey("roles.id"))

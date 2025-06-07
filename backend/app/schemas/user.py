@@ -9,9 +9,10 @@ class Token(BaseModel):
 
 class UserBase(BaseModel):
     username: str
-    full_name: Optional[str] = None
-    email: EmailStr
-    is_active: Optional[bool] = True
+    full_name: str
+    email: str
+    is_active: bool = True
+    api_enabled: bool = False
 
 
 class User(BaseModel):
@@ -45,18 +46,18 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     password: Optional[str] = None
     is_active: Optional[bool] = None
-    role: Optional[str] = None
+    api_enabled: Optional[bool] = None
+    role_id: Optional[int] = None
     tenant_id: Optional[str] = None
-    additional_tenant_ids: Optional[List[str]] = None
-    is_msp_user: Optional[bool] = None
 
 
 class UserResponse(UserBase):
-    id: str  # Changed from int to str to accept UUID
+    id: int
     user_id: str
     role: Optional[str] = None
-    tenant_id: Optional[str] = None  # Changed to str for UUID
-    is_msp_user: Optional[bool] = False
+    tenant_id: Optional[str] = None
+    tenant_name: Optional[str] = None
+    is_msp_user: bool = False
     
     class Config:
         from_attributes = True

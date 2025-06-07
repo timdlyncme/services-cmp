@@ -1,5 +1,5 @@
 from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.endpoints.auth import get_current_user
@@ -8,18 +8,27 @@ from app.models.user import User, Tenant
 from app.models.deployment import Environment, CloudAccount
 from app.schemas.deployment import EnvironmentResponse, EnvironmentCreate, EnvironmentUpdate, CloudAccountResponse
 from app.core.utils import format_error_response
+from app.core.deployment_tokens import is_valid_deployment_context
+from app.core.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
 @router.get("/", response_model=List[EnvironmentResponse])
 def get_environments(
+    request: Request,
     tenant_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Get all environments for the current user's tenant or a specific tenant
+    Get all environments for the current user's tenant or a specific tenant.
+    
+    Supports both full access (view:environments permission) and deployment access
+    (deploy:templates permission with valid deployment context token).
     """
     # Add CORS headers
     response = Response()
@@ -27,9 +36,32 @@ def get_environments(
     response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
-    # Check if user has permission to view environments
-    has_permission = any(p.name == "view:environments" for p in current_user.role.permissions)
-    if not has_permission:
+    # Check permissions
+    has_full_access = any(p.name == "view:environments" for p in current_user.role.permissions)
+    has_deploy_access = any(p.name == "deploy:templates" for p in current_user.role.permissions)
+    
+    # Validate access
+    if has_full_access:
+        # User has full access to environments
+        logger.debug(f"User {current_user.username} accessing environments with full permissions")
+    elif has_deploy_access:
+        # Check for valid deployment context
+        if not is_valid_deployment_context(
+            request_headers=dict(request.headers),
+            user_id=current_user.user_id,
+            secret_key=settings.DEPLOYMENT_SECRET_KEY
+        ):
+            logger.warning(
+                f"User {current_user.username} attempted to access environments "
+                f"with deploy:templates permission but invalid deployment context"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Valid deployment context required for environment access"
+            )
+        logger.debug(f"User {current_user.username} accessing environments with deployment context")
+    else:
+        logger.warning(f"User {current_user.username} lacks permissions to view environments")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
