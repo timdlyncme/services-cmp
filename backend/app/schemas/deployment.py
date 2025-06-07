@@ -6,7 +6,15 @@ import uuid
 # Base schemas
 class DeploymentBase(BaseModel):
     name: str
-    description: Optional[str] = None
+    template_id: str
+    environment: str
+    cloud_account_id: str
+    subscription_id: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    variables: Optional[Dict[str, Any]] = None
+    
+    class Config:
+        from_attributes = True
 
 class TemplateBase(BaseModel):
     name: str
@@ -49,7 +57,7 @@ class CloudAccountResponse(CloudAccountBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         from_attributes = True
 
 class CloudAccountFrontendResponse(BaseModel):
@@ -63,7 +71,7 @@ class CloudAccountFrontendResponse(BaseModel):
     connectionDetails: Dict[str, Any] = {}
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         from_attributes = True
 
 # Template schemas
@@ -101,7 +109,7 @@ class TemplateResponse(TemplateBase):
     tenant_id: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         from_attributes = True
 
 class TemplateDetailResponse(TemplateResponse):
@@ -111,7 +119,7 @@ class TemplateDetailResponse(TemplateResponse):
     versions: List[Dict[str, Any]] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         from_attributes = True
 
 class CloudTemplateResponse(BaseModel):
@@ -134,7 +142,7 @@ class CloudTemplateResponse(BaseModel):
     isPublic: Optional[bool] = False
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         from_attributes = True
 
 class TemplateVersionCreate(BaseModel):
@@ -169,80 +177,21 @@ class CloudDeploymentResponse(BaseModel):
     details: Optional[Dict[str, Any]] = None  # Add details field for outputs
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         from_attributes = True
 
 # Deployment schemas
 class DeploymentCreate(DeploymentBase):
-    environment_id: int
-    template_id: str  # Changed from int to str to support GUID
-    environment_name: str  # For deployment engine
-    provider: str  # aws, azure, gcp
-    deployment_type: str  # native, terraform
-    template_source: str  # url, code
-    template_url: Optional[str] = None
-    template_code: Optional[str] = None
-    parameters: Optional[Dict[str, Any]] = None
-    project_id: Optional[str] = None  # For GCP
-    template_version: Optional[str] = None  # Add template_version field
-    resource_group: Optional[str] = None  # Add resource_group field for Azure
-    location: Optional[str] = None  # Add location field for Azure
-
-    @validator('template_source')
-    def validate_template_source(cls, v, values):
-        if v not in ['url', 'code']:
-            raise ValueError('template_source must be either "url" or "code"')
-        
-        if v == 'url' and not values.get('template_url'):
-            raise ValueError('template_url is required when template_source is "url"')
-        
-        # For code source, check if template_code exists and is not empty
-        # Skip this validation as it's causing issues with valid requests
-        # We'll handle this in the endpoint instead
-        
-        return v
-
-    @validator('provider')
-    def validate_provider(cls, v):
-        if v not in ['aws', 'azure', 'gcp']:
-            raise ValueError('provider must be one of: aws, azure, gcp')
-        return v
-
-    @validator('deployment_type')
-    def validate_deployment_type(cls, v):
-        if v not in ['native', 'terraform']:
-            raise ValueError('deployment_type must be either "native" or "terraform"')
-        return v
-        
-    @validator('environment_id')
-    def validate_environment_id(cls, v):
-        if v is None:
-            raise ValueError('environment_id is required')
-        return v
+    pass
 
 class DeploymentUpdate(BaseModel):
     name: Optional[str] = None
-    description: Optional[str] = None
     status: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
-    resources: Optional[List[Dict[str, Any]]] = None
-    region: Optional[str] = None
-    template_source: Optional[str] = None
-    template_url: Optional[str] = None
-    template_code: Optional[str] = None
-
-    @validator('template_source')
-    def validate_template_source(cls, v, values):
-        if v and v not in ['url', 'code']:
-            raise ValueError('template_source must be either "url" or "code"')
-        
-        if v == 'url' and not values.get('template_url'):
-            raise ValueError('template_url is required when template_source is "url"')
-        
-        if v == 'code' and not values.get('template_code'):
-            raise ValueError('template_code is required when template_source is "code"')
-        
-        return v
+    variables: Optional[Dict[str, Any]] = None
+    
+    class Config:
+        from_attributes = True
 
 class DeploymentResponse(BaseModel):
     id: int
@@ -254,7 +203,7 @@ class DeploymentResponse(BaseModel):
     cloud_deployment_id: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class DeploymentHistoryItem(BaseModel):
     status: str
@@ -263,7 +212,7 @@ class DeploymentHistoryItem(BaseModel):
     user: Optional[Dict[str, Any]] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class DeploymentDetailResponse(DeploymentResponse):
     description: Optional[str] = None
@@ -280,7 +229,7 @@ class DeploymentDetailResponse(DeploymentResponse):
     history: List[DeploymentHistoryItem] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Environment schemas
 class EnvironmentCreate(EnvironmentBase):
@@ -308,7 +257,7 @@ class EnvironmentResponse(EnvironmentBase):
     cloud_accounts: List[Dict[str, Any]] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class EnvironmentDetailResponse(EnvironmentResponse):
     scaling_policies: Optional[Dict[str, Any]] = None
@@ -318,4 +267,4 @@ class EnvironmentDetailResponse(EnvironmentResponse):
     deployments: List[Dict[str, Any]] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
