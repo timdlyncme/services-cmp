@@ -39,7 +39,17 @@ export class AuthService {
       });
       
       console.log('Login successful');
-      return response.data;
+      
+      // The new backend returns { access_token, token_type, user }
+      const { access_token, user } = response.data;
+      
+      return { 
+        user: {
+          ...user,
+          permissions: user.permissions || []
+        }, 
+        token: access_token 
+      };
     } catch (error) {
       console.error('Login error:', error);
       if (axios.isAxiosError(error)) {
@@ -72,14 +82,45 @@ export class AuthService {
         }
       });
       
-      // Add default name if not provided
-      if (!response.data.name) {
-        response.data.name = response.data.email || 'User';
-      }
+      // The new backend returns user with multi-tenant fields
+      const userData = response.data;
       
-      return response.data;
+      return {
+        ...userData,
+        permissions: userData.permissions || []
+      };
     } catch (error) {
       console.error('Token verification error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Switch to a different tenant
+   */
+  async switchTenant(tenantId: string): Promise<AuthUser | null> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return null;
+      }
+
+      const response = await api.post('/auth/switch-tenant', 
+        { tenant_id: tenantId },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      return {
+        ...response.data,
+        permissions: response.data.permissions || []
+      };
+    } catch (error) {
+      console.error('Tenant switch error:', error);
       return null;
     }
   }

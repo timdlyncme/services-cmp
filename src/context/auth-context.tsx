@@ -142,44 +142,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Authenticate user
       const { user: authUser, token } = await authService.login(email, password);
       
-      // Ensure user has permissions array
-      if (!authUser.permissions || authUser.permissions.length === 0) {
-        console.warn("User has no permissions, adding default permissions for development");
-        authUser.permissions = defaultPermissions;
-      }
-      
       // Store token in localStorage
       localStorage.setItem("token", token);
       
       // Set user in state
       setUser(authUser);
       
-      // Get user's tenants
-      const userTenants = await authService.getUserTenants(authUser.id);
-      
-      if (userTenants && userTenants.length > 0) {
-        setTenants(userTenants);
+      // Handle multi-tenant setup
+      if (authUser.accessibleTenants && authUser.accessibleTenants.length > 0) {
+        // Get full tenant details for accessible tenants
+        const userTenants = await authService.getUserTenants(authUser.id);
+        const accessibleTenantDetails = userTenants.filter(tenant => 
+          authUser.accessibleTenants!.includes(tenant.tenant_id)
+        );
         
-        // Set current tenant to user's default tenant
-        const defaultTenant = userTenants.find(t => t.tenant_id === authUser.tenantId) || userTenants[0];
-        setCurrentTenant(defaultTenant);
+        setTenants(accessibleTenantDetails);
         
-        if (defaultTenant) {
-          localStorage.setItem("currentTenantId", defaultTenant.tenant_id);
+        // Set current tenant to user's current tenant from login
+        const currentTenant = accessibleTenantDetails.find(t => t.tenant_id === authUser.tenantId);
+        if (currentTenant) {
+          setCurrentTenant(currentTenant);
+          localStorage.setItem("currentTenantId", currentTenant.tenant_id);
+        } else if (accessibleTenantDetails.length > 0) {
+          // Fallback to first accessible tenant
+          setCurrentTenant(accessibleTenantDetails[0]);
+          localStorage.setItem("currentTenantId", accessibleTenantDetails[0].tenant_id);
         }
       } else {
-        console.warn("No tenants found for user, using default tenant");
-        // Create a default tenant if none exists
-        const defaultTenant = {
-          id: authUser.tenantId || "default-tenant",
-          tenant_id: authUser.tenantId || "default-tenant",
-          name: "Default Tenant",
-          description: "Default tenant for development",
-          createdAt: new Date().toISOString()
-        };
-        setTenants([defaultTenant]);
-        setCurrentTenant(defaultTenant);
-        localStorage.setItem("currentTenantId", defaultTenant.tenant_id);
+        // MSP users or users with no specific tenant assignments
+        if (authUser.isMspUser) {
+          // MSP users can see all tenants
+          const allTenants = await authService.getUserTenants(authUser.id);
+          setTenants(allTenants);
+          
+          if (allTenants.length > 0) {
+            const currentTenant = allTenants.find(t => t.tenant_id === authUser.tenantId) || allTenants[0];
+            setCurrentTenant(currentTenant);
+            localStorage.setItem("currentTenantId", currentTenant.tenant_id);
+          }
+        } else {
+          // Fallback for users without proper tenant assignments
+          console.warn("User has no accessible tenants, creating default tenant");
+          const defaultTenant = {
+            id: authUser.tenantId || "default-tenant",
+            tenant_id: authUser.tenantId || "default-tenant",
+            name: "Default Tenant",
+            description: "Default tenant for development",
+            date_created: new Date().toISOString()
+          };
+          setTenants([defaultTenant]);
+          setCurrentTenant(defaultTenant);
+          localStorage.setItem("currentTenantId", defaultTenant.tenant_id);
+        }
       }
       
       toast.success(`Welcome, ${authUser.name}!`);
@@ -202,17 +216,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     setCurrentTenant(null);
+    setTenants([]);
     localStorage.removeItem("token");
     localStorage.removeItem("currentTenantId");
     toast.info("You have been logged out");
   };
 
-  const switchTenant = (tenantId: string) => {
-    const tenant = tenants.find(t => t.tenant_id === tenantId);
-    if (tenant) {
-      setCurrentTenant(tenant);
-      localStorage.setItem("currentTenantId", tenantId);
-      toast.success(`Switched to ${tenant.name}`);
+  const switchTenant = async (tenantId: string) => {
+    if (!user) return;
+    
+    try {
+      // Call backend to switch tenant context
+      const updatedUser = await authService.switchTenant(tenantId);
+      
+      if (updatedUser) {
+        // Update user with new tenant context and permissions
+        setUser(updatedUser);
+        
+        // Update current tenant
+        const tenant = tenants.find(t => t.tenant_id === tenantId);
+        if (tenant) {
+          setCurrentTenant(tenant);
+          localStorage.setItem("currentTenantId", tenantId);
+          toast.success(`Switched to ${tenant.name}`);
+        }
+      } else {
+        toast.error("Failed to switch tenant");
+      }
+    } catch (error) {
+      console.error("Tenant switch failed:", error);
+      toast.error("Failed to switch tenant");
     }
   };
 
@@ -224,11 +257,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       permission,
       userRole: user.role,
       userPermissions: user.permissions,
+      isMspUser: user.isMspUser,
       hasPermissionsArray: !!user.permissions,
       permissionsLength: user.permissions?.length || 0
     });
     
-    // For development, if user has no permissions, grant all permissions
+    // MSP users have all permissions
+    if (user.isMspUser && user.role === 'msp') {
+      return true;
+    }
+    
+    // For development, if user has no permissions, grant basic permissions
     if (!user.permissions || user.permissions.length === 0) {
       console.warn(`No permissions found for user, granting permission: ${permission}`);
       return true;
@@ -243,19 +282,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('Permission check result:', {
       permission,
       hasSpecificPermission,
-      userRole: user.role
+      userRole: user.role,
+      isMspUser: user.isMspUser
     });
     
-    if (hasSpecificPermission) {
-      return true;
-    }
-    
-    // If user is admin or msp, grant all permissions
-    if (user.role === 'admin' || user.role === 'msp') {
-      return true;
-    }
-    
-    return false;
+    return hasSpecificPermission;
   };
 
   const updateTenants = (updatedTenants: Tenant[]) => {

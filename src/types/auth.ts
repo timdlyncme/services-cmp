@@ -24,12 +24,14 @@ export interface Permission {
 
 export interface User {
   id: string;
-  full_name: string;
+  name: string;  // Changed from full_name to name to match backend
   email: string;
   role: UserRole;
   tenantId: string;
   avatar?: string;
   permissions?: (Permission | string)[];  // Allow both Permission objects and strings
+  accessibleTenants?: string[];  // List of tenant IDs user can access
+  isMspUser?: boolean;  // Flag to identify MSP users
 }
 
 // Badge variants for consistency

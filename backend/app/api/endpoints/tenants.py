@@ -9,6 +9,7 @@ from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import Tenant, User
 from app.schemas.tenant import TenantResponse, TenantCreate, TenantUpdate
+from app.core.permissions import has_global_permission, get_user_accessible_tenants
 
 router = APIRouter()
 
@@ -19,7 +20,8 @@ def get_tenants(
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Get all tenants
+    Get tenants accessible to the current user.
+    MSP users see all tenants, regular users see only their assigned tenants.
     """
     # Add CORS headers
     response = Response()
@@ -27,16 +29,21 @@ def get_tenants(
     response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
-    # Check if user has permission to view tenants
-    has_permission = any(p.name == "view:tenants" for p in current_user.role.permissions)
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
     try:
-        tenants = db.query(Tenant).all()
+        # MSP users can see all tenants
+        if current_user.is_msp_user and has_global_permission(current_user, "view:all-tenants"):
+            tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
+        else:
+            # Regular users can only see their assigned tenants
+            accessible_tenant_ids = get_user_accessible_tenants(current_user, db)
+            if not accessible_tenant_ids:
+                return []
+            
+            tenants = db.query(Tenant).filter(
+                Tenant.tenant_id.in_(accessible_tenant_ids),
+                Tenant.is_active == True
+            ).all()
+        
         return [
             TenantResponse(
                 id=tenant.id,

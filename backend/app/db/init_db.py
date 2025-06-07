@@ -41,86 +41,104 @@ def generate_uuid():
 
 # Permissions
 PERMISSIONS = [
-    # User management
-    {"name": "view:users", "description": "View users"},
-    {"name": "create:users", "description": "Create users"},
-    {"name": "update:users", "description": "Update users"},
-    {"name": "delete:users", "description": "Delete users"},
+    # User management (tenant-scoped)
+    {"name": "view:users", "description": "View users", "scope": "tenant"},
+    {"name": "create:users", "description": "Create users", "scope": "tenant"},
+    {"name": "update:users", "description": "Update users", "scope": "tenant"},
+    {"name": "delete:users", "description": "Delete users", "scope": "tenant"},
     
-    # Tenant management
-    {"name": "view:tenants", "description": "View tenants"},
-    {"name": "create:tenants", "description": "Create tenants"},
-    {"name": "update:tenants", "description": "Update tenants"},
-    {"name": "delete:tenants", "description": "Delete tenants"},
+    # Tenant management (global for MSP, restricted for others)
+    {"name": "view:all-tenants", "description": "View all tenants", "scope": "global"},
+    {"name": "create:tenants", "description": "Create tenants", "scope": "global"},
+    {"name": "update:tenants", "description": "Update tenants", "scope": "global"},
+    {"name": "delete:tenants", "description": "Delete tenants", "scope": "global"},
     
-    # Permissions management
-    {"name": "view:permissions", "description": "View permissions"},
-    {"name": "create:permissions", "description": "Create permissions"},
-    {"name": "update:permissions", "description": "Update permissions"},
-    {"name": "delete:permissions", "description": "Delete permissions"},
+    # MSP user management (global)
+    {"name": "view:msp-users", "description": "View MSP users", "scope": "global"},
+    {"name": "create:msp-users", "description": "Create MSP users", "scope": "global"},
+    {"name": "update:msp-users", "description": "Update MSP users", "scope": "global"},
+    {"name": "delete:msp-users", "description": "Delete MSP users", "scope": "global"},
     
-    # Cloud accounts
-    {"name": "view:cloud-accounts", "description": "View cloud accounts"},
-    {"name": "create:cloud-accounts", "description": "Create cloud accounts"},
-    {"name": "update:cloud-accounts", "description": "Update cloud accounts"},
-    {"name": "delete:cloud-accounts", "description": "Delete cloud accounts"},
+    # Permissions management (global)
+    {"name": "view:permissions", "description": "View permissions", "scope": "global"},
+    {"name": "create:permissions", "description": "Create permissions", "scope": "global"},
+    {"name": "update:permissions", "description": "Update permissions", "scope": "global"},
+    {"name": "delete:permissions", "description": "Delete permissions", "scope": "global"},
     
-    # Environments
-    {"name": "view:environments", "description": "View environments"},
-    {"name": "create:environments", "description": "Create environments"},
-    {"name": "update:environments", "description": "Update environments"},
-    {"name": "delete:environments", "description": "Delete environments"},
+    # Cloud accounts (tenant-scoped)
+    {"name": "view:cloud-accounts", "description": "View cloud accounts", "scope": "tenant"},
+    {"name": "create:cloud-accounts", "description": "Create cloud accounts", "scope": "tenant"},
+    {"name": "update:cloud-accounts", "description": "Update cloud accounts", "scope": "tenant"},
+    {"name": "delete:cloud-accounts", "description": "Delete cloud accounts", "scope": "tenant"},
     
-    # Templates
-    {"name": "view:templates", "description": "View templates"},
-    {"name": "create:templates", "description": "Create templates"},
-    {"name": "update:templates", "description": "Update templates"},
-    {"name": "delete:templates", "description": "Delete templates"},
+    # Environments (tenant-scoped)
+    {"name": "view:environments", "description": "View environments", "scope": "tenant"},
+    {"name": "create:environments", "description": "Create environments", "scope": "tenant"},
+    {"name": "update:environments", "description": "Update environments", "scope": "tenant"},
+    {"name": "delete:environments", "description": "Delete environments", "scope": "tenant"},
     
-    # Template foundry
-    {"name": "view:template-foundry", "description": "View template foundry"},
-    {"name": "create:template-foundry", "description": "Create templates in foundry"},
-    {"name": "update:template-foundry", "description": "Update templates in foundry"},
-    {"name": "delete:template-foundry", "description": "Delete templates from foundry"},
+    # Templates (tenant-scoped)
+    {"name": "view:catalog", "description": "View template catalog", "scope": "tenant"},
+    {"name": "view:templates", "description": "View templates", "scope": "tenant"},
+    {"name": "create:templates", "description": "Create templates", "scope": "tenant"},
+    {"name": "update:templates", "description": "Update templates", "scope": "tenant"},
+    {"name": "delete:templates", "description": "Delete templates", "scope": "tenant"},
     
-    # Deployments
-    {"name": "view:deployments", "description": "View deployments"},
-    {"name": "create:deployments", "description": "Create deployments"},
-    {"name": "update:deployments", "description": "Update deployments"},
-    {"name": "delete:deployments", "description": "Delete deployments"},
-    {"name": "manage:deployments", "description": "Manage deployment engine credentials and resources"},
+    # Template foundry (tenant-scoped)
+    {"name": "view:template-foundry", "description": "View template foundry", "scope": "tenant"},
+    {"name": "create:template-foundry", "description": "Create templates in foundry", "scope": "tenant"},
+    {"name": "update:template-foundry", "description": "Update templates in foundry", "scope": "tenant"},
+    {"name": "delete:template-foundry", "description": "Delete templates from foundry", "scope": "tenant"},
     
+    # Deployments (tenant-scoped)
+    {"name": "view:deployments", "description": "View deployments", "scope": "tenant"},
+    {"name": "create:deployments", "description": "Create deployments", "scope": "tenant"},
+    {"name": "update:deployments", "description": "Update deployments", "scope": "tenant"},
+    {"name": "delete:deployments", "description": "Delete deployments", "scope": "tenant"},
+    {"name": "manage:deployments", "description": "Manage deployment engine credentials and resources", "scope": "tenant"},
     
-    # NexusAI
-    {"name": "use:nexus_ai", "description": "Use NexusAI"},
-    {"name": "manage:nexus_ai", "description": "Manage NexusAI settings"},
+    # Settings (tenant-scoped)
+    {"name": "view:settings", "description": "View settings", "scope": "tenant"},
+    {"name": "update:settings", "description": "Update settings", "scope": "tenant"},
     
-    # AI Assistant
-    {"name": "use:ai_assistant", "description": "Use AI Assistant"},
-    {"name": "manage:settings", "description": "Manage application settings including AI services"},
+    # AI Services (tenant-scoped)
+    {"name": "use:nexus_ai", "description": "Use NexusAI", "scope": "tenant"},
+    {"name": "manage:nexus_ai", "description": "Manage NexusAI settings", "scope": "tenant"},
+    {"name": "use:ai_assistant", "description": "Use AI Assistant", "scope": "tenant"},
+    
+    # Global platform management (global)
+    {"name": "manage:global-settings", "description": "Manage global platform settings", "scope": "global"},
+    {"name": "view:platform-analytics", "description": "View platform-wide analytics", "scope": "global"},
 ]
 
-# Roles with their permissions
+# Roles with their permissions (updated for new permission model)
 ROLES = [
     {
         "name": "user",
-        "description": "Regular user with limited permissions",
+        "description": "Regular user with limited permissions within assigned tenants",
         "permissions": [
-            "view:users", "view:tenants", 
-            "view:cloud-accounts", "view:environments", "view:templates", "view:deployments",
+            "view:catalog", "view:deployments",
             "create:deployments", "update:deployments", "delete:deployments",
-            "use:nexus_ai"
+            "use:nexus_ai", "use:ai_assistant"
         ]
     },
     {
-        "name": "admin",
-        "description": "Administrator with full permissions",
-        "permissions": [p["name"] for p in PERMISSIONS]
+        "name": "admin", 
+        "description": "Administrator with full permissions within assigned tenants",
+        "permissions": [
+            "view:users", "create:users", "update:users", "delete:users",
+            "view:cloud-accounts", "create:cloud-accounts", "update:cloud-accounts", "delete:cloud-accounts",
+            "view:environments", "create:environments", "update:environments", "delete:environments",
+            "view:catalog", "view:templates", "create:templates", "update:templates", "delete:templates",
+            "view:template-foundry", "create:template-foundry", "update:template-foundry", "delete:template-foundry",
+            "view:deployments", "create:deployments", "update:deployments", "delete:deployments", "manage:deployments",
+            "view:settings", "update:settings", "use:ai_assistant", "use:nexus_ai", "manage:nexus_ai"
+        ]
     },
     {
         "name": "msp",
-        "description": "Managed Service Provider with multi-tenant access",
-        "permissions": [p["name"] for p in PERMISSIONS]
+        "description": "Managed Service Provider with global access across all tenants",
+        "permissions": [p["name"] for p in PERMISSIONS]  # MSP gets all permissions
     }
 ]
 
@@ -153,7 +171,8 @@ USERS = [
         "password": "admin123",  # This would be hashed in production
         "role": "admin",
         "tenant": 0,  # Index in TENANTS list
-        "user_id": generate_uuid()
+        "user_id": generate_uuid(),
+        "is_msp_user": False
     },
     {
         "email": "user@example.com",
@@ -162,7 +181,8 @@ USERS = [
         "password": "user123",  # This would be hashed in production
         "role": "user",
         "tenant": 0,  # Index in TENANTS list
-        "user_id": generate_uuid()
+        "user_id": generate_uuid(),
+        "is_msp_user": False
     },
     {
         "email": "msp@example.com",
@@ -170,8 +190,9 @@ USERS = [
         "full_name": "MSP User",
         "password": "msp123",  # This would be hashed in production
         "role": "msp",
-        "tenant": 0,  # Index in TENANTS list
-        "user_id": generate_uuid()
+        "tenant": 0,  # Index in TENANTS list (primary tenant)
+        "user_id": generate_uuid(),
+        "is_msp_user": True
     },
     {
         "email": "dev@example.com",
@@ -180,7 +201,8 @@ USERS = [
         "password": "dev123",  # This would be hashed in production
         "role": "user",
         "tenant": 1,  # Index in TENANTS list
-        "user_id": generate_uuid()
+        "user_id": generate_uuid(),
+        "is_msp_user": False
     },
     {
         "email": "ops@example.com",
@@ -189,7 +211,8 @@ USERS = [
         "password": "ops123",  # This would be hashed in production
         "role": "user",
         "tenant": 2,  # Index in TENANTS list
-        "user_id": generate_uuid()
+        "user_id": generate_uuid(),
+        "is_msp_user": False
     }
 ]
 
@@ -471,9 +494,37 @@ def init_db(db: Session) -> None:
                     hashed_password=get_password_hash(user_data["password"]),
                     role_id=role.id,
                     tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
-                    user_id=user_data.get("user_id")
+                    user_id=user_data.get("user_id"),
+                    is_msp_user=user_data.get("is_msp_user")
                 )
                 db.add(user)
+                db.flush()  # Flush to get the user ID
+                
+                # Create user-tenant assignment for the new multi-tenant system
+                from app.models.user_tenant_assignment import UserTenantAssignment
+                
+                # Create primary tenant assignment
+                primary_assignment = UserTenantAssignment(
+                    user_id=user.id,  # Use integer primary key instead of UUID
+                    tenant_id=tenant.tenant_id,
+                    role_id=role.id,
+                    is_primary=True,
+                    is_active=True
+                )
+                db.add(primary_assignment)
+                
+                # For MSP users, create assignments to all tenants
+                if user_data.get("is_msp_user", False):
+                    for tenant_id, tenant_obj in tenants.items():
+                        if isinstance(tenant_id, str) and tenant_id != tenant.tenant_id:  # Skip primary tenant
+                            msp_assignment = UserTenantAssignment(
+                                user_id=user.id,  # Use integer primary key instead of UUID
+                                tenant_id=tenant_id,
+                                role_id=role.id,
+                                is_primary=False,
+                                is_active=True
+                            )
+                            db.add(msp_assignment)
     
     # Create default AI configurations
     logger.info("Creating default AI configurations...")

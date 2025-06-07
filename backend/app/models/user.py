@@ -22,6 +22,7 @@ class Permission(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
     description = Column(String, nullable=True)
+    scope = Column(String, default="tenant", nullable=False)  # "tenant" or "global"
     
     # Relationships
     roles = relationship("Role", secondary=role_permission, back_populates="permissions")
@@ -51,14 +52,11 @@ class Tenant(Base):
     date_modified = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
     # Relationships
-    users = relationship("User", back_populates="tenant")
+    users = relationship("User", back_populates="tenant")  # Keep for backward compatibility
+    user_assignments = relationship("UserTenantAssignment", back_populates="tenant")  # New multi-tenant relationship
     
-    # These relationships will be added by the respective models
-    # cloud_accounts = relationship("CloudAccount", back_populates="tenant")
-    # environments = relationship("Environment", back_populates="tenant")
-    # templates = relationship("Template", back_populates="tenant")
-    # deployments = relationship("Deployment", back_populates="tenant")
-    
+    # ... existing relationships ...
+
     # Relationship with TemplateFoundry
     template_foundry_items = relationship("TemplateFoundry", back_populates="tenant")
     
@@ -80,13 +78,18 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
+    is_msp_user = Column(Boolean, default=False)  # Flag to identify MSP users
     
     # Relationships
     role_id = Column(Integer, ForeignKey("roles.id"))
     role = relationship("Role", back_populates="users")
     
-    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))  # Changed to UUID type
+    # Keep existing single tenant relationship for backward compatibility
+    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))
     tenant = relationship("Tenant", back_populates="users")
+    
+    # New multi-tenant relationship
+    tenant_assignments = relationship("UserTenantAssignment", back_populates="user")
     
     # Relationship with Deployment
     deployments = relationship("Deployment", back_populates="created_by")
@@ -96,3 +99,33 @@ class User(Base):
     
     # Relationship with Dashboard
     dashboards = relationship("Dashboard", back_populates="user")
+    
+    # ... existing methods ...
+    
+    def get_tenant_assignments(self):
+        """Get all active tenant assignments for this user"""
+        return [assignment for assignment in self.tenant_assignments if assignment.is_active]
+    
+    def get_primary_tenant_assignment(self):
+        """Get the user's primary tenant assignment"""
+        for assignment in self.tenant_assignments:
+            if assignment.is_primary and assignment.is_active:
+                return assignment
+        return None
+    
+    def has_tenant_access(self, tenant_id: str) -> bool:
+        """Check if user has access to a specific tenant"""
+        if self.is_msp_user:
+            return True  # MSP users have access to all tenants
+        
+        for assignment in self.tenant_assignments:
+            if assignment.is_active and assignment.tenant_id == tenant_id:
+                return True
+        return False
+    
+    def get_role_in_tenant(self, tenant_id: str):
+        """Get the user's role in a specific tenant"""
+        for assignment in self.tenant_assignments:
+            if assignment.is_active and assignment.tenant_id == tenant_id:
+                return assignment.role
+        return None

@@ -28,6 +28,9 @@ import CloudAccounts from "@/pages/CloudAccounts";
 import NexusAI from "@/pages/NexusAI";
 import Login from "@/pages/Login";
 import NotFound from "./pages/NotFound";
+import { MSPTenants } from "@/pages/msp/MSPTenants";
+import { MSPUsers } from "@/pages/msp/MSPUsers";
+import { MSPAnalytics } from "@/pages/msp/MSPAnalytics";
 
 const queryClient = new QueryClient();
 
@@ -49,8 +52,16 @@ const App = () => (
               }>
                 <Route path="/" element={<EnhancedDashboard />} />
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/catalog" element={<Catalog />} />
-                <Route path="/catalog/:templateId" element={<TemplateDetails />} />
+                <Route path="/catalog" element={
+                  <ProtectedRoute requiredPermission="view:catalog">
+                    <Catalog />
+                  </ProtectedRoute>
+                } />
+                <Route path="/catalog/:templateId" element={
+                  <ProtectedRoute requiredPermission="view:catalog">
+                    <TemplateDetails />
+                  </ProtectedRoute>
+                } />
                 <Route path="/approvals" element={<Approvals />} />
                 <Route path="/approvals/:approvalId" element={<ApprovalDetails />} />
                 <Route path="/deployments" element={<Deployments />} />
@@ -72,7 +83,7 @@ const App = () => (
                   </ProtectedRoute>
                 } />
                 <Route path="/msp-template-foundry" element={
-                  <ProtectedRoute requiredPermission="manage:templates">
+                  <ProtectedRoute requiredPermission="view:templates">
                     <MSPTemplateFoundry />
                   </ProtectedRoute>
                 } />
@@ -97,8 +108,23 @@ const App = () => (
                   </ProtectedRoute>
                 } />
                 <Route path="/nexus-ai" element={
-                  <ProtectedRoute requiredPermission="use:nexus-ai">
+                  <ProtectedRoute requiredPermission="use:nexus_ai">
                     <NexusAI />
+                  </ProtectedRoute>
+                } />
+                <Route path="/msp/tenants" element={
+                  <ProtectedRoute requiredPermission="view:all-tenants">
+                    <MSPTenants />
+                  </ProtectedRoute>
+                } />
+                <Route path="/msp/users" element={
+                  <ProtectedRoute requiredPermission="view:msp-users">
+                    <MSPUsers />
+                  </ProtectedRoute>
+                } />
+                <Route path="/msp/analytics" element={
+                  <ProtectedRoute requiredPermission="view:platform-analytics">
+                    <MSPAnalytics />
                   </ProtectedRoute>
                 } />
               </Route>

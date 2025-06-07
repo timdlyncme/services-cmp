@@ -106,7 +106,7 @@ export function AppSidebar() {
   useEffect(() => {
     // Update permissions when user changes
     if (user && user.permissions) {
-      setUserPermissions(user.permissions.map(p => p.name));
+      setUserPermissions(user.permissions.map(p => typeof p === 'string' ? p : p.name));
     } else {
       setUserPermissions([]);
     }
@@ -114,8 +114,9 @@ export function AppSidebar() {
 
   const toggleCollapse = () => setCollapsed(!collapsed);
 
-  const isAdmin = user?.role === "admin" || user?.role === "msp";
-  const isMSP = user?.role === "msp";
+  const isAdmin = user?.role === "admin";
+  const isMSP = user?.isMspUser && user?.role === "msp";
+  const isRegularUser = user?.role === "user";
 
   return (
     <Sidebar
@@ -139,21 +140,21 @@ export function AppSidebar() {
       </SidebarHeader>
       <div className="flex flex-col h-full">
         <SidebarContent>
-          {/* Core Services Section */}
+          {/* Core Services Section - Available to all users */}
           <SidebarSection title="Core Services" collapsed={collapsed}>
             <div className="list-none">
               <NavItem to="/" icon={Activity} label="Dashboard" collapsed={collapsed} />
-              <NavItem to="/catalog" icon={FileCode} label="Template Catalog" collapsed={collapsed} permission="view:templates" />
+              <NavItem to="/catalog" icon={FileCode} label="Template Catalog" collapsed={collapsed} permission="view:catalog" />
               <NavItem to="/deployments" icon={Database} label="Deployments" collapsed={collapsed} permission="view:deployments" />
               <NavItem to="/approvals" icon={CheckSquare} label="Approvals" collapsed={collapsed} />
-              </div>
+            </div>
           </SidebarSection>
 
-          {/* Admin Settings Section - visible to admin and msp roles */}
-          {isAdmin && (
+          {/* Tenant Management Section - visible to admin and MSP roles only */}
+          {(isAdmin || isMSP) && (
             <>
               <SidebarSeparator />
-              <SidebarSection title="Tenant Settings" collapsed={collapsed}>
+              <SidebarSection title="Tenant Management" collapsed={collapsed}>
                 <div className="list-none">
                   <NavItem to="/cloud-accounts" icon={CloudCog} label="Cloud Accounts" collapsed={collapsed} permission="view:cloud-accounts" />
                   <NavItem to="/environments" icon={Server} label="Environments" collapsed={collapsed} permission="view:environments" />
@@ -165,15 +166,17 @@ export function AppSidebar() {
             </>
           )}
 
-          {/* MSP Management Section - visible only to msp role */}
+          {/* MSP Management Section - visible only to MSP users */}
           {isMSP && (
             <>
               <SidebarSeparator />
               <SidebarSection title="MSP Management" collapsed={collapsed}>
                 <div className="list-none">
-                  <NavItem to="/tenants" icon={Users} label="Tenants" collapsed={collapsed} permission="view:tenants" />
-                  <NavItem to="/msp-template-foundry" icon={Pickaxe} label="Template Foundry" collapsed={collapsed} permission="manage:templates" />
-                  <NavItem to="/nexus-ai" icon={Brain} label="NexusAI" collapsed={collapsed} permission="use:nexus-ai" />
+                  <NavItem to="/msp/tenants" icon={Users} label="All Tenants" collapsed={collapsed} permission="view:all-tenants" />
+                  <NavItem to="/msp/users" icon={Shield} label="MSP Users" collapsed={collapsed} permission="view:msp-users" />
+                  <NavItem to="/msp/analytics" icon={Activity} label="Platform Analytics" collapsed={collapsed} permission="view:platform-analytics" />
+                  <NavItem to="/msp-template-foundry" icon={Pickaxe} label="Template Foundry" collapsed={collapsed} permission="view:templates" />
+                  <NavItem to="/nexus-ai" icon={Brain} label="NexusAI" collapsed={collapsed} permission="use:nexus_ai" />
                 </div>
               </SidebarSection>
             </>
