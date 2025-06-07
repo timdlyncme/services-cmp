@@ -62,7 +62,7 @@ def get_users(
                     UserTenantAssignment.is_active == True
                 ).all()
                 user_ids = [assignment.user_id for assignment in user_assignments]
-                users = db.query(User).filter(User.user_id.in_(user_ids)).all()
+                users = db.query(User).filter(User.id.in_(user_ids)).all()  # Use User.id instead of User.user_id
         else:
             # Regular users can only see non-MSP users in their assigned tenants
             user_assignments = db.query(UserTenantAssignment).filter(
@@ -71,7 +71,7 @@ def get_users(
             ).all()
             user_ids = [assignment.user_id for assignment in user_assignments]
             users = db.query(User).filter(
-                User.user_id.in_(user_ids),
+                User.id.in_(user_ids),  # Use User.id instead of User.user_id
                 User.is_msp_user == False  # Regular users can't see MSP users
             ).all()
         
@@ -269,7 +269,7 @@ def create_user(
         if not user.is_msp_user:
             # Create primary tenant assignment
             primary_assignment = UserTenantAssignment(
-                user_id=new_user.user_id,
+                user_id=new_user.id,  # Use integer primary key instead of UUID
                 tenant_id=target_tenant_id,
                 role_id=role.id,
                 is_primary=True,
@@ -282,7 +282,7 @@ def create_user(
                 for additional_tenant_id in user.additional_tenant_ids:
                     if additional_tenant_id != target_tenant_id:  # Don't duplicate primary
                         additional_assignment = UserTenantAssignment(
-                            user_id=new_user.user_id,
+                            user_id=new_user.id,  # Use integer primary key instead of UUID
                             tenant_id=additional_tenant_id,
                             role_id=role.id,
                             is_primary=False,
@@ -294,7 +294,7 @@ def create_user(
             all_tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
             for i, tenant in enumerate(all_tenants):
                 msp_assignment = UserTenantAssignment(
-                    user_id=new_user.user_id,
+                    user_id=new_user.id,  # Use integer primary key instead of UUID
                     tenant_id=tenant.tenant_id,
                     role_id=role.id,
                     is_primary=(i == 0),  # First tenant is primary

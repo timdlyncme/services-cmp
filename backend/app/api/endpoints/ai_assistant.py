@@ -15,6 +15,7 @@ from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.models.ai_assistant import AIAssistantConfig, AIAssistantLog
 from app.models.user import Tenant
+from app.core.permissions import has_permission_in_tenant
 
 router = APIRouter()
 
@@ -142,25 +143,16 @@ async def chat(
     """
     Chat with Azure OpenAI
     """
+    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+    
     # Check if user has permission to use AI Assistant
-    has_permission = any(p.name == "use:ai_assistant" for p in current_user.role.permissions)
-    if not has_permission:
+    if not has_permission_in_tenant(current_user, "use:ai_assistant", config_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
     
-
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
-    
-    # Check if tenant exists
-    tenant = db.query(Tenant).filter(Tenant.tenant_id == config_tenant_id).first()
-    if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tenant with ID {config_tenant_id} not found"
-        )
     # Get the configuration from the database
     config = get_or_create_config(db, config_tenant_id)
     
@@ -299,25 +291,16 @@ async def stream_chat_endpoint(
     """
     Stream chat responses from Azure OpenAI
     """
+    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+    
     # Check if user has permission to use AI Assistant
-    has_permission = any(p.name == "use:ai_assistant" for p in current_user.role.permissions)
-    if not has_permission:
+    if not has_permission_in_tenant(current_user, "use:ai_assistant", config_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
     
-
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
-    
-    # Check if tenant exists
-    tenant = db.query(Tenant).filter(Tenant.tenant_id == config_tenant_id).first()
-    if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tenant with ID {config_tenant_id} not found"
-        )
     # The issue is here - we need to await the coroutine
     generator = stream_chat(request, current_user, db, config_tenant_id)
     
@@ -469,16 +452,15 @@ async def get_config_endpoint(
     """
     Get Azure OpenAI configuration
     """
-    # Check if user has permission to manage settings
-    has_permission = any(p.name == "manage:settings" for p in current_user.role.permissions)
-    if not has_permission:
+    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+    
+    # Check if user has permission to manage nexus AI (changed from manage:settings)
+    if not has_permission_in_tenant(current_user, "manage:nexus_ai", config_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
-    
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
     
     # Check if tenant exists
     tenant = db.query(Tenant).filter(Tenant.tenant_id == config_tenant_id).first()
@@ -521,17 +503,15 @@ async def update_config(
     """
     Update Azure OpenAI configuration
     """
-    # Check if user has permission to manage settings
-    has_permission = any(p.name == "manage:settings" for p in current_user.role.permissions)
-    if not has_permission:
+    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+    
+    # Check if user has permission to manage nexus AI (changed from manage:settings)
+    if not has_permission_in_tenant(current_user, "manage:nexus_ai", config_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
-    
-
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
     
     # Check if tenant exists
     tenant = db.query(Tenant).filter(Tenant.tenant_id == config_tenant_id).first()
@@ -540,6 +520,7 @@ async def update_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Tenant with ID {config_tenant_id} not found"
         )
+    
     # Get the configuration from the database
     config = get_or_create_config(db, config_tenant_id)
     
@@ -681,16 +662,15 @@ async def get_logs(
     """
     Get debug logs
     """
-    # Check if user has permission to manage settings
-    has_permission = any(p.name == "manage:settings" for p in current_user.role.permissions)
-    if not has_permission:
+    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
+    config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+    
+    # Check if user has permission to manage nexus AI (changed from manage:settings)
+    if not has_permission_in_tenant(current_user, "manage:nexus_ai", config_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
-    
-
-    # Use the provided tenant_id if it exists, otherwise use the current user's tenant
     config_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
     
     # Check if tenant exists
