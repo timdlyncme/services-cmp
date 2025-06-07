@@ -75,7 +75,7 @@ const App = () => (
                   </ProtectedRoute>
                 } />
                 <Route path="/msp-template-foundry" element={
-                  <ProtectedRoute requiredPermission="manage:templates">
+                  <ProtectedRoute requiredPermission="view:templates">
                     <MSPTemplateFoundry />
                   </ProtectedRoute>
                 } />
@@ -100,7 +100,7 @@ const App = () => (
                   </ProtectedRoute>
                 } />
                 <Route path="/nexus-ai" element={
-                  <ProtectedRoute requiredPermission="use:nexus-ai">
+                  <ProtectedRoute requiredPermission="use:nexus_ai">
                     <NexusAI />
                   </ProtectedRoute>
                 } />
