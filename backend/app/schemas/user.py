@@ -52,8 +52,8 @@ class UserUpdate(BaseModel):
 
 
 class UserResponse(UserBase):
-    id: int
-    user_id: str
+    id: str  # Changed to str to match UUID usage in API
+    user_id: str  # UUID string
     role: Optional[str] = None
     tenant_id: Optional[str] = None
     tenant_name: Optional[str] = None
