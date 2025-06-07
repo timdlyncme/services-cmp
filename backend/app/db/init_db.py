@@ -504,7 +504,7 @@ def init_db(db: Session) -> None:
                 
                 # Create primary tenant assignment
                 primary_assignment = UserTenantAssignment(
-                    user_id=user.user_id,
+                    user_id=user.id,  # Use integer primary key instead of UUID
                     tenant_id=tenant.tenant_id,
                     role_id=role.id,
                     is_primary=True,
@@ -517,7 +517,7 @@ def init_db(db: Session) -> None:
                     for tenant_id, tenant_obj in tenants.items():
                         if isinstance(tenant_id, str) and tenant_id != tenant.tenant_id:  # Skip primary tenant
                             msp_assignment = UserTenantAssignment(
-                                user_id=user.user_id,
+                                user_id=user.id,  # Use integer primary key instead of UUID
                                 tenant_id=tenant_id,
                                 role_id=role.id,
                                 is_primary=False,
