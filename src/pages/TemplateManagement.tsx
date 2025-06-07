@@ -38,7 +38,10 @@ const TemplateManagement = () => {
   const [templateToDelete, setTemplateToDelete] = useState<CloudTemplate | null>(null);
   
   // Check if user has permission to manage templates
-  const canManageTemplates = hasPermission("manage:templates");
+  const canCreateTemplates = hasPermission("create:templates");
+  const canUpdateTemplates = hasPermission("update:templates");
+  const canDeleteTemplates = hasPermission("delete:templates");
+  const canManageTemplates = canCreateTemplates || canUpdateTemplates || canDeleteTemplates;
   
   // Fetch templates from API
   const fetchTemplates = async () => {
@@ -217,7 +220,7 @@ const TemplateManagement = () => {
           <Button variant="outline" size="icon" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4" />
           </Button>
-          {canManageTemplates && (
+          {canCreateTemplates && (
             <Button onClick={() => setIsUploadWizardOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Create Template
@@ -400,15 +403,15 @@ const TemplateManagement = () => {
                     <Button variant="ghost" size="icon" onClick={() => handleViewTemplate(template.id)}>
                       <FileCode className="h-4 w-4" />
                     </Button>
-                    {canManageTemplates && (
-                      <>
-                        <Button variant="ghost" size="icon" onClick={() => handleEditTemplate(template)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteTemplateConfirm(template)}>
-                          <Trash className="h-4 w-4" />
-                        </Button>
-                      </>
+                    {canUpdateTemplates && (
+                      <Button variant="ghost" size="icon" onClick={() => handleEditTemplate(template)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canDeleteTemplates && (
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteTemplateConfirm(template)}>
+                        <Trash className="h-4 w-4" />
+                      </Button>
                     )}
                   </TableCell>
                 </TableRow>
@@ -423,11 +426,11 @@ const TemplateManagement = () => {
           <p className="text-muted-foreground mt-2">
             {searchQuery 
               ? "No templates match your search criteria" 
-              : canManageTemplates 
+              : canCreateTemplates 
                 ? "Upload your first template to start building your catalog" 
               : "No templates are available for your account"}
           </p>
-          {canManageTemplates && (
+          {canCreateTemplates && (
             <Button className="mt-4" onClick={() => setIsUploadWizardOpen(true)}>
               <Upload className="h-4 w-4 mr-2" />
               Upload Template
