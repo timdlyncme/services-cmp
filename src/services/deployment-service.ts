@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { CloudDeployment, CloudAccount, CloudTemplate, DeploymentLog } from '@/types/cloud';
+import { Environment } from '@/types/deployment';
+import { deploymentTokenService } from './deployment-token-service';
 
 // API base URL for backend services
 const API_URL = 'http://localhost:8000/api';
@@ -122,9 +124,13 @@ export class DeploymentService {
         return [];
       }
 
+      // Get deployment context headers if available
+      const deploymentHeaders = deploymentTokenService.getDeploymentHeader();
+
       const response = await api.get('/cloud-accounts', {
         headers: {
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          ...deploymentHeaders
         },
         params: {
           tenant_id: formatTenantId(tenantId)
@@ -133,6 +139,35 @@ export class DeploymentService {
       return response.data;
     } catch (error) {
       console.error('Get cloud accounts error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all environments for a tenant
+   */
+  async getEnvironments(tenantId: string): Promise<Environment[]> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return [];
+      }
+
+      // Get deployment context headers if available
+      const deploymentHeaders = deploymentTokenService.getDeploymentHeader();
+
+      const response = await api.get('/environments', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...deploymentHeaders
+        },
+        params: {
+          tenant_id: formatTenantId(tenantId)
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get environments error:', error);
       throw error;
     }
   }
@@ -272,6 +307,44 @@ export class DeploymentService {
       return response.data;
     } catch (error) {
       console.error('Query resource graph error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all cloud accounts for a tenant (deployment context)
+   * This method ensures a valid deployment token before making the request
+   */
+  async getCloudAccountsForDeployment(tenantId: string): Promise<CloudAccount[]> {
+    try {
+      // Ensure we have a valid deployment token
+      const hasValidToken = await deploymentTokenService.ensureValidToken();
+      if (!hasValidToken) {
+        throw new Error('Failed to obtain deployment token');
+      }
+
+      return await this.getCloudAccounts(tenantId);
+    } catch (error) {
+      console.error('Get cloud accounts for deployment error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all environments for a tenant (deployment context)
+   * This method ensures a valid deployment token before making the request
+   */
+  async getEnvironmentsForDeployment(tenantId: string): Promise<Environment[]> {
+    try {
+      // Ensure we have a valid deployment token
+      const hasValidToken = await deploymentTokenService.ensureValidToken();
+      if (!hasValidToken) {
+        throw new Error('Failed to obtain deployment token');
+      }
+
+      return await this.getEnvironments(tenantId);
+    } catch (error) {
+      console.error('Get environments for deployment error:', error);
       throw error;
     }
   }

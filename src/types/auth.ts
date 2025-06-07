@@ -32,6 +32,7 @@ export interface User {
   permissions?: (Permission | string)[];  // Allow both Permission objects and strings
   accessibleTenants?: string[];  // List of tenant IDs user can access
   isMspUser?: boolean;  // Flag to identify MSP users
+  api_enabled?: boolean;  // New field for API access control
 }
 
 // Badge variants for consistency

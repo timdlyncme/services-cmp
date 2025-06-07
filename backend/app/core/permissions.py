@@ -46,6 +46,7 @@ TENANT_SCOPED_PERMISSIONS = {
     "create:templates",
     "update:templates",
     "delete:templates",
+    "deploy:templates",
     "view:deployments",
     "create:deployments",
     "update:deployments",
@@ -64,6 +65,7 @@ ROLE_PERMISSIONS = {
         "tenant_scoped": [
             "view:catalog", "view:deployments",
             "create:deployments", "update:deployments", "delete:deployments",
+            "deploy:templates",
             "use:nexus_ai", "use:ai_assistant"
         ],
         "global": []

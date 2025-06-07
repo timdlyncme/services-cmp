@@ -17,6 +17,8 @@ export const API_ENDPOINTS = {
   
   // Deployments
   DEPLOYMENTS: '/deployments',
+  DEPLOYMENT_TOKEN: '/deployment/token',
+  DEPLOYMENT_TOKEN_VALIDATE: '/deployment/validate-token',
   
   // Cloud Accounts
   CLOUD_ACCOUNTS: '/cloud-accounts',
@@ -58,4 +60,3 @@ export const REQUEST_TIMEOUT = 30000;
 export const DEFAULT_HEADERS = {
   'Content-Type': 'application/json',
 } as const;
-
