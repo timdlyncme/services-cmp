@@ -61,7 +61,7 @@ TENANT_SCOPED_PERMISSIONS = {
 ROLE_PERMISSIONS = {
     "user": {
         "tenant_scoped": [
-            "view:cloud-accounts", "view:environments", "view:templates", "view:deployments",
+            "view:deployments",
             "create:deployments", "update:deployments", "delete:deployments",
             "use:nexus_ai", "use:ai_assistant"
         ],
