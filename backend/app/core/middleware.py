@@ -55,6 +55,10 @@ class APIAccessControlMiddleware(BaseHTTPMiddleware):
         Process request and enforce API access restrictions.
         """
         try:
+            # Skip middleware for OPTIONS requests (CORS preflight)
+            if request.method == "OPTIONS":
+                return await call_next(request)
+            
             # Skip middleware for non-API requests
             if not request.url.path.startswith("/api/"):
                 return await call_next(request)

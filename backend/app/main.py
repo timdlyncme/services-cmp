@@ -9,46 +9,21 @@ from app.core.config import settings
 from app.core.middleware import APIAccessControlMiddleware
 
 
-class CORSMiddlewareWithOptions(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        # Handle preflight requests
-        if request.method == "OPTIONS":
-            response = Response()
-            response.headers["Access-Control-Allow-Origin"] = "*"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-            response.headers["Access-Control-Max-Age"] = "86400"
-            return response
-        
-        # Process the request
-        response = await call_next(request)
-        
-        # Add CORS headers to the response
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        
-        return response
-
-
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
-# Add CORS middleware
+# Add CORS middleware first - this is the main CORS handler
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["http://localhost:8080", "http://localhost:3000", "*"],  # Allow frontend origins
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
-# Add custom CORS middleware for handling OPTIONS requests
-app.add_middleware(CORSMiddlewareWithOptions)
-
-# Add API access control middleware
+# Add API access control middleware after CORS
 app.add_middleware(APIAccessControlMiddleware)
 
 # Include API router
