@@ -7,17 +7,28 @@ class Token(BaseModel):
     token_type: str
 
 
-class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str
-    user: "User"  # Use User instead of UserSchema
-
-
 class UserBase(BaseModel):
     username: str
     full_name: Optional[str] = None
     email: EmailStr
     is_active: Optional[bool] = True
+
+
+class User(BaseModel):
+    id: str  # Changed to str for UUID
+    name: str  # Changed from full_name for consistency
+    email: EmailStr
+    role: str
+    tenantId: Optional[str] = None  # Current/primary tenant
+    permissions: List[str] = []
+    accessibleTenants: List[str] = []  # List of tenant IDs user can access
+    isMspUser: bool = False
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: User  # Now User is defined above, no need for forward reference
 
 
 class UserCreate(UserBase):
@@ -38,18 +49,6 @@ class UserUpdate(BaseModel):
     tenant_id: Optional[str] = None
     additional_tenant_ids: Optional[List[str]] = None
     is_msp_user: Optional[bool] = None
-
-
-class User(BaseModel):
-    id: str  # Changed to str for UUID
-    name: str  # Changed from full_name for consistency
-    email: EmailStr
-    role: str
-    tenantId: Optional[str] = None  # Current/primary tenant
-    permissions: List[str] = []
-    accessibleTenants: List[str] = []  # List of tenant IDs user can access
-    isMspUser: bool = False
-
 
 
 class UserResponse(UserBase):
