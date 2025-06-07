@@ -34,6 +34,8 @@ class APIAccessControlMiddleware(BaseHTTPMiddleware):
     ALWAYS_ALLOWED_PATTERNS = [
         r"^/api/auth/.*",           # Authentication endpoints
         r"^/api/deployment/token$", # Deployment token generation
+        r"^/api/users/me$",         # Current user info
+        r"^/api/dashboards/.*",     # Dashboard endpoints (UI functionality)
         r"^/docs.*",                # API documentation
         r"^/openapi\.json$",        # OpenAPI schema
         r"^/health.*",              # Health checks
@@ -43,12 +45,22 @@ class APIAccessControlMiddleware(BaseHTTPMiddleware):
     DEPLOYMENT_CONTEXT_PATTERNS = [
         r"^/api/environments/?$",
         r"^/api/cloud-accounts/?$",
+        r"^/api/templates/?.*",     # Templates for deployment context
+    ]
+    
+    # Endpoints that are blocked for api_enabled=False users (direct API access)
+    RESTRICTED_PATTERNS = [
+        r"^/api/users/.*",          # User management (except /me)
+        r"^/api/tenants/.*",        # Tenant management
+        r"^/api/deployments/.*",    # Deployment management
+        r"^/api/integrations/.*",   # Integration management
     ]
     
     def __init__(self, app):
         super().__init__(app)
         self.always_allowed_regex = [re.compile(pattern) for pattern in self.ALWAYS_ALLOWED_PATTERNS]
         self.deployment_context_regex = [re.compile(pattern) for pattern in self.DEPLOYMENT_CONTEXT_PATTERNS]
+        self.restricted_regex = [re.compile(pattern) for pattern in self.RESTRICTED_PATTERNS]
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """
@@ -63,52 +75,37 @@ class APIAccessControlMiddleware(BaseHTTPMiddleware):
             if not request.url.path.startswith("/api/"):
                 return await call_next(request)
             
+            path = request.url.path
+            
             # Check if endpoint is always allowed
-            if self._is_always_allowed(request.url.path):
+            if any(regex.match(path) for regex in self.always_allowed_regex):
                 return await call_next(request)
             
             # Get current user from token
             user = await self._get_current_user(request)
             if not user:
-                # No user found - let the endpoint handle authentication
+                return await call_next(request)  # Let auth middleware handle it
+            
+            # MSP users have full access
+            if user.is_msp_user:
                 return await call_next(request)
             
-            # If user has API enabled, allow all requests
-            if user.api_enabled:
-                logger.debug(f"User {user.username} has API access enabled")
-                return await call_next(request)
-            
-            # User has API disabled - check for deployment context
-            if self._requires_deployment_context(request.url.path):
-                if self._has_valid_deployment_context(request, user):
-                    logger.debug(
-                        f"User {user.username} accessing {request.url.path} "
-                        f"with valid deployment context"
-                    )
-                    return await call_next(request)
-                else:
-                    logger.warning(
-                        f"User {user.username} attempted to access {request.url.path} "
-                        f"without valid deployment context"
-                    )
+            # Check if user has API access enabled
+            if not user.api_enabled:
+                # Check if this is a restricted endpoint (except /api/users/me which is in always_allowed)
+                if any(regex.match(path) for regex in self.restricted_regex) and path != "/api/users/me":
                     return JSONResponse(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        content={
-                            "detail": "API access disabled. Use deployment wizard for template deployment."
-                        }
+                        status_code=403,
+                        content={"detail": "API access disabled for this user"}
                     )
+                
+                # Check if this requires deployment context
+                if any(regex.match(path) for regex in self.deployment_context_regex):
+                    # Allow these endpoints for UI functionality
+                    return await call_next(request)
             
-            # Block all other API access for users with api_enabled=False
-            logger.warning(
-                f"User {user.username} attempted to access {request.url.path} "
-                f"but API access is disabled"
-            )
-            return JSONResponse(
-                status_code=status.HTTP_403_FORBIDDEN,
-                content={
-                    "detail": "API access disabled. Contact administrator to enable API access."
-                }
-            )
+            # Allow all other requests
+            return await call_next(request)
             
         except Exception as e:
             logger.error(f"Error in API access control middleware: {e}")

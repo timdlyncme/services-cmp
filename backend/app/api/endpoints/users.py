@@ -532,11 +532,17 @@ def delete_user(
         # Handle related records before deleting the user
         # Import Dashboard model here to avoid circular imports
         from app.models.dashboard import Dashboard
+        from app.models.user_tenant_assignment import UserTenantAssignment
         
         # Delete user's dashboards first (since they have NOT NULL constraint)
         user_dashboards = db.query(Dashboard).filter(Dashboard.user_id == user.user_id).all()
         for dashboard in user_dashboards:
             db.delete(dashboard)
+        
+        # Delete user's tenant assignments to avoid foreign key constraint violations
+        user_assignments = db.query(UserTenantAssignment).filter(UserTenantAssignment.user_id == user.id).all()
+        for assignment in user_assignments:
+            db.delete(assignment)
         
         # For other tables with nullable foreign keys, we could set them to NULL
         # but since they're already nullable=True, SQLAlchemy should handle this automatically

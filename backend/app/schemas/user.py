@@ -47,6 +47,7 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     is_active: Optional[bool] = None
     api_enabled: Optional[bool] = None
+    role: Optional[str] = None  # Add missing role field
     role_id: Optional[int] = None
     tenant_id: Optional[str] = None
 
