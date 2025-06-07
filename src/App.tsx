@@ -52,8 +52,16 @@ const App = () => (
               }>
                 <Route path="/" element={<EnhancedDashboard />} />
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/catalog" element={<Catalog />} />
-                <Route path="/catalog/:templateId" element={<TemplateDetails />} />
+                <Route path="/catalog" element={
+                  <ProtectedRoute requiredPermission="view:catalog">
+                    <Catalog />
+                  </ProtectedRoute>
+                } />
+                <Route path="/catalog/:templateId" element={
+                  <ProtectedRoute requiredPermission="view:catalog">
+                    <TemplateDetails />
+                  </ProtectedRoute>
+                } />
                 <Route path="/approvals" element={<Approvals />} />
                 <Route path="/approvals/:approvalId" element={<ApprovalDetails />} />
                 <Route path="/deployments" element={<Deployments />} />

@@ -40,13 +40,14 @@ TENANT_SCOPED_PERMISSIONS = {
     "view:environments",
     "create:environments",
     "update:environments",
-    "delete:environments", 
+    "delete:environments",
+    "view:catalog",
     "view:templates",
     "create:templates",
     "update:templates",
     "delete:templates",
     "view:deployments",
-    "create:deployments", 
+    "create:deployments",
     "update:deployments",
     "delete:deployments",
     "manage:deployments",
@@ -61,7 +62,7 @@ TENANT_SCOPED_PERMISSIONS = {
 ROLE_PERMISSIONS = {
     "user": {
         "tenant_scoped": [
-            "view:deployments",
+            "view:catalog", "view:deployments",
             "create:deployments", "update:deployments", "delete:deployments",
             "use:nexus_ai", "use:ai_assistant"
         ],
@@ -72,7 +73,7 @@ ROLE_PERMISSIONS = {
             "view:users", "create:users", "update:users", "delete:users",
             "view:cloud-accounts", "create:cloud-accounts", "update:cloud-accounts", "delete:cloud-accounts",
             "view:environments", "create:environments", "update:environments", "delete:environments",
-            "view:templates", "create:templates", "update:templates", "delete:templates", 
+            "view:catalog", "view:templates", "create:templates", "update:templates", "delete:templates",
             "view:deployments", "create:deployments", "update:deployments", "delete:deployments", "manage:deployments",
             "view:settings", "update:settings", "use:ai_assistant", "use:nexus_ai", "manage:nexus_ai"
         ],
@@ -83,7 +84,7 @@ ROLE_PERMISSIONS = {
             "view:users", "create:users", "update:users", "delete:users",
             "view:cloud-accounts", "create:cloud-accounts", "update:cloud-accounts", "delete:cloud-accounts",
             "view:environments", "create:environments", "update:environments", "delete:environments",
-            "view:templates", "create:templates", "update:templates", "delete:templates",
+            "view:catalog", "view:templates", "create:templates", "update:templates", "delete:templates",
             "view:deployments", "create:deployments", "update:deployments", "delete:deployments", "manage:deployments",
             "view:settings", "update:settings", "use:ai_assistant", "use:nexus_ai", "manage:nexus_ai"
         ],
