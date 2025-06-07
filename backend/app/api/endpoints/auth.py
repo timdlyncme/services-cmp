@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
@@ -15,6 +16,10 @@ from app.schemas.user import Token, LoginResponse, User
 from app.db.session import get_db
 
 router = APIRouter()
+
+
+class SwitchTenantRequest(BaseModel):
+    tenant_id: str
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -148,7 +153,7 @@ def verify_token(current_user: User = Depends(get_current_user)) -> Any:
 
 @router.post("/switch-tenant")
 def switch_tenant(
-    tenant_id: str,
+    request: SwitchTenantRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -158,14 +163,14 @@ def switch_tenant(
     from app.core.permissions import can_user_switch_to_tenant, get_user_permissions_in_tenant
     
     # Check if user can switch to this tenant
-    if not can_user_switch_to_tenant(current_user, tenant_id):
+    if not can_user_switch_to_tenant(current_user, request.tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this tenant"
         )
     
     # Get permissions for the new tenant
-    permissions = list(get_user_permissions_in_tenant(current_user, tenant_id))
+    permissions = list(get_user_permissions_in_tenant(current_user, request.tenant_id))
     
     # Get user's accessible tenants
     accessible_tenants = get_user_accessible_tenants(current_user, db)
@@ -175,7 +180,7 @@ def switch_tenant(
         name=current_user.full_name,
         email=current_user.email,
         role=current_user.role.name,
-        tenantId=tenant_id,
+        tenantId=request.tenant_id,
         permissions=permissions,
         accessibleTenants=accessible_tenants,
         isMspUser=current_user.is_msp_user
