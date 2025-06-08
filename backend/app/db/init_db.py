@@ -129,9 +129,8 @@ ROLES = [
         "name": "user",
         "description": "Regular user with limited permissions within assigned tenants",
         "permissions": [
-            "view:catalog", "list:catalog", "view:deployments", "list:deployments",
-            "create:deployments", "update:deployments", "delete:deployments",
-            "use:nexus_ai", "use:ai_assistant"
+            "view:catalog", "list:catalog", "list:environments", "list:cloud-accounts", "view:deployments", "list:deployments",
+            "create:deployments", "update:deployments", "delete:deployments", "use:ai_assistant"
         ]
     },
     {
