@@ -36,6 +36,7 @@ class APIAccessControlMiddleware(BaseHTTPMiddleware):
         r"^/api/deployment/token$", # Deployment token generation
         r"^/api/users/me$",         # Current user info
         r"^/api/dashboards/.*",     # Dashboard endpoints (UI functionality)
+        r"^/api/deployments/.*",    # Deployment viewing (users need to see their deployments)
         r"^/docs.*",                # API documentation
         r"^/openapi\.json$",        # OpenAPI schema
         r"^/health.*",              # Health checks
@@ -52,7 +53,6 @@ class APIAccessControlMiddleware(BaseHTTPMiddleware):
     RESTRICTED_PATTERNS = [
         r"^/api/users/.*",          # User management (except /me)
         r"^/api/tenants/.*",        # Tenant management
-        r"^/api/deployments/.*",    # Deployment management
         r"^/api/integrations/.*",   # Integration management
     ]
     
