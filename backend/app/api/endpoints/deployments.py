@@ -64,7 +64,7 @@ def get_azure_credentials(
     Get all Azure credentials for the tenant
     """
     # Check if user has permission to view credentials
-    if not current_user.role or "view:deployments" not in [p.name for p in current_user.role.permissions]:
+    if not current_user.role or "list:deployments" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -229,7 +229,7 @@ def get_azure_credential(
     Get a specific Azure credential by settings_id
     """
     # Check if user has permission to view credentials
-    if not current_user.role or "view:deployments" not in [p.name for p in current_user.role.permissions]:
+    if not current_user.role or "list:deployments" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -523,7 +523,7 @@ def list_azure_subscriptions(
     Otherwise, the current user's tenant ID will be used.
     """
     # Check if user has permission to view credentials
-    if not current_user.role or "view:deployments" not in [p.name for p in current_user.role.permissions]:
+    if not current_user.role or "list:deployments" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -597,9 +597,10 @@ def list_azure_subscriptions(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/", tags=["deployments"], response_model=List[CloudDeploymentResponse])
+@router.get("/", response_model=List[DeploymentResponse])
 def get_deployments(
-    tenant_id: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -613,11 +614,11 @@ def get_deployments(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view deployments
-    has_permission = any(p.name == "view:deployments" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:deployments" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            detail="Not enough permissions to list deployments"
         )
     
     try:
@@ -736,7 +737,7 @@ def get_deployment(
     Get a specific deployment by ID
     """
     # Check if user has permission to view deployments
-    has_permission = any(p.name == "view:deployments" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:deployments" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1301,7 +1302,7 @@ def get_deployment_logs(
     Get logs for a specific deployment from the deployment_history table
     """
     # Check if user has permission to view deployments
-    has_permission = any(p.name == "view:deployments" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:deployments" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1353,3 +1354,25 @@ def get_deployment_logs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving deployment logs: {str(e)}"
         )
+
+@router.get("/stats", response_model=DeploymentStatsResponse)
+def get_deployment_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get deployment statistics for the current user's tenant."""
+    if not current_user.role or "list:deployments" not in [p.name for p in current_user.role.permissions]:
+        raise HTTPException(
+            status_code=403,
+            detail="Not enough permissions to list deployment statistics"
+        )
+    
+    # Get the user's tenant
+    user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
+    
+    # Get deployment statistics
+    stats = db.query(func.count(Deployment.deployment_id)).filter(
+        Deployment.tenant_id == user_tenant.tenant_id
+    ).scalar()
+    
+    return DeploymentStatsResponse(count=stats)

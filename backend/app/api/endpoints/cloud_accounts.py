@@ -34,7 +34,7 @@ def get_cloud_accounts(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view cloud accounts
-    has_permission = any(p.name == "view:cloud-accounts" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:cloud-accounts" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -125,7 +125,7 @@ def get_cloud_account(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view cloud accounts
-    has_permission = any(p.name == "view:cloud-accounts" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:cloud-accounts" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -543,7 +543,7 @@ def list_azure_subscriptions(
     List available Azure subscriptions for a specific credential
     """
     # Check if user has permission to view cloud accounts
-    has_permission = any(p.name == "view:cloud-accounts" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:cloud-accounts" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

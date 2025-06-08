@@ -16,42 +16,57 @@ from app.models.user_tenant_assignment import UserTenantAssignment
 # Global permissions that apply across all tenants (primarily for MSP users)
 GLOBAL_PERMISSIONS = {
     "view:all-tenants",
+    "list:all-tenants",
     "create:tenants", 
     "update:tenants",
     "delete:tenants",
     "view:msp-users",
+    "list:msp-users",
     "create:msp-users",
     "update:msp-users", 
     "delete:msp-users",
     "manage:global-settings",
-    "view:platform-analytics"
+    "view:platform-analytics",
+    "list:platform-analytics"
 }
 
 # Tenant-scoped permissions that apply within specific tenants
 TENANT_SCOPED_PERMISSIONS = {
     "view:users",
+    "list:users",
     "create:users", 
     "update:users",
     "delete:users",
     "view:cloud-accounts",
+    "list:cloud-accounts",
     "create:cloud-accounts",
     "update:cloud-accounts", 
     "delete:cloud-accounts",
     "view:environments",
+    "list:environments",
     "create:environments",
     "update:environments",
     "delete:environments",
     "view:catalog",
+    "list:catalog",
     "view:templates",
+    "list:templates",
     "create:templates",
     "update:templates",
     "delete:templates",
+    "view:template-foundry",
+    "list:template-foundry",
+    "create:template-foundry",
+    "update:template-foundry",
+    "delete:template-foundry",
     "view:deployments",
+    "list:deployments",
     "create:deployments",
     "update:deployments",
     "delete:deployments",
     "manage:deployments",
     "view:settings",
+    "list:settings",
     "update:settings",
     "use:ai_assistant",
     "use:nexus_ai",
@@ -62,7 +77,7 @@ TENANT_SCOPED_PERMISSIONS = {
 ROLE_PERMISSIONS = {
     "user": {
         "tenant_scoped": [
-            "view:catalog", "view:deployments",
+            "view:catalog", "list:catalog", "view:deployments", "list:deployments",
             "create:deployments", "update:deployments", "delete:deployments",
             "use:nexus_ai", "use:ai_assistant"
         ],
@@ -70,28 +85,30 @@ ROLE_PERMISSIONS = {
     },
     "admin": {
         "tenant_scoped": [
-            "view:users", "create:users", "update:users", "delete:users",
-            "view:cloud-accounts", "create:cloud-accounts", "update:cloud-accounts", "delete:cloud-accounts",
-            "view:environments", "create:environments", "update:environments", "delete:environments",
-            "view:catalog", "view:templates", "create:templates", "update:templates", "delete:templates",
-            "view:deployments", "create:deployments", "update:deployments", "delete:deployments", "manage:deployments",
-            "view:settings", "update:settings", "use:ai_assistant", "use:nexus_ai", "manage:nexus_ai"
+            "view:users", "list:users", "create:users", "update:users", "delete:users",
+            "view:cloud-accounts", "list:cloud-accounts", "create:cloud-accounts", "update:cloud-accounts", "delete:cloud-accounts",
+            "view:environments", "list:environments", "create:environments", "update:environments", "delete:environments",
+            "view:catalog", "list:catalog", "view:templates", "list:templates", "create:templates", "update:templates", "delete:templates",
+            "view:template-foundry", "list:template-foundry", "create:template-foundry", "update:template-foundry", "delete:template-foundry",
+            "view:deployments", "list:deployments", "create:deployments", "update:deployments", "delete:deployments", "manage:deployments",
+            "view:settings", "list:settings", "update:settings", "use:ai_assistant", "use:nexus_ai", "manage:nexus_ai"
         ],
         "global": []
     },
     "msp": {
         "tenant_scoped": [
-            "view:users", "create:users", "update:users", "delete:users",
-            "view:cloud-accounts", "create:cloud-accounts", "update:cloud-accounts", "delete:cloud-accounts",
-            "view:environments", "create:environments", "update:environments", "delete:environments",
-            "view:catalog", "view:templates", "create:templates", "update:templates", "delete:templates",
-            "view:deployments", "create:deployments", "update:deployments", "delete:deployments", "manage:deployments",
-            "view:settings", "update:settings", "use:ai_assistant", "use:nexus_ai", "manage:nexus_ai"
+            "view:users", "list:users", "create:users", "update:users", "delete:users",
+            "view:cloud-accounts", "list:cloud-accounts", "create:cloud-accounts", "update:cloud-accounts", "delete:cloud-accounts",
+            "view:environments", "list:environments", "create:environments", "update:environments", "delete:environments",
+            "view:catalog", "list:catalog", "view:templates", "list:templates", "create:templates", "update:templates", "delete:templates",
+            "view:template-foundry", "list:template-foundry", "create:template-foundry", "update:template-foundry", "delete:template-foundry",
+            "view:deployments", "list:deployments", "create:deployments", "update:deployments", "delete:deployments", "manage:deployments",
+            "view:settings", "list:settings", "update:settings", "use:ai_assistant", "use:nexus_ai", "manage:nexus_ai"
         ],
         "global": [
-            "view:all-tenants", "create:tenants", "update:tenants", "delete:tenants",
-            "view:msp-users", "create:msp-users", "update:msp-users", "delete:msp-users",
-            "manage:global-settings", "view:platform-analytics"
+            "view:all-tenants", "list:all-tenants", "create:tenants", "update:tenants", "delete:tenants",
+            "view:msp-users", "list:msp-users", "create:msp-users", "update:msp-users", "delete:msp-users",
+            "manage:global-settings", "view:platform-analytics", "list:platform-analytics"
         ]
     }
 }

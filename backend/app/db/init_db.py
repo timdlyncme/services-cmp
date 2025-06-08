@@ -42,63 +42,74 @@ def generate_uuid():
 # Permissions
 PERMISSIONS = [
     # User management (tenant-scoped)
-    {"name": "view:users", "description": "View users", "scope": "tenant"},
+    {"name": "view:users", "description": "View users page", "scope": "tenant"},
+    {"name": "list:users", "description": "List users via API", "scope": "tenant"},
     {"name": "create:users", "description": "Create users", "scope": "tenant"},
     {"name": "update:users", "description": "Update users", "scope": "tenant"},
     {"name": "delete:users", "description": "Delete users", "scope": "tenant"},
     
     # Tenant management (global for MSP, restricted for others)
-    {"name": "view:all-tenants", "description": "View all tenants", "scope": "global"},
+    {"name": "view:all-tenants", "description": "View all tenants page", "scope": "global"},
+    {"name": "list:all-tenants", "description": "List all tenants via API", "scope": "global"},
     {"name": "create:tenants", "description": "Create tenants", "scope": "global"},
     {"name": "update:tenants", "description": "Update tenants", "scope": "global"},
     {"name": "delete:tenants", "description": "Delete tenants", "scope": "global"},
     
     # MSP user management (global)
-    {"name": "view:msp-users", "description": "View MSP users", "scope": "global"},
+    {"name": "view:msp-users", "description": "View MSP users page", "scope": "global"},
+    {"name": "list:msp-users", "description": "List MSP users via API", "scope": "global"},
     {"name": "create:msp-users", "description": "Create MSP users", "scope": "global"},
     {"name": "update:msp-users", "description": "Update MSP users", "scope": "global"},
     {"name": "delete:msp-users", "description": "Delete MSP users", "scope": "global"},
     
     # Permissions management (global)
-    {"name": "view:permissions", "description": "View permissions", "scope": "global"},
+    {"name": "view:permissions", "description": "View permissions page", "scope": "global"},
+    {"name": "list:permissions", "description": "List permissions via API", "scope": "global"},
     {"name": "create:permissions", "description": "Create permissions", "scope": "global"},
     {"name": "update:permissions", "description": "Update permissions", "scope": "global"},
     {"name": "delete:permissions", "description": "Delete permissions", "scope": "global"},
     
     # Cloud accounts (tenant-scoped)
-    {"name": "view:cloud-accounts", "description": "View cloud accounts", "scope": "tenant"},
+    {"name": "view:cloud-accounts", "description": "View cloud accounts page", "scope": "tenant"},
+    {"name": "list:cloud-accounts", "description": "List cloud accounts via API", "scope": "tenant"},
     {"name": "create:cloud-accounts", "description": "Create cloud accounts", "scope": "tenant"},
     {"name": "update:cloud-accounts", "description": "Update cloud accounts", "scope": "tenant"},
     {"name": "delete:cloud-accounts", "description": "Delete cloud accounts", "scope": "tenant"},
     
     # Environments (tenant-scoped)
-    {"name": "view:environments", "description": "View environments", "scope": "tenant"},
+    {"name": "view:environments", "description": "View environments page", "scope": "tenant"},
+    {"name": "list:environments", "description": "List environments via API", "scope": "tenant"},
     {"name": "create:environments", "description": "Create environments", "scope": "tenant"},
     {"name": "update:environments", "description": "Update environments", "scope": "tenant"},
     {"name": "delete:environments", "description": "Delete environments", "scope": "tenant"},
     
     # Templates (tenant-scoped)
-    {"name": "view:catalog", "description": "View template catalog", "scope": "tenant"},
-    {"name": "view:templates", "description": "View templates", "scope": "tenant"},
+    {"name": "view:catalog", "description": "View template catalog page", "scope": "tenant"},
+    {"name": "list:catalog", "description": "List catalog templates via API", "scope": "tenant"},
+    {"name": "view:templates", "description": "View templates page", "scope": "tenant"},
+    {"name": "list:templates", "description": "List templates via API", "scope": "tenant"},
     {"name": "create:templates", "description": "Create templates", "scope": "tenant"},
     {"name": "update:templates", "description": "Update templates", "scope": "tenant"},
     {"name": "delete:templates", "description": "Delete templates", "scope": "tenant"},
     
     # Template foundry (tenant-scoped)
-    {"name": "view:template-foundry", "description": "View template foundry", "scope": "tenant"},
+    {"name": "view:template-foundry", "description": "View template foundry page", "scope": "tenant"},
+    {"name": "list:template-foundry", "description": "List template foundry items via API", "scope": "tenant"},
     {"name": "create:template-foundry", "description": "Create templates in foundry", "scope": "tenant"},
     {"name": "update:template-foundry", "description": "Update templates in foundry", "scope": "tenant"},
     {"name": "delete:template-foundry", "description": "Delete templates from foundry", "scope": "tenant"},
     
     # Deployments (tenant-scoped)
-    {"name": "view:deployments", "description": "View deployments", "scope": "tenant"},
+    {"name": "view:deployments", "description": "View deployments page", "scope": "tenant"},
+    {"name": "list:deployments", "description": "List deployments via API", "scope": "tenant"},
     {"name": "create:deployments", "description": "Create deployments", "scope": "tenant"},
     {"name": "update:deployments", "description": "Update deployments", "scope": "tenant"},
     {"name": "delete:deployments", "description": "Delete deployments", "scope": "tenant"},
     {"name": "manage:deployments", "description": "Manage deployment engine credentials and resources", "scope": "tenant"},
     
     # Settings (tenant-scoped)
-    {"name": "view:settings", "description": "View settings", "scope": "tenant"},
+    {"name": "view:settings", "description": "View settings page", "scope": "tenant"},
+    {"name": "list:settings", "description": "List settings via API", "scope": "tenant"},
     {"name": "update:settings", "description": "Update settings", "scope": "tenant"},
     
     # AI Services (tenant-scoped)
@@ -108,7 +119,8 @@ PERMISSIONS = [
     
     # Global platform management (global)
     {"name": "manage:global-settings", "description": "Manage global platform settings", "scope": "global"},
-    {"name": "view:platform-analytics", "description": "View platform-wide analytics", "scope": "global"},
+    {"name": "view:platform-analytics", "description": "View platform analytics page", "scope": "global"},
+    {"name": "list:platform-analytics", "description": "List platform analytics via API", "scope": "global"},
 ]
 
 # Roles with their permissions (updated for new permission model)
@@ -117,7 +129,7 @@ ROLES = [
         "name": "user",
         "description": "Regular user with limited permissions within assigned tenants",
         "permissions": [
-            "view:catalog", "view:deployments",
+            "view:catalog", "list:catalog", "view:deployments", "list:deployments",
             "create:deployments", "update:deployments", "delete:deployments",
             "use:nexus_ai", "use:ai_assistant"
         ]
@@ -126,13 +138,13 @@ ROLES = [
         "name": "admin", 
         "description": "Administrator with full permissions within assigned tenants",
         "permissions": [
-            "view:users", "create:users", "update:users", "delete:users",
-            "view:cloud-accounts", "create:cloud-accounts", "update:cloud-accounts", "delete:cloud-accounts",
-            "view:environments", "create:environments", "update:environments", "delete:environments",
-            "view:catalog", "view:templates", "create:templates", "update:templates", "delete:templates",
-            "view:template-foundry", "create:template-foundry", "update:template-foundry", "delete:template-foundry",
-            "view:deployments", "create:deployments", "update:deployments", "delete:deployments", "manage:deployments",
-            "view:settings", "update:settings", "use:ai_assistant", "use:nexus_ai", "manage:nexus_ai"
+            "view:users", "list:users", "create:users", "update:users", "delete:users",
+            "view:cloud-accounts", "list:cloud-accounts", "create:cloud-accounts", "update:cloud-accounts", "delete:cloud-accounts",
+            "view:environments", "list:environments", "create:environments", "update:environments", "delete:environments",
+            "view:catalog", "list:catalog", "view:templates", "list:templates", "create:templates", "update:templates", "delete:templates",
+            "view:template-foundry", "list:template-foundry", "create:template-foundry", "update:template-foundry", "delete:template-foundry",
+            "view:deployments", "list:deployments", "create:deployments", "update:deployments", "delete:deployments", "manage:deployments",
+            "view:settings", "list:settings", "update:settings", "use:ai_assistant", "use:nexus_ai", "manage:nexus_ai"
         ]
     },
     {
