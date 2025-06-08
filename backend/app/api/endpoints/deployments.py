@@ -597,10 +597,9 @@ def list_azure_subscriptions(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/", response_model=List[DeploymentResponse])
+@router.get("/", tags=["deployments"], response_model=List[CloudDeploymentResponse])
 def get_deployments(
-    skip: int = 0,
-    limit: int = 100,
+    tenant_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -610,7 +609,7 @@ def get_deployments(
     # Add CORS headers
     response = Response()
     response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view deployments
@@ -1354,25 +1353,3 @@ def get_deployment_logs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving deployment logs: {str(e)}"
         )
-
-@router.get("/stats", response_model=DeploymentStatsResponse)
-def get_deployment_stats(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get deployment statistics for the current user's tenant."""
-    if not current_user.role or "list:deployments" not in [p.name for p in current_user.role.permissions]:
-        raise HTTPException(
-            status_code=403,
-            detail="Not enough permissions to list deployment statistics"
-        )
-    
-    # Get the user's tenant
-    user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
-    
-    # Get deployment statistics
-    stats = db.query(func.count(Deployment.deployment_id)).filter(
-        Deployment.tenant_id == user_tenant.tenant_id
-    ).scalar()
-    
-    return DeploymentStatsResponse(count=stats)
