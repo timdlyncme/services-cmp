@@ -31,7 +31,7 @@ def get_templates(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view template foundry
-    has_permission = any(p.name == "view:template-foundry" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:template-foundry" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -85,7 +85,7 @@ def get_template(
     Get a specific template from the template foundry
     """
     # Check if user has permission to view template foundry
-    has_permission = any(p.name == "view:template-foundry" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:template-foundry" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -447,7 +447,7 @@ def get_template_versions(
     Get all versions for a template
     """
     # Check if user has permission to view templates
-    has_permission = any(p.name == "view:template-foundry" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:template-foundry" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

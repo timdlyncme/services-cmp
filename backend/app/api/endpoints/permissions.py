@@ -26,7 +26,7 @@ def get_permissions(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view permissions
-    has_permission = any(p.name == "view:permissions" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:permissions" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

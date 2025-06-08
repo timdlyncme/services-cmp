@@ -43,7 +43,7 @@ def get_users(
         )
     
     # Check permissions
-    if not has_permission_in_tenant(current_user, "view:users", target_tenant_id, db):
+    if not has_permission_in_tenant(current_user, "list:users", target_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions to view users in this tenant"
@@ -119,7 +119,7 @@ def get_user(
     Get a specific user by UUID
     """
     # Check if user has permission to view users
-    has_permission = any(p.name == "view:users" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:users" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

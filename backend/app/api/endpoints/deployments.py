@@ -64,7 +64,7 @@ def get_azure_credentials(
     Get all Azure credentials for the tenant
     """
     # Check if user has permission to view credentials
-    if not current_user.role or "view:deployments" not in [p.name for p in current_user.role.permissions]:
+    if not current_user.role or "list:deployments" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -229,7 +229,7 @@ def get_azure_credential(
     Get a specific Azure credential by settings_id
     """
     # Check if user has permission to view credentials
-    if not current_user.role or "view:deployments" not in [p.name for p in current_user.role.permissions]:
+    if not current_user.role or "list:deployments" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -523,7 +523,7 @@ def list_azure_subscriptions(
     Otherwise, the current user's tenant ID will be used.
     """
     # Check if user has permission to view credentials
-    if not current_user.role or "view:deployments" not in [p.name for p in current_user.role.permissions]:
+    if not current_user.role or "list:deployments" not in [p.name for p in current_user.role.permissions]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -609,15 +609,15 @@ def get_deployments(
     # Add CORS headers
     response = Response()
     response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view deployments
-    has_permission = any(p.name == "view:deployments" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:deployments" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            detail="Not enough permissions to list deployments"
         )
     
     try:
@@ -736,7 +736,7 @@ def get_deployment(
     Get a specific deployment by ID
     """
     # Check if user has permission to view deployments
-    has_permission = any(p.name == "view:deployments" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:deployments" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1301,7 +1301,7 @@ def get_deployment_logs(
     Get logs for a specific deployment from the deployment_history table
     """
     # Check if user has permission to view deployments
-    has_permission = any(p.name == "view:deployments" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:deployments" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

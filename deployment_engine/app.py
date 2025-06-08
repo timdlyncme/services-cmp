@@ -247,7 +247,7 @@ def set_credentials(
 def get_credentials(
     settings_id: Optional[str] = None,
     target_tenant_id: Optional[str] = None,
-    user: dict = Depends(check_permission("view:deployments"))
+    user: dict = Depends(check_permission("list:deployments"))
 ):
     """
     Get Azure credentials status for the current tenant or a target tenant.
@@ -299,7 +299,7 @@ def set_subscription(
 def list_subscriptions(
     settings_id: Optional[str] = None,
     target_tenant_id: Optional[str] = None,
-    user: dict = Depends(check_permission("view:deployments"))
+    user: dict = Depends(check_permission("list:deployments"))
 ):
     """
     List Azure subscriptions for the current tenant or a target tenant.
@@ -537,7 +537,7 @@ def get_resource_details(
     resource_id: str,
     target_tenant_id: Optional[str] = None,
     settings_id: Optional[str] = None,
-    user: dict = Depends(check_permission("view:deployments"))
+    user: dict = Depends(check_permission("list:deployments"))
 ):
     """
     Get Azure resource details by resource ID.
@@ -644,7 +644,7 @@ def get_resource_details(
 def list_resource_providers(
     target_tenant_id: Optional[str] = None,
     settings_id: Optional[str] = None,
-    user: dict = Depends(check_permission("view:deployments"))
+    user: dict = Depends(check_permission("list:deployments"))
 ):
     """
     List all Azure resource providers available in the subscription.
@@ -752,7 +752,7 @@ def get_resource_provider(
     namespace: str,
     target_tenant_id: Optional[str] = None,
     settings_id: Optional[str] = None,
-    user: dict = Depends(check_permission("view:deployments"))
+    user: dict = Depends(check_permission("list:deployments"))
 ):
     """
     Get details for a specific Azure resource provider by namespace.
@@ -858,7 +858,7 @@ def query_azure_resource_graph(
     query: str,
     target_tenant_id: Optional[str] = None,
     settings_id: Optional[str] = None,
-    user: dict = Depends(check_permission("view:deployments"))
+    user: dict = Depends(check_permission("list:deployments"))
 ):
     """
     Query Azure Resource Graph.
@@ -949,7 +949,7 @@ def query_azure_resource_graph(
 def get_subscription_locations(
     target_tenant_id: Optional[str] = None,
     settings_id: Optional[str] = None,
-    user: dict = Depends(check_permission("view:deployments"))
+    user: dict = Depends(check_permission("list:deployments"))
 ):
     """
     Get all available locations for the Azure subscription.

@@ -31,7 +31,7 @@ def get_tenants(
     
     try:
         # MSP users can see all tenants
-        if current_user.is_msp_user and has_global_permission(current_user, "view:all-tenants"):
+        if current_user.is_msp_user and has_global_permission(current_user, "list:all-tenants"):
             tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
         else:
             # Regular users can only see their assigned tenants
@@ -71,7 +71,7 @@ def get_tenant(
     Get a specific tenant by ID
     """
     # Check if user has permission to view tenants
-    has_permission = any(p.name == "view:tenants" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:tenants" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

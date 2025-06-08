@@ -36,7 +36,7 @@ def get_msp_users(
             detail="Only MSP users can access this endpoint"
         )
     
-    if not has_global_permission(current_user, "view:msp-users"):
+    if not has_global_permission(current_user, "list:msp-users"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions to view MSP users"
@@ -371,7 +371,7 @@ def get_all_tenants(
             detail="Only MSP users can access this endpoint"
         )
     
-    if not has_global_permission(current_user, "view:all-tenants"):
+    if not has_global_permission(current_user, "list:all-tenants"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions to view all tenants"
@@ -422,7 +422,7 @@ def get_platform_analytics(
             detail="Only MSP users can access this endpoint"
         )
     
-    if not has_global_permission(current_user, "view:platform-analytics"):
+    if not has_global_permission(current_user, "list:platform-analytics"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions to view platform analytics"

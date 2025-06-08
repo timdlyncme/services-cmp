@@ -28,7 +28,7 @@ def get_template_categories(
     """
     try:
         # Check if user has permission to view templates or catalog
-        has_permission = any(p.name in ["view:templates", "view:catalog"] for p in current_user.role.permissions)
+        has_permission = any(p.name in ["list:templates", "list:catalog"] for p in current_user.role.permissions)
         if not has_permission:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -107,7 +107,7 @@ def get_templates(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view templates or catalog
-    has_permission = any(p.name in ["view:templates", "view:catalog"] for p in current_user.role.permissions)
+    has_permission = any(p.name in ["list:templates", "list:catalog"] for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -250,7 +250,7 @@ def get_template(
     Get a specific template by ID
     """
     # Check if user has permission to view templates or catalog
-    has_permission = any(p.name in ["view:templates", "view:catalog"] for p in current_user.role.permissions)
+    has_permission = any(p.name in ["list:templates", "list:catalog"] for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -711,7 +711,7 @@ def get_template_versions(
     Get all versions of a template
     """
     # Check if user has permission to view templates or catalog
-    has_permission = any(p.name in ["view:templates", "view:catalog"] for p in current_user.role.permissions)
+    has_permission = any(p.name in ["list:templates", "list:catalog"] for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -878,7 +878,7 @@ def get_template_version(
     Get a specific version of a template
     """
     # Check if user has permission to view templates or catalog
-    has_permission = any(p.name in ["view:templates", "view:catalog"] for p in current_user.role.permissions)
+    has_permission = any(p.name in ["list:templates", "list:catalog"] for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

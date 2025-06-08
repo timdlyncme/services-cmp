@@ -30,7 +30,7 @@ def get_integrations(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view settings
-    has_permission = any(p.name == "view:settings" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:settings" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -87,7 +87,7 @@ def get_integration(
     Get a specific integration config by ID
     """
     # Check if user has permission to view settings
-    has_permission = any(p.name == "view:settings" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:settings" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

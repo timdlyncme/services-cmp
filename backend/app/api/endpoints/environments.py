@@ -28,7 +28,7 @@ def get_environments(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view environments
-    has_permission = any(p.name == "view:environments" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:environments" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -101,7 +101,7 @@ def get_environment(
     Get a specific environment by ID
     """
     # Check if user has permission to view environments
-    has_permission = any(p.name == "view:environments" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:environments" for p in current_user.role.permissions)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
