@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, Users, UserPlus, UserCog } from "lucide-react";
 import { User } from "@/types/auth";
 import { cmpService } from "@/services/cmp-service";
+import { MultiTenantSelector } from "@/components/multi-tenant-selector";
 
 // Data mapping utilities
 const mapBackendUserToFrontend = (backendUser: any): User => {
@@ -19,9 +20,16 @@ const mapBackendUserToFrontend = (backendUser: any): User => {
     full_name: backendUser.full_name || backendUser.name || '',
     email: backendUser.email,
     role: backendUser.role,
-    tenantId: backendUser.tenant_id,
+    tenantId: backendUser.tenant_id || backendUser.primary_tenant_id,
     avatar: undefined,
-    permissions: undefined
+    permissions: undefined,
+    primary_tenant_id: backendUser.primary_tenant_id,
+    tenant_assignments: backendUser.tenant_assignments || [],
+    external_id: backendUser.external_id,
+    identity_provider: backendUser.identity_provider,
+    is_sso_user: backendUser.is_sso_user,
+    is_active: backendUser.is_active,
+    isMspUser: backendUser.is_msp_user
   };
 };
 
@@ -32,7 +40,8 @@ const mapFrontendUserToBackend = (frontendUser: any) => {
     email: frontendUser.email,
     role: frontendUser.role,
     password: frontendUser.password,
-    is_active: frontendUser.is_active !== undefined ? frontendUser.is_active : true
+    is_active: frontendUser.is_active !== undefined ? frontendUser.is_active : true,
+    tenant_assignments: frontendUser.tenant_assignments || []
   };
 };
 
@@ -51,6 +60,14 @@ const UsersAndGroups = () => {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserRole, setNewUserRole] = useState("user");
   const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserTenantAssignments, setNewUserTenantAssignments] = useState<Array<{
+    tenant_id: string;
+    tenant_name?: string;
+    role_id?: number;
+    role_name?: string;
+    is_primary: boolean;
+    is_active: boolean;
+  }>>([]);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   
   // State for the edit user dialog
@@ -60,6 +77,14 @@ const UsersAndGroups = () => {
   const [editUserEmail, setEditUserEmail] = useState("");
   const [editUserRole, setEditUserRole] = useState("user");
   const [editUserActive, setEditUserActive] = useState(true);
+  const [editUserTenantAssignments, setEditUserTenantAssignments] = useState<Array<{
+    tenant_id: string;
+    tenant_name?: string;
+    role_id?: number;
+    role_name?: string;
+    is_primary: boolean;
+    is_active: boolean;
+  }>>([]);
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
   
   // State for delete confirmation
@@ -130,6 +155,11 @@ const UsersAndGroups = () => {
       return;
     }
     
+    if (newUserTenantAssignments.length === 0) {
+      toast.error("Please assign the user to at least one tenant");
+      return;
+    }
+    
     setIsCreatingUser(true);
     
     try {
@@ -137,29 +167,27 @@ const UsersAndGroups = () => {
         full_name: newUserName,
         email: newUserEmail,
         role: newUserRole,
-        password: newUserPassword
+        password: newUserPassword,
+        tenant_assignments: newUserTenantAssignments
       });
       
       await cmpService.createUser(userData, currentTenant.tenant_id);
+      
+      toast.success("User created successfully");
       
       // Reset form
       setNewUserName("");
       setNewUserEmail("");
       setNewUserRole("user");
       setNewUserPassword("");
+      setNewUserTenantAssignments([]);
       setIsNewUserDialogOpen(false);
       
       // Refresh users list
       await fetchUsers();
-      
-      toast.success("User created successfully");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating user:", error);
-      if (error instanceof Error) {
-        toast.error(`Failed to create user: ${error.message}`);
-      } else {
-        toast.error("Failed to create user");
-      }
+      toast.error(error.response?.data?.detail || "Failed to create user");
     } finally {
       setIsCreatingUser(false);
     }
@@ -170,16 +198,16 @@ const UsersAndGroups = () => {
     setEditUserName(userToEdit.full_name);
     setEditUserEmail(userToEdit.email);
     setEditUserRole(userToEdit.role);
-    setEditUserActive(true); // Default to active since we don't have this field in the current User type
+    setEditUserActive(userToEdit.is_active !== false); // Default to active since we don't have this field in the current User type
+    setEditUserTenantAssignments(userToEdit.tenant_assignments || []);
     setIsEditUserDialogOpen(true);
   };
   
   const handleUpdateUser = async () => {
     if (!editingUser) return;
     
-    // Validation
-    if (!editUserName.trim() || !editUserEmail.trim()) {
-      toast.error("Please fill in all required fields");
+    if (editUserTenantAssignments.length === 0) {
+      toast.error("Please assign the user to at least one tenant");
       return;
     }
     
@@ -190,10 +218,13 @@ const UsersAndGroups = () => {
         full_name: editUserName,
         email: editUserEmail,
         role: editUserRole,
-        is_active: editUserActive
+        is_active: editUserActive,
+        tenant_assignments: editUserTenantAssignments
       };
       
       await cmpService.updateUser(editingUser.id, updateData);
+      
+      toast.success("User updated successfully");
       
       // Reset form
       setEditingUser(null);
@@ -201,19 +232,14 @@ const UsersAndGroups = () => {
       setEditUserEmail("");
       setEditUserRole("user");
       setEditUserActive(true);
+      setEditUserTenantAssignments([]);
       setIsEditUserDialogOpen(false);
       
       // Refresh users list
       await fetchUsers();
-      
-      toast.success("User updated successfully");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating user:", error);
-      if (error instanceof Error) {
-        toast.error(`Failed to update user: ${error.message}`);
-      } else {
-        toast.error("Failed to update user");
-      }
+      toast.error(error.response?.data?.detail || "Failed to update user");
     } finally {
       setIsUpdatingUser(false);
     }
@@ -232,11 +258,9 @@ const UsersAndGroups = () => {
     try {
       await cmpService.deleteUser(userToDelete.id);
       
-      // Reset state
       setUserToDelete(null);
       setIsDeleteDialogOpen(false);
       
-      // Refresh users list
       await fetchUsers();
       
       toast.success("User deleted successfully");
@@ -340,6 +364,15 @@ const UsersAndGroups = () => {
                       placeholder="Enter a password"
                     />
                   </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="tenant-assignments" className="text-sm font-medium">Tenant Assignments</label>
+                    <MultiTenantSelector
+                      selectedTenants={newUserTenantAssignments}
+                      onTenantsChange={setNewUserTenantAssignments}
+                      placeholder="Select tenants for this user..."
+                    />
+                  </div>
                 </div>
                 
                 <DialogFooter>
@@ -410,6 +443,15 @@ const UsersAndGroups = () => {
               />
               <label htmlFor="edit-active" className="text-sm font-medium">Active</label>
             </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="tenant-assignments" className="text-sm font-medium">Tenant Assignments</label>
+              <MultiTenantSelector
+                selectedTenants={editUserTenantAssignments}
+                onTenantsChange={setEditUserTenantAssignments}
+                placeholder="Select tenants for this user..."
+              />
+            </div>
           </div>
           
           <DialogFooter>
@@ -479,6 +521,7 @@ const UsersAndGroups = () => {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Tenants</TableHead>
                     {canManageUsers && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -488,6 +531,24 @@ const UsersAndGroups = () => {
                       <TableCell className="font-medium">{user.full_name}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{getRoleBadge(user.role)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {user.tenant_assignments && user.tenant_assignments.length > 0 ? (
+                            user.tenant_assignments.map((assignment) => (
+                              <Badge 
+                                key={assignment.tenant_id} 
+                                variant={assignment.is_primary ? "default" : "secondary"}
+                                className="text-xs"
+                              >
+                                {assignment.tenant_name || assignment.tenant_id}
+                                {assignment.is_primary && " (Primary)"}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-muted-foreground text-sm">No tenants assigned</span>
+                          )}
+                        </div>
+                      </TableCell>
                       {canManageUsers && (
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(user)}>
@@ -506,19 +567,10 @@ const UsersAndGroups = () => {
           ) : (
             <div className="flex flex-col items-center justify-center h-64 border rounded-md p-8">
               <Users className="h-12 w-12 mx-auto text-muted-foreground" />
-              <h2 className="mt-4 text-xl font-semibold">No Users Found</h2>
-              <p className="text-muted-foreground mt-2">
-                {searchQuery 
-                  ? "No users match your search criteria" 
-                  : canManageUsers 
-                    ? "Create your first user to start managing your organization" 
-                    : "No users are available for your account"}
+              <h3 className="mt-4 text-lg font-semibold">No users found</h3>
+              <p className="text-muted-foreground">
+                {searchQuery ? "No users match your search criteria." : "Get started by creating your first user."}
               </p>
-              {canManageUsers && (
-                <Button className="mt-4" onClick={() => setIsNewUserDialogOpen(true)}>
-                  Create User
-                </Button>
-              )}
             </div>
           )}
         </TabsContent>
