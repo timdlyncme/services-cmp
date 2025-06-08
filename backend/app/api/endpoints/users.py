@@ -7,12 +7,18 @@ from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import User, Tenant, Role
 from app.models.user_tenant_assignment import UserTenantAssignment
-from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.schemas.user import UserCreate, UserUpdate, UserResponse, TenantAssignmentCreate, TenantAssignmentResponse
 from app.core.security import get_password_hash
 from app.core.permissions import (
     has_permission_in_tenant, 
     get_user_accessible_tenants,
     has_global_permission
+)
+from app.core.tenant_utils import (
+    resolve_tenant_context,
+    get_user_accessible_tenant_ids,
+    validate_admin_tenant_assignment_permission,
+    ensure_single_primary_tenant
 )
 
 router = APIRouter()
