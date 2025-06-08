@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Search, Plus, Edit, Trash, RefreshCw, AlertCircle, Users, UserPlus, UserCog } from "lucide-react";
 import { User } from "@/types/auth";
 import { cmpService } from "@/services/cmp-service";
+import TenantSelector, { TenantAssignment } from "@/components/ui/TenantSelector";
 
 // Data mapping utilities
 const mapBackendUserToFrontend = (backendUser: any): User => {
@@ -20,6 +21,7 @@ const mapBackendUserToFrontend = (backendUser: any): User => {
     email: backendUser.email,
     role: backendUser.role,
     tenantId: backendUser.tenant_id,
+    tenantAssignments: backendUser.tenant_assignments || [],
     avatar: undefined,
     permissions: undefined
   };
@@ -51,6 +53,7 @@ const UsersAndGroups = () => {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserRole, setNewUserRole] = useState("user");
   const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserTenantAssignments, setNewUserTenantAssignments] = useState<TenantAssignment[]>([]);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   
   // State for the edit user dialog
@@ -60,6 +63,7 @@ const UsersAndGroups = () => {
   const [editUserEmail, setEditUserEmail] = useState("");
   const [editUserRole, setEditUserRole] = useState("user");
   const [editUserActive, setEditUserActive] = useState(true);
+  const [editUserTenantAssignments, setEditUserTenantAssignments] = useState<TenantAssignment[]>([]);
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
   
   // State for delete confirmation
@@ -130,6 +134,12 @@ const UsersAndGroups = () => {
       return;
     }
     
+    // Validate tenant assignments for non-MSP users
+    if (newUserRole !== "msp" && newUserTenantAssignments.length === 0) {
+      toast.error("Please assign the user to at least one tenant");
+      return;
+    }
+    
     setIsCreatingUser(true);
     
     try {
@@ -137,16 +147,26 @@ const UsersAndGroups = () => {
         full_name: newUserName,
         email: newUserEmail,
         role: newUserRole,
-        password: newUserPassword
+        password: newUserPassword,
+        is_msp_user: newUserRole === "msp"
       });
       
-      await cmpService.createUser(userData, currentTenant.tenant_id);
+      // Add tenant assignments if provided
+      if (newUserTenantAssignments.length > 0) {
+        userData.tenant_assignments = newUserTenantAssignments;
+      }
+      
+      // Use tenant assignments or fall back to current tenant for backward compatibility
+      const tenantId = newUserTenantAssignments.length > 0 ? undefined : currentTenant.tenant_id;
+      
+      await cmpService.createUser(userData, tenantId);
       
       // Reset form
       setNewUserName("");
       setNewUserEmail("");
       setNewUserRole("user");
       setNewUserPassword("");
+      setNewUserTenantAssignments([]);
       setIsNewUserDialogOpen(false);
       
       // Refresh users list
@@ -167,10 +187,25 @@ const UsersAndGroups = () => {
   
   const handleEditUser = (userToEdit: User) => {
     setEditingUser(userToEdit);
-    setEditUserName(userToEdit.full_name);
+    setEditUserName(userToEdit.full_name || userToEdit.name);
     setEditUserEmail(userToEdit.email);
     setEditUserRole(userToEdit.role);
     setEditUserActive(true); // Default to active since we don't have this field in the current User type
+    
+    // Load existing tenant assignments or create default assignment
+    if (userToEdit.tenantAssignments && userToEdit.tenantAssignments.length > 0) {
+      setEditUserTenantAssignments(userToEdit.tenantAssignments);
+    } else if (userToEdit.tenantId && userToEdit.role !== "msp") {
+      // Create default assignment from legacy tenant data
+      setEditUserTenantAssignments([{
+        tenant_id: userToEdit.tenantId,
+        role: userToEdit.role,
+        is_primary: true
+      }]);
+    } else {
+      setEditUserTenantAssignments([]);
+    }
+    
     setIsEditUserDialogOpen(true);
   };
   
@@ -180,6 +215,12 @@ const UsersAndGroups = () => {
     // Validation
     if (!editUserName.trim() || !editUserEmail.trim()) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+    
+    // Validate tenant assignments for non-MSP users
+    if (editUserRole !== "msp" && editUserTenantAssignments.length === 0) {
+      toast.error("Please assign the user to at least one tenant");
       return;
     }
     
@@ -193,6 +234,11 @@ const UsersAndGroups = () => {
         is_active: editUserActive
       };
       
+      // Add tenant assignments if provided and user is not MSP
+      if (editUserRole !== "msp" && editUserTenantAssignments.length > 0) {
+        updateData.tenant_assignments = editUserTenantAssignments;
+      }
+      
       await cmpService.updateUser(editingUser.id, updateData);
       
       // Reset form
@@ -201,6 +247,7 @@ const UsersAndGroups = () => {
       setEditUserEmail("");
       setEditUserRole("user");
       setEditUserActive(true);
+      setEditUserTenantAssignments([]);
       setIsEditUserDialogOpen(false);
       
       // Refresh users list
@@ -340,6 +387,14 @@ const UsersAndGroups = () => {
                       placeholder="Enter a password"
                     />
                   </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="tenant-assignments" className="text-sm font-medium">Tenant Assignments</label>
+                    <TenantSelector
+                      value={newUserTenantAssignments}
+                      onChange={(assignments) => setNewUserTenantAssignments(assignments)}
+                    />
+                  </div>
                 </div>
                 
                 <DialogFooter>
@@ -410,6 +465,14 @@ const UsersAndGroups = () => {
               />
               <label htmlFor="edit-active" className="text-sm font-medium">Active</label>
             </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="tenant-assignments" className="text-sm font-medium">Tenant Assignments</label>
+              <TenantSelector
+                value={editUserTenantAssignments}
+                onChange={(assignments) => setEditUserTenantAssignments(assignments)}
+              />
+            </div>
           </div>
           
           <DialogFooter>
@@ -479,15 +542,36 @@ const UsersAndGroups = () => {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Tenants</TableHead>
                     {canManageUsers && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredUsers.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.full_name}</TableCell>
+                      <TableCell className="font-medium">{user.full_name || user.name}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{getRoleBadge(user.role)}</TableCell>
+                      <TableCell>
+                        {user.role === "msp" ? (
+                          <Badge variant="outline">All Tenants</Badge>
+                        ) : user.tenantAssignments && user.tenantAssignments.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {user.tenantAssignments.map((assignment, index) => (
+                              <Badge 
+                                key={assignment.tenant_id} 
+                                variant={assignment.is_primary ? "default" : "outline"}
+                                className="text-xs"
+                              >
+                                {assignment.tenant_id.substring(0, 8)}...
+                                {assignment.is_primary && " (Primary)"}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <Badge variant="outline">Legacy Assignment</Badge>
+                        )}
+                      </TableCell>
                       {canManageUsers && (
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(user)}>

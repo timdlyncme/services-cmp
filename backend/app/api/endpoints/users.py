@@ -185,14 +185,23 @@ def create_user(
     MSP users can create both MSP and regular users.
     Regular users can only create users in their assigned tenants.
     """
-    # Determine target tenant
-    target_tenant_id = tenant_id or user.tenant_id
-    if not target_tenant_id and not user.is_msp_user:
+    # Determine target tenant assignments
+    tenant_assignments = []
+    
+    # Handle new multi-tenant assignments
+    if user.tenant_assignments:
+        tenant_assignments = user.tenant_assignments
+    elif tenant_id or user.tenant_id:
+        # Backward compatibility: single tenant assignment
+        target_tenant_id = tenant_id or user.tenant_id
+        tenant_assignments = [{"tenant_id": target_tenant_id, "role": user.role, "is_primary": True}]
+    elif not user.is_msp_user:
         # Default to current user's primary tenant for regular users
         primary_assignment = current_user.get_primary_tenant_assignment()
-        target_tenant_id = primary_assignment.tenant_id if primary_assignment else None
-    
-    # Check permissions
+        if primary_assignment:
+            tenant_assignments = [{"tenant_id": primary_assignment.tenant_id, "role": user.role, "is_primary": True}]
+
+    # Check permissions for each tenant assignment
     if user.is_msp_user:
         # Creating MSP user requires global permission
         if not has_global_permission(current_user, "create:msp-users"):
@@ -201,19 +210,20 @@ def create_user(
                 detail="Not enough permissions to create MSP users"
             )
     else:
-        # Creating regular user requires tenant permission
-        if not target_tenant_id:
+        # Creating regular user requires tenant permission for each assignment
+        if not tenant_assignments:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Tenant ID required for non-MSP users"
+                detail="Tenant assignments required for non-MSP users"
             )
         
-        if not has_permission_in_tenant(current_user, "create:users", target_tenant_id, db):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions to create users in this tenant"
-            )
-    
+        for assignment in tenant_assignments:
+            if not has_permission_in_tenant(current_user, "create:users", assignment["tenant_id"], db):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Not enough permissions to create users in tenant {assignment['tenant_id']}"
+                )
+
     try:
         # Check if username or email already exists
         existing_user = db.query(User).filter(
@@ -226,84 +236,87 @@ def create_user(
                 detail="Username or email already registered"
             )
         
-        # Get role
-        role = db.query(Role).filter(Role.name == user.role).first()
-        if not role:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Role '{user.role}' not found"
-            )
-        
-        # Validate role assignment
-        if user.is_msp_user and role.name != "msp":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="MSP users must have MSP role"
-            )
-        elif not user.is_msp_user and role.name == "msp":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Non-MSP users cannot have MSP role"
-            )
-        
+        # Get role for MSP users (regular users get roles per tenant)
+        role = None
+        if user.is_msp_user:
+            role = db.query(Role).filter(Role.name == user.role).first()
+            if not role:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Role '{user.role}' not found"
+                )
+            
+            # Validate role assignment
+            if role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="MSP users must have MSP role"
+                )
+
         # Create new user
         new_user = User(
             username=user.username,
             full_name=user.full_name,
             email=user.email,
             hashed_password=get_password_hash(user.password),
-            role_id=role.id,
+            role_id=role.id if role else None,
             is_active=user.is_active,
             is_msp_user=user.is_msp_user,
             user_id=str(uuid.uuid4())
         )
         
-        # Set legacy tenant_id for backward compatibility
-        if target_tenant_id:
-            new_user.tenant_id = target_tenant_id
+        # Set legacy tenant_id for backward compatibility (primary tenant)
+        primary_assignment = next((a for a in tenant_assignments if a.get("is_primary")), None)
+        if not primary_assignment and tenant_assignments:
+            primary_assignment = tenant_assignments[0]
+            primary_assignment["is_primary"] = True
+        
+        if primary_assignment:
+            new_user.tenant_id = primary_assignment["tenant_id"]
         
         db.add(new_user)
         db.flush()  # Get the user ID
         
         # Create tenant assignments for non-MSP users
         if not user.is_msp_user:
-            # Create primary tenant assignment
-            primary_assignment = UserTenantAssignment(
-                user_id=new_user.id,  # Use integer primary key instead of UUID
-                tenant_id=target_tenant_id,
-                role_id=role.id,
-                is_primary=True,
-                is_active=True
-            )
-            db.add(primary_assignment)
-            
-            # Create additional tenant assignments if specified
-            if user.additional_tenant_ids:
-                for additional_tenant_id in user.additional_tenant_ids:
-                    if additional_tenant_id != target_tenant_id:  # Don't duplicate primary
-                        additional_assignment = UserTenantAssignment(
-                            user_id=new_user.id,  # Use integer primary key instead of UUID
-                            tenant_id=additional_tenant_id,
-                            role_id=role.id,
-                            is_primary=False,
-                            is_active=True
-                        )
-                        db.add(additional_assignment)
-        else:
-            # MSP users get assignments to all tenants
-            all_tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
-            for i, tenant in enumerate(all_tenants):
-                msp_assignment = UserTenantAssignment(
-                    user_id=new_user.id,  # Use integer primary key instead of UUID
-                    tenant_id=tenant.tenant_id,
-                    role_id=role.id,
-                    is_primary=(i == 0),  # First tenant is primary
+            for assignment in tenant_assignments:
+                # Get role for this assignment
+                assignment_role = db.query(Role).filter(Role.name == assignment["role"]).first()
+                if not assignment_role:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Role '{assignment['role']}' not found"
+                    )
+                
+                # Validate role assignment
+                if assignment_role.name == "msp":
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Non-MSP users cannot have MSP role"
+                    )
+                
+                # Create tenant assignment
+                tenant_assignment = UserTenantAssignment(
+                    user_id=new_user.id,
+                    tenant_id=assignment["tenant_id"],
+                    role_id=assignment_role.id,
+                    is_primary=assignment.get("is_primary", False),
                     is_active=True
                 )
-                db.add(msp_assignment)
+                db.add(tenant_assignment)
         
         db.commit()
         db.refresh(new_user)
+        
+        # Build response with tenant assignments
+        response_assignments = []
+        if not user.is_msp_user:
+            for assignment in new_user.get_tenant_assignments():
+                response_assignments.append({
+                    "tenant_id": assignment.tenant_id,
+                    "role": assignment.role.name if assignment.role else None,
+                    "is_primary": assignment.is_primary
+                })
         
         return UserResponse(
             id=new_user.user_id,
@@ -312,8 +325,9 @@ def create_user(
             full_name=new_user.full_name,
             email=new_user.email,
             is_active=new_user.is_active,
-            role=role.name,
-            tenant_id=target_tenant_id if not user.is_msp_user else "msp",
+            role=role.name if role else (primary_assignment["role"] if primary_assignment else None),
+            tenant_id=primary_assignment["tenant_id"] if primary_assignment else "msp",
+            tenant_assignments=response_assignments,
             is_msp_user=new_user.is_msp_user
         )
     
@@ -336,7 +350,7 @@ def update_user(
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Update a user
+    Update a user with multi-tenant assignment support
     """
     # Check if user has permission to update users
     has_permission = any(p.name == "update:users" for p in current_user.role.permissions)
@@ -363,7 +377,7 @@ def update_user(
                 detail="Not authorized to update this user"
             )
         
-        # Update user fields
+        # Update basic user fields
         if user_update.username is not None:
             # Check if username already exists
             existing_user = db.query(User).filter(
@@ -401,7 +415,8 @@ def update_user(
         if user_update.is_active is not None:
             user.is_active = user_update.is_active
         
-        if user_update.role is not None:
+        # Handle role updates for MSP users
+        if user_update.role is not None and user.is_msp_user:
             # Get role
             role = db.query(Role).filter(Role.name == user_update.role).first()
             if not role:
@@ -412,7 +427,70 @@ def update_user(
             
             user.role_id = role.id
         
-        if user_update.tenant_id is not None:
+        # Handle tenant assignments update
+        if user_update.tenant_assignments is not None and not user.is_msp_user:
+            # Validate permissions for each new tenant assignment
+            for assignment in user_update.tenant_assignments:
+                if not has_permission_in_tenant(current_user, "create:users", assignment.tenant_id, db):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Not enough permissions to assign users to tenant {assignment.tenant_id}"
+                    )
+            
+            # Remove existing tenant assignments
+            db.query(UserTenantAssignment).filter(
+                UserTenantAssignment.user_id == user.id
+            ).delete()
+            
+            # Create new tenant assignments
+            primary_assignment = None
+            for assignment in user_update.tenant_assignments:
+                # Get role for this assignment
+                assignment_role = db.query(Role).filter(Role.name == assignment.role).first()
+                if not assignment_role:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Role '{assignment.role}' not found"
+                    )
+                
+                # Validate role assignment
+                if assignment_role.name == "msp":
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Non-MSP users cannot have MSP role"
+                    )
+                
+                # Create tenant assignment
+                tenant_assignment = UserTenantAssignment(
+                    user_id=user.id,
+                    tenant_id=assignment.tenant_id,
+                    role_id=assignment_role.id,
+                    is_primary=assignment.is_primary,
+                    is_active=True
+                )
+                db.add(tenant_assignment)
+                
+                # Track primary assignment for legacy tenant_id update
+                if assignment.is_primary:
+                    primary_assignment = assignment
+            
+            # Ensure at least one assignment is primary
+            if not primary_assignment and user_update.tenant_assignments:
+                primary_assignment = user_update.tenant_assignments[0]
+                # Update the first assignment to be primary
+                first_assignment = db.query(UserTenantAssignment).filter(
+                    UserTenantAssignment.user_id == user.id,
+                    UserTenantAssignment.tenant_id == primary_assignment.tenant_id
+                ).first()
+                if first_assignment:
+                    first_assignment.is_primary = True
+            
+            # Update legacy tenant_id field
+            if primary_assignment:
+                user.tenant_id = primary_assignment.tenant_id
+        
+        # Handle legacy single tenant update for backward compatibility
+        elif user_update.tenant_id is not None:
             # Handle different tenant ID formats
             try:
                 tenant_id = user_update.tenant_id
@@ -447,6 +525,16 @@ def update_user(
                     )
                 
                 user.tenant_id = tenant.tenant_id
+                
+                # Update primary tenant assignment if it exists
+                primary_assignment = db.query(UserTenantAssignment).filter(
+                    UserTenantAssignment.user_id == user.id,
+                    UserTenantAssignment.is_primary == True
+                ).first()
+                
+                if primary_assignment:
+                    primary_assignment.tenant_id = tenant.tenant_id
+                
             except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -456,15 +544,31 @@ def update_user(
         db.commit()
         db.refresh(user)
         
+        # Build response with tenant assignments
+        response_assignments = []
+        if not user.is_msp_user:
+            for assignment in user.get_tenant_assignments():
+                response_assignments.append({
+                    "tenant_id": assignment.tenant_id,
+                    "role": assignment.role.name if assignment.role else None,
+                    "is_primary": assignment.is_primary
+                })
+        
         # Convert role object to role name
         role_name = None
         if hasattr(user, 'role') and user.role:
             role_name = user.role.name
+        elif response_assignments:
+            # For non-MSP users, get role from primary assignment
+            primary = next((a for a in response_assignments if a["is_primary"]), None)
+            role_name = primary["role"] if primary else None
         
         # Get tenant_id from tenant object
         tenant_id = None
         if hasattr(user, 'tenant') and user.tenant:
             tenant_id = user.tenant.tenant_id
+        elif user.tenant_id:
+            tenant_id = user.tenant_id
         
         return UserResponse(
             id=user.user_id,  # Use UUID as id, not internal integer
@@ -474,7 +578,9 @@ def update_user(
             email=user.email,
             is_active=user.is_active,
             role=role_name,
-            tenant_id=tenant_id
+            tenant_id=tenant_id,
+            tenant_assignments=response_assignments,
+            is_msp_user=user.is_msp_user
         )
     
     except HTTPException:

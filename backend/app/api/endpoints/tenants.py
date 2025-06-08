@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.models.user import Tenant, User
 from app.schemas.tenant import TenantResponse, TenantCreate, TenantUpdate
 from app.core.permissions import has_global_permission, get_user_accessible_tenants
+from app.models.user_tenant_assignment import UserTenantAssignment
 
 router = APIRouter()
 
@@ -20,44 +21,84 @@ def get_tenants(
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Get tenants accessible to the current user.
-    MSP users see all tenants, regular users see only their assigned tenants.
+    Get all tenants accessible to the current user
     """
-    # Add CORS headers
-    response = Response()
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    
     try:
-        # MSP users can see all tenants
-        if current_user.is_msp_user and has_global_permission(current_user, "list:all-tenants"):
+        if current_user.is_msp_user:
+            # MSP users can see all tenants
             tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
         else:
             # Regular users can only see their assigned tenants
-            accessible_tenant_ids = get_user_accessible_tenants(current_user, db)
-            if not accessible_tenant_ids:
-                return []
+            user_tenant_assignments = db.query(UserTenantAssignment).filter(
+                UserTenantAssignment.user_id == current_user.id,
+                UserTenantAssignment.is_active == True
+            ).all()
             
+            tenant_ids = [assignment.tenant_id for assignment in user_tenant_assignments]
             tenants = db.query(Tenant).filter(
-                Tenant.tenant_id.in_(accessible_tenant_ids),
+                Tenant.tenant_id.in_(tenant_ids),
                 Tenant.is_active == True
             ).all()
         
         return [
             TenantResponse(
-                id=tenant.id,
+                id=tenant.tenant_id,
                 tenant_id=tenant.tenant_id,
                 name=tenant.name,
                 description=tenant.description,
-                date_created=tenant.date_created,
-                date_modified=tenant.date_modified
-            ) for tenant in tenants
+                date_created=tenant.date_created.isoformat() if tenant.date_created else None,
+                date_modified=tenant.date_modified.isoformat() if tenant.date_modified else None
+            )
+            for tenant in tenants
         ]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving tenants: {str(e)}"
+        )
+
+
+@router.get("/available", response_model=List[TenantResponse])
+def get_available_tenants(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Get all tenants available for user assignment based on current user's permissions
+    MSP users can assign to any tenant, regular users can only assign to their accessible tenants
+    """
+    try:
+        if current_user.is_msp_user:
+            # MSP users can assign to any tenant
+            tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
+        else:
+            # Regular users can only assign to tenants they have access to
+            user_tenant_assignments = db.query(UserTenantAssignment).filter(
+                UserTenantAssignment.user_id == current_user.id,
+                UserTenantAssignment.is_active == True
+            ).all()
+            
+            tenant_ids = [assignment.tenant_id for assignment in user_tenant_assignments]
+            tenants = db.query(Tenant).filter(
+                Tenant.tenant_id.in_(tenant_ids),
+                Tenant.is_active == True
+            ).all()
+        
+        return [
+            TenantResponse(
+                id=tenant.tenant_id,
+                tenant_id=tenant.tenant_id,
+                name=tenant.name,
+                description=tenant.description,
+                date_created=tenant.date_created.isoformat() if tenant.date_created else None,
+                date_modified=tenant.date_modified.isoformat() if tenant.date_modified else None
+            )
+            for tenant in tenants
+        ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving available tenants: {str(e)}"
         )
 
 

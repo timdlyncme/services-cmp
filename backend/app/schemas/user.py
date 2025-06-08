@@ -7,6 +7,13 @@ class Token(BaseModel):
     token_type: str
 
 
+class TenantAssignment(BaseModel):
+    """Schema for tenant assignment with role"""
+    tenant_id: str
+    role: str
+    is_primary: Optional[bool] = False
+
+
 class UserBase(BaseModel):
     username: str
     full_name: Optional[str] = None
@@ -35,7 +42,8 @@ class UserCreate(UserBase):
     password: str
     role: str
     tenant_id: Optional[str] = None
-    additional_tenant_ids: Optional[List[str]] = []  # For multi-tenant assignments
+    tenant_assignments: Optional[List[TenantAssignment]] = []  # New multi-tenant support
+    additional_tenant_ids: Optional[List[str]] = []  # For backward compatibility
     is_msp_user: Optional[bool] = False
 
 
@@ -47,6 +55,7 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     role: Optional[str] = None
     tenant_id: Optional[str] = None
+    tenant_assignments: Optional[List[TenantAssignment]] = None  # New multi-tenant support
     additional_tenant_ids: Optional[List[str]] = None
     is_msp_user: Optional[bool] = None
 
@@ -56,6 +65,7 @@ class UserResponse(UserBase):
     user_id: str
     role: Optional[str] = None
     tenant_id: Optional[str] = None  # Changed to str for UUID
+    tenant_assignments: Optional[List[TenantAssignment]] = []  # Include tenant assignments in response
     is_msp_user: Optional[bool] = False
     
     class Config:

@@ -433,7 +433,7 @@ export class CMPService {
   /**
    * Get all tenants
    */
-  async getTenants(): Promise<any[]> {
+  async getTenants(): Promise<Tenant[]> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -453,9 +453,31 @@ export class CMPService {
   }
 
   /**
+   * Get available tenants for user assignment
+   */
+  async getAvailableTenants(): Promise<Tenant[]> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await api.get('/tenants/available', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get available tenants error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get a specific tenant
    */
-  async getTenant(tenantId: string): Promise<any> {
+  async getTenant(tenantId: string): Promise<Tenant> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -477,7 +499,7 @@ export class CMPService {
   /**
    * Create a new tenant
    */
-  async createTenant(tenant: any): Promise<any> {
+  async createTenant(tenant: any): Promise<Tenant> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -501,7 +523,7 @@ export class CMPService {
   /**
    * Update a tenant
    */
-  async updateTenant(tenantId: string, tenant: any): Promise<any> {
+  async updateTenant(tenantId: string, tenant: any): Promise<Tenant> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -591,13 +613,19 @@ export class CMPService {
   }
 
   /**
-   * Create a new user
+   * Create a new user with tenant assignments support
    */
-  async createUser(user: any, tenantId: string): Promise<any> {
+  async createUser(user: any, tenantId?: string): Promise<any> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication token not found');
+      }
+
+      const params: Record<string, string> = {};
+      if (tenantId && !user.tenant_assignments) {
+        // Backward compatibility: use tenant_id parameter if no tenant_assignments provided
+        params.tenant_id = formatTenantId(tenantId);
       }
 
       const response = await api.post('/users', {
@@ -606,9 +634,7 @@ export class CMPService {
         headers: {
           Authorization: `Bearer ${token}`
         },
-        params: {
-          tenant_id: formatTenantId(tenantId)
-        }
+        params
       });
       return response.data;
     } catch (error) {
@@ -618,7 +644,7 @@ export class CMPService {
   }
 
   /**
-   * Update a user
+   * Update a user with tenant assignments support
    */
   async updateUser(userId: string, user: any): Promise<any> {
     try {

@@ -22,12 +22,20 @@ export interface Permission {
   description?: string;
 }
 
+export interface TenantAssignment {
+  tenant_id: string;
+  role: string;
+  is_primary: boolean;
+}
+
 export interface User {
   id: string;
   name: string;  // Changed from full_name to name to match backend
+  full_name?: string;  // Keep for backward compatibility
   email: string;
   role: UserRole;
   tenantId: string;
+  tenantAssignments?: TenantAssignment[];  // Multi-tenant assignments
   avatar?: string;
   permissions?: (Permission | string)[];  // Allow both Permission objects and strings
   accessibleTenants?: string[];  // List of tenant IDs user can access
