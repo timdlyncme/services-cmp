@@ -202,7 +202,7 @@ def switch_tenant(
     current_role = get_user_role_in_tenant(current_user, request.tenant_id)
     permissions = get_tenant_permissions(current_user, request.tenant_id)
     
-    accessible_tenants = get_user_accessible_tenants(current_user)
+    accessible_tenants = get_user_accessible_tenants(current_user, db)
     
     return User(
         id=current_user.user_id,
