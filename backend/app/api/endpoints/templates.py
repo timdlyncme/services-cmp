@@ -205,7 +205,14 @@ def get_templates(
             # Get the last user who updated the template
             last_updated_by = current_user.full_name or current_user.username
             
-                code=template_code,
+            result.append(CloudTemplateResponse(
+                id=template.template_id,
+                template_id=template.template_id,  # Explicitly include template_id
+                name=template.name,
+                description=template.description or "",
+                type=template.type,  # Use the actual template type from the database
+                provider=template.provider,
+                code=code,
                 deploymentCount=deployment_count,
                 uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
                 updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
@@ -293,6 +300,13 @@ def get_template(
         # Get the last user who updated the template
         last_updated_by = current_user.full_name or current_user.username
         
+        return CloudTemplateResponse(
+            id=template.template_id,
+            template_id=template.template_id,  # Explicitly include template_id
+            name=template.name,
+            description=template.description or "",
+            type=template.type,  # Use the actual template type from the database
+            provider=template.provider,
             code=code,
             deploymentCount=deployment_count,
             uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
