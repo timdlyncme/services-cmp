@@ -265,7 +265,7 @@ def get_user_permissions_list(user: "User", tenant_id: str = None) -> List[str]:
     if not tenant_id:
         return []
     
-    permissions = get_tenant_permissions(user, tenant_id)
+    permissions = get_user_permissions_in_tenant(user, tenant_id)
     return list(permissions)
 
 
