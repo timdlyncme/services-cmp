@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Table, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, Table, Boolean, DateTime, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -51,9 +51,12 @@ class Tenant(Base):
     date_created = Column(DateTime, default=datetime.datetime.utcnow)
     date_modified = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
+    # SSO_FUTURE: Domain-based tenant resolution for SSO login flows
+    # This will enable automatic tenant detection from user email domains (e.g., user@company.com -> tenant)
+    primary_domain = Column(String, nullable=True, index=True)
+    
     # Relationships
-    users = relationship("User", back_populates="tenant")  # Keep for backward compatibility
-    user_assignments = relationship("UserTenantAssignment", back_populates="tenant")  # New multi-tenant relationship
+    user_assignments = relationship("UserTenantAssignment", back_populates="tenant")  # Multi-tenant relationship
     
     # ... existing relationships ...
 
@@ -75,20 +78,25 @@ class User(Base):
     user_id = Column(UUID(as_uuid=False), unique=True, index=True, default=generate_uuid)
     username = Column(String, unique=True, index=True)
     full_name = Column(String)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
+    email = Column(String, index=True)  # Removed unique=True for SSO compatibility
+    
+    # SSO_FUTURE: Password becomes optional for SSO-only users
+    # SSO users won't have local passwords, only external identity provider authentication
+    hashed_password = Column(String, nullable=True)  # Changed from required to optional
+    
     is_active = Column(Boolean, default=True)
     is_msp_user = Column(Boolean, default=False)  # Flag to identify MSP users
+    
+    # SSO_FUTURE: External identity provider integration fields
+    # These fields will store Azure AD/OAuth2.0 user information for SSO authentication
+    external_id = Column(String, unique=True, nullable=True, index=True)  # Azure AD Object ID
+    identity_provider = Column(String, default="local", nullable=False)  # "local", "azure_ad", "saml", etc.
     
     # Relationships
     role_id = Column(Integer, ForeignKey("roles.id"))
     role = relationship("Role", back_populates="users")
     
-    # Keep existing single tenant relationship for backward compatibility
-    tenant_id = Column(UUID(as_uuid=False), ForeignKey("tenants.tenant_id"))
-    tenant = relationship("Tenant", back_populates="users")
-    
-    # New multi-tenant relationship
+    # Multi-tenant relationship - this is now the ONLY way users are assigned to tenants
     tenant_assignments = relationship("UserTenantAssignment", back_populates="user")
     
     # Relationship with Deployment
@@ -100,7 +108,12 @@ class User(Base):
     # Relationship with Dashboard
     dashboards = relationship("Dashboard", back_populates="user")
     
-    # ... existing methods ...
+    # SSO_FUTURE: Email uniqueness will be enforced per tenant via user_tenant_assignments
+    # This allows the same email to exist across multiple tenants (common in SSO scenarios)
+    __table_args__ = (
+        # Email uniqueness is now handled through tenant assignments, not globally
+        # This enables SSO users to exist in multiple tenants with the same email
+    )
     
     def get_tenant_assignments(self):
         """Get all active tenant assignments for this user"""
@@ -112,6 +125,11 @@ class User(Base):
             if assignment.is_primary and assignment.is_active:
                 return assignment
         return None
+    
+    def get_primary_tenant_id(self):
+        """Get the user's primary tenant ID - replaces direct tenant_id access"""
+        primary_assignment = self.get_primary_tenant_assignment()
+        return primary_assignment.tenant_id if primary_assignment else None
     
     def has_tenant_access(self, tenant_id: str) -> bool:
         """Check if user has access to a specific tenant"""
@@ -129,3 +147,24 @@ class User(Base):
             if assignment.is_active and assignment.tenant_id == tenant_id:
                 return assignment.role
         return None
+    
+    # SSO_FUTURE: Additional methods for SSO user management
+    @property
+    def is_sso_user(self) -> bool:
+        """Check if user authenticates via SSO"""
+        return self.identity_provider != "local"
+    
+    @property
+    def tenant_id(self) -> str:
+        """Backward compatibility property for primary tenant ID"""
+        return self.get_primary_tenant_id()
+    
+    @property
+    def tenant(self):
+        """Backward compatibility property for primary tenant relationship"""
+        primary_assignment = self.get_primary_tenant_assignment()
+        return primary_assignment.tenant if primary_assignment else None
+    
+    def can_login_locally(self) -> bool:
+        """Check if user can authenticate with local password"""
+        return self.hashed_password is not None

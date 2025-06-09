@@ -31,6 +31,7 @@ from app.models.template_foundry_versions import TemplateFoundryVersion
 from app.models.nexus_ai import NexusAIConfig, NexusAILog
 from app.models.ai_assistant import AIAssistantConfig, AIAssistantLog
 from app.models.dashboard import Dashboard, DashboardWidget, UserWidget
+from app.models.user_tenant_assignment import UserTenantAssignment
 
 logger = logging.getLogger(__name__)
 
@@ -498,21 +499,24 @@ def init_db(db: Session) -> None:
             tenant = tenants.get(tenant_index)
             
             if role and tenant:
+                # SSO_FUTURE: User creation with SSO-compatible fields
                 user = User(
                     email=user_data["email"],
                     username=user_data["username"],
                     full_name=user_data["full_name"],
                     hashed_password=get_password_hash(user_data["password"]),
                     role_id=role.id,
-                    tenant_id=tenant.tenant_id,  # Use tenant_id (UUID) instead of id (Integer)
+                    # REMOVED: tenant_id=tenant.tenant_id,  # Legacy field removed - using user_tenant_assignments only
                     user_id=user_data.get("user_id"),
-                    is_msp_user=user_data.get("is_msp_user")
+                    is_msp_user=user_data.get("is_msp_user"),
+                    # SSO_FUTURE: External identity fields for future SSO integration
+                    external_id=None,  # Will be populated during SSO user creation
+                    identity_provider="local"  # All init users are local, SSO users added later
                 )
                 db.add(user)
                 db.flush()  # Flush to get the user ID
                 
-                # Create user-tenant assignment for the new multi-tenant system
-                from app.models.user_tenant_assignment import UserTenantAssignment
+                # ... existing user-tenant assignment creation code ...
                 
                 # Create primary tenant assignment
                 primary_assignment = UserTenantAssignment(
@@ -520,7 +524,11 @@ def init_db(db: Session) -> None:
                     tenant_id=tenant.tenant_id,
                     role_id=role.id,
                     is_primary=True,
-                    is_active=True
+                    is_active=True,
+                    # SSO_FUTURE: Provisioning tracking for manual vs SSO users
+                    provisioned_via="manual",  # All init users are manually provisioned
+                    external_group_id=None,  # No Azure AD groups for init users
+                    external_role_mapping=None  # No external role mapping for init users
                 )
                 db.add(primary_assignment)
                 
@@ -533,7 +541,11 @@ def init_db(db: Session) -> None:
                                 tenant_id=tenant_id,
                                 role_id=role.id,
                                 is_primary=False,
-                                is_active=True
+                                is_active=True,
+                                # SSO_FUTURE: MSP assignments also tracked for provisioning
+                                provisioned_via="manual",
+                                external_group_id=None,
+                                external_role_mapping=None
                             )
                             db.add(msp_assignment)
     

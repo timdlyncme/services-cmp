@@ -22,16 +22,38 @@ export interface Permission {
   description?: string;
 }
 
+export interface TenantAssignment {
+  tenant_id: string;
+  tenant_name?: string;
+  role_id?: number;
+  role_name?: string;
+  is_primary: boolean;
+  is_active: boolean;
+  provisioned_via?: string;
+  external_group_id?: string;
+  external_role_mapping?: string;
+}
+
 export interface User {
   id: string;
-  name: string;  // Changed from full_name to name to match backend
+  full_name: string;  // Keep full_name for consistency with backend
   email: string;
   role: UserRole;
-  tenantId: string;
+  tenantId: string;  // Primary tenant ID for backward compatibility
   avatar?: string;
   permissions?: (Permission | string)[];  // Allow both Permission objects and strings
   accessibleTenants?: string[];  // List of tenant IDs user can access
   isMspUser?: boolean;  // Flag to identify MSP users
+  
+  // Multi-tenant support
+  primary_tenant_id?: string;
+  tenant_assignments?: TenantAssignment[];
+  
+  // SSO support
+  external_id?: string;
+  identity_provider?: string;
+  is_sso_user?: boolean;
+  is_active?: boolean;
 }
 
 // Badge variants for consistency

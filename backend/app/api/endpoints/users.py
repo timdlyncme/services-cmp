@@ -1,5 +1,5 @@
 from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.orm import Session
 import uuid
 
@@ -7,12 +7,18 @@ from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import User, Tenant, Role
 from app.models.user_tenant_assignment import UserTenantAssignment
-from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.schemas.user import UserCreate, UserUpdate, UserResponse, TenantAssignmentCreate, TenantAssignmentResponse
 from app.core.security import get_password_hash
 from app.core.permissions import (
     has_permission_in_tenant, 
     get_user_accessible_tenants,
     has_global_permission
+)
+from app.core.tenant_utils import (
+    resolve_tenant_context,
+    get_user_accessible_tenant_ids,
+    validate_admin_tenant_assignment_permission,
+    ensure_single_primary_tenant
 )
 
 router = APIRouter()
@@ -86,6 +92,40 @@ def get_users(
                 role_in_tenant = user.get_role_in_tenant(target_tenant_id)
                 role_name = role_in_tenant.name if role_in_tenant else None
             
+            # Get all tenant assignments for this user
+            tenant_assignments = []
+            user_tenant_assignments = db.query(UserTenantAssignment).filter(
+                UserTenantAssignment.user_id == user.id,
+                UserTenantAssignment.is_active == True
+            ).all()
+            
+            for assignment in user_tenant_assignments:
+                # Get tenant name
+                tenant = db.query(Tenant).filter(Tenant.tenant_id == assignment.tenant_id).first()
+                tenant_name = tenant.name if tenant else assignment.tenant_id
+                
+                # Get role name
+                role = db.query(Role).filter(Role.id == assignment.role_id).first()
+                role_name_for_tenant = role.name if role else None
+                
+                tenant_assignments.append(
+                    TenantAssignmentResponse(
+                        tenant_id=assignment.tenant_id,
+                        tenant_name=tenant_name,
+                        role_id=assignment.role_id,
+                        role_name=role_name_for_tenant,
+                        is_primary=assignment.is_primary,
+                        is_active=assignment.is_active,
+                        provisioned_via=assignment.provisioned_via,
+                        external_group_id=assignment.external_group_id,
+                        external_role_mapping=assignment.external_role_mapping
+                    )
+                )
+            
+            # Get primary tenant ID
+            primary_assignment = next((a for a in user_tenant_assignments if a.is_primary), None)
+            primary_tenant_id = primary_assignment.tenant_id if primary_assignment else None
+            
             result.append(
                 UserResponse(
                     id=user.user_id,
@@ -96,7 +136,12 @@ def get_users(
                     is_active=user.is_active,
                     role=role_name,
                     tenant_id=target_tenant_id if not user.is_msp_user else "msp",
-                    is_msp_user=user.is_msp_user
+                    tenant_assignments=tenant_assignments,
+                    primary_tenant_id=primary_tenant_id,
+                    is_msp_user=user.is_msp_user,
+                    external_id=user.external_id,
+                    identity_provider=user.identity_provider,
+                    is_sso_user=user.is_sso_user
                 )
             )
         
@@ -112,18 +157,23 @@ def get_users(
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user(
     user_id: str,  # Changed from int to str to accept UUID
+    tenant_id: Optional[str] = Query(None, description="Tenant ID context for the operation"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Get a specific user by UUID
+    Get a specific user by UUID with multi-tenant access control.
+    
+    SSO_FUTURE: Will include SSO user information and external identity details.
     """
-    # Check if user has permission to view users
-    has_permission = any(p.name == "list:users" for p in current_user.role.permissions)
-    if not has_permission:
+    # Resolve tenant context for permission checking
+    operation_tenant_id = resolve_tenant_context(current_user, tenant_id, db)
+    
+    # Check if user has permission to view users in the tenant
+    if not has_permission_in_tenant(current_user, "list:users", operation_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            detail="Not enough permissions to view users in this tenant"
         )
     
     try:
@@ -136,12 +186,19 @@ def get_user(
                 detail=f"User with ID {user_id} not found"
             )
         
-        # Check if user has access to this user's tenant
-        if user.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to access this user"
-            )
+        # Check if current user has access to view this user
+        # MSP users can view all users, admins can view users in their accessible tenants
+        if not current_user.is_msp_user:
+            # Check if the target user has any tenant assignments that the current user can access
+            current_user_accessible_tenants = set(get_user_accessible_tenant_ids(current_user, db))
+            target_user_tenant_ids = set([assignment.tenant_id for assignment in user.get_tenant_assignments()])
+            
+            # If there's no overlap in accessible tenants, deny access
+            if not current_user_accessible_tenants.intersection(target_user_tenant_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to access this user"
+                )
         
         # Convert role object to role name
         role_name = None
@@ -161,7 +218,14 @@ def get_user(
             email=user.email,
             is_active=user.is_active,
             role=role_name,
-            tenant_id=tenant_id
+            tenant_id=tenant_id,
+            primary_tenant_id=user.get_primary_tenant_id(),  # Backward compatibility
+            tenant_assignments=[],  # Will be populated with actual assignments
+            is_msp_user=user.is_msp_user,
+            # SSO_FUTURE: SSO user information
+            external_id=user.external_id,
+            identity_provider=user.identity_provider,
+            is_sso_user=user.is_sso_user
         )
     
     except HTTPException:
@@ -186,7 +250,7 @@ def create_user(
     Regular users can only create users in their assigned tenants.
     """
     # Determine target tenant
-    target_tenant_id = tenant_id or user.tenant_id
+    target_tenant_id = tenant_id
     if not target_tenant_id and not user.is_msp_user:
         # Default to current user's primary tenant for regular users
         primary_assignment = current_user.get_primary_tenant_assignment()
@@ -227,24 +291,22 @@ def create_user(
             )
         
         # Get role
-        role = db.query(Role).filter(Role.name == user.role).first()
-        if not role:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Role '{user.role}' not found"
-            )
+        role = None
+        if user.role:
+            role = db.query(Role).filter(Role.name == user.role).first()
+            if not role:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Role '{user.role}' not found"
+                )
         
-        # Validate role assignment
-        if user.is_msp_user and role.name != "msp":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="MSP users must have MSP role"
-            )
-        elif not user.is_msp_user and role.name == "msp":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Non-MSP users cannot have MSP role"
-            )
+        # Validate role assignment for MSP users
+        if user.is_msp_user:
+            if not role or (role and role.name != "msp"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="MSP users must have 'msp' role"
+                )
         
         # Create new user
         new_user = User(
@@ -252,43 +314,65 @@ def create_user(
             full_name=user.full_name,
             email=user.email,
             hashed_password=get_password_hash(user.password),
-            role_id=role.id,
+            role_id=role.id if role else None,
             is_active=user.is_active,
             is_msp_user=user.is_msp_user,
             user_id=str(uuid.uuid4())
         )
-        
-        # Set legacy tenant_id for backward compatibility
-        if target_tenant_id:
-            new_user.tenant_id = target_tenant_id
         
         db.add(new_user)
         db.flush()  # Get the user ID
         
         # Create tenant assignments for non-MSP users
         if not user.is_msp_user:
-            # Create primary tenant assignment
-            primary_assignment = UserTenantAssignment(
-                user_id=new_user.id,  # Use integer primary key instead of UUID
-                tenant_id=target_tenant_id,
-                role_id=role.id,
-                is_primary=True,
-                is_active=True
-            )
-            db.add(primary_assignment)
-            
-            # Create additional tenant assignments if specified
-            if user.additional_tenant_ids:
-                for additional_tenant_id in user.additional_tenant_ids:
-                    if additional_tenant_id != target_tenant_id:  # Don't duplicate primary
-                        additional_assignment = UserTenantAssignment(
-                            user_id=new_user.id,  # Use integer primary key instead of UUID
-                            tenant_id=additional_tenant_id,
-                            role_id=role.id,
-                            is_primary=False,
-                            is_active=True
+            # Use new tenant_assignments structure if provided
+            if user.tenant_assignments:
+                for assignment in user.tenant_assignments:
+                    tenant_assignment = UserTenantAssignment(
+                        user_id=new_user.id,
+                        tenant_id=assignment.tenant_id,
+                        role_id=assignment.role_id or role.id,  # Use specified role or default
+                        is_primary=assignment.is_primary,
+                        is_active=assignment.is_active,
+                        provisioned_via=assignment.provisioned_via or "manual",
+                        external_group_id=assignment.external_group_id,
+                        external_role_mapping=assignment.external_role_mapping
+                    )
+                    db.add(tenant_assignment)
+            else:
+                # Fallback: Create primary tenant assignment
+                # For regular users without explicit role, use default 'user' role
+                assignment_role_id = role.id if role else None
+                if not assignment_role_id:
+                    default_role = db.query(Role).filter(Role.name == "user").first()
+                    if not default_role:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Default 'user' role not found in system"
                         )
-                        db.add(additional_assignment)
+                    assignment_role_id = default_role.id
+                
+                primary_assignment = UserTenantAssignment(
+                    user_id=new_user.id,  # Use integer primary key instead of UUID
+                    tenant_id=target_tenant_id,
+                    role_id=assignment_role_id,
+                    is_primary=True,
+                    is_active=True
+                )
+                db.add(primary_assignment)
+                
+                # Create additional tenant assignments if specified (backward compatibility)
+                if hasattr(user, 'additional_tenant_ids') and user.additional_tenant_ids:
+                    for additional_tenant_id in user.additional_tenant_ids:
+                        if additional_tenant_id != target_tenant_id:  # Don't duplicate primary
+                            additional_assignment = UserTenantAssignment(
+                                user_id=new_user.id,  # Use integer primary key instead of UUID
+                                tenant_id=additional_tenant_id,
+                                role_id=assignment_role_id,
+                                is_primary=False,
+                                is_active=True
+                            )
+                            db.add(additional_assignment)
         else:
             # MSP users get assignments to all tenants
             all_tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
@@ -312,7 +396,7 @@ def create_user(
             full_name=new_user.full_name,
             email=new_user.email,
             is_active=new_user.is_active,
-            role=role.name,
+            role=role.name if role else None,
             tenant_id=target_tenant_id if not user.is_msp_user else "msp",
             is_msp_user=new_user.is_msp_user
         )
@@ -332,18 +416,23 @@ def create_user(
 def update_user(
     user_id: str,  # Changed from int to str to accept UUID
     user_update: UserUpdate,
+    tenant_id: Optional[str] = Query(None, description="Tenant ID context for the operation"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Update a user
+    Update a user with multi-tenant assignment support.
+    
+    SSO_FUTURE: Will handle SSO user updates and external identity synchronization.
     """
-    # Check if user has permission to update users
-    has_permission = any(p.name == "update:users" for p in current_user.role.permissions)
-    if not has_permission:
+    # Resolve tenant context for permission checking
+    operation_tenant_id = resolve_tenant_context(current_user, tenant_id, db)
+    
+    # Check if user has permission to update users in the tenant
+    if not has_permission_in_tenant(current_user, "update:users", operation_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            detail="Not enough permissions to update users in this tenant"
         )
     
     try:
@@ -356,102 +445,85 @@ def update_user(
                 detail=f"User with ID {user_id} not found"
             )
         
-        # Check if user has access to this user's tenant
-        if user.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to update this user"
-            )
-        
-        # Update user fields
-        if user_update.username is not None:
-            # Check if username already exists
-            existing_user = db.query(User).filter(
-                (User.username == user_update.username) & (User.user_id != user_id)
-            ).first()
+        # Check if current user has access to update this user
+        if not current_user.is_msp_user:
+            # Check if the target user has any tenant assignments that the current user can access
+            current_user_accessible_tenants = set(get_user_accessible_tenant_ids(current_user, db))
+            target_user_tenant_ids = set([assignment.tenant_id for assignment in user.get_tenant_assignments()])
             
-            if existing_user:
+            # If there's no overlap in accessible tenants, deny access
+            if not current_user_accessible_tenants.intersection(target_user_tenant_ids):
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Username already registered"
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to update this user"
                 )
-            
-            user.username = user_update.username
         
+        # Update basic user fields
+        if user_update.username is not None:
+            user.username = user_update.username
         if user_update.full_name is not None:
             user.full_name = user_update.full_name
-        
         if user_update.email is not None:
-            # Check if email already exists
-            existing_user = db.query(User).filter(
-                (User.email == user_update.email) & (User.user_id != user_id)
-            ).first()
-            
-            if existing_user:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email already registered"
-                )
-            
             user.email = user_update.email
-        
         if user_update.password is not None:
             user.hashed_password = get_password_hash(user_update.password)
-        
         if user_update.is_active is not None:
             user.is_active = user_update.is_active
+        if user_update.is_msp_user is not None:
+            user.is_msp_user = user_update.is_msp_user
         
+        # Handle role updates
         if user_update.role is not None:
-            # Get role
             role = db.query(Role).filter(Role.name == user_update.role).first()
             if not role:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Role '{user_update.role}' not found"
                 )
-            
             user.role_id = role.id
         
-        if user_update.tenant_id is not None:
-            # Handle different tenant ID formats
-            try:
-                tenant_id = user_update.tenant_id
-                
-                # Remove 'tenant-' prefix if present
-                if tenant_id.startswith('tenant-'):
-                    tenant_id = tenant_id[7:]
-                
-                # Try to parse as UUID
-                try:
-                    uuid_obj = uuid.UUID(tenant_id)
-                    tenant = db.query(Tenant).filter(Tenant.tenant_id == str(uuid_obj)).first()
-                except ValueError:
-                    # Not a valid UUID, try to find by numeric ID
-                    try:
-                        id_value = int(tenant_id)
-                        tenant = db.query(Tenant).filter(Tenant.id == id_value).first()
-                    except (ValueError, TypeError):
-                        tenant = None
-                
-                if not tenant:
+        # Handle tenant assignment updates
+        if user_update.tenant_assignments is not None:
+            # Validate admin can assign to all specified tenants
+            assignment_tenant_ids = [assignment.tenant_id for assignment in user_update.tenant_assignments]
+            validate_admin_tenant_assignment_permission(current_user, assignment_tenant_ids, db)
+            
+            # Remove existing assignments
+            db.query(UserTenantAssignment).filter(
+                UserTenantAssignment.user_id == user.id
+            ).delete()
+            
+            # Create new assignments
+            for assignment in user_update.tenant_assignments:
+                # Validate role exists
+                assignment_role = db.query(Role).filter(Role.id == assignment.role_id).first()
+                if not assignment_role:
                     raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Tenant with ID {tenant_id} not found"
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Role with ID {assignment.role_id} not found"
                     )
                 
-                # Check if user has access to this tenant
-                if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Not authorized to assign users to this tenant"
-                    )
-                
-                user.tenant_id = tenant.tenant_id
-            except Exception as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid tenant ID format: {str(e)}"
+                # Create the assignment
+                db_assignment = UserTenantAssignment(
+                    user_id=user.id,
+                    tenant_id=assignment.tenant_id,
+                    role_id=assignment.role_id,
+                    is_primary=assignment.is_primary,
+                    is_active=True,
+                    # SSO_FUTURE: Preserve provisioning information during updates
+                    provisioned_via="manual",  # Manual updates always marked as manual
+                    external_group_id=assignment.external_group_id,
+                    external_role_mapping=assignment.external_role_mapping
                 )
+                db.add(db_assignment)
+        
+        # Backward compatibility: handle single tenant_id update
+        elif user_update.tenant_id is not None:
+            # Ensure user has access to assign to this tenant
+            validate_admin_tenant_assignment_permission(current_user, [user_update.tenant_id], db)
+            
+            # Update primary tenant assignment
+            ensure_single_primary_tenant(user.id, user_update.tenant_id, db)
         
         db.commit()
         db.refresh(user)
@@ -467,18 +539,24 @@ def update_user(
             tenant_id = user.tenant.tenant_id
         
         return UserResponse(
-            id=user.user_id,  # Use UUID as id, not internal integer
+            id=user.user_id,
             user_id=user.user_id,
             username=user.username,
             full_name=user.full_name,
             email=user.email,
             is_active=user.is_active,
-            role=role_name,
-            tenant_id=tenant_id
+            role=user.role.name if user.role else None,
+            tenant_id=user.get_primary_tenant_id(),  # Backward compatibility
+            primary_tenant_id=user.get_primary_tenant_id(),
+            tenant_assignments=[],  # Will be populated with actual assignments
+            is_msp_user=user.is_msp_user,
+            # SSO_FUTURE: SSO user information
+            external_id=user.external_id,
+            identity_provider=user.identity_provider,
+            is_sso_user=user.is_sso_user
         )
     
     except HTTPException:
-        db.rollback()
         raise
     except Exception as e:
         db.rollback()
@@ -491,18 +569,23 @@ def update_user(
 @router.delete("/{user_id}")
 def delete_user(
     user_id: str,  # Changed from int to str to accept UUID
+    tenant_id: Optional[str] = Query(None, description="Tenant ID context for the operation"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Delete a user
+    Delete a user with multi-tenant access control.
+    
+    SSO_FUTURE: Will handle SSO user deletion and external identity cleanup.
     """
-    # Check if user has permission to delete users
-    has_permission = any(p.name == "delete:users" for p in current_user.role.permissions)
-    if not has_permission:
+    # Resolve tenant context for permission checking
+    operation_tenant_id = resolve_tenant_context(current_user, tenant_id, db)
+    
+    # Check if user has permission to delete users in the tenant
+    if not has_permission_in_tenant(current_user, "delete:users", operation_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            detail="Not enough permissions to delete users in this tenant"
         )
     
     try:
@@ -515,40 +598,38 @@ def delete_user(
                 detail=f"User with ID {user_id} not found"
             )
         
-        # Check if user has access to this user's tenant
-        if user.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to delete this user"
-            )
+        # Check if current user has access to delete this user
+        if not current_user.is_msp_user:
+            # Check if the target user has any tenant assignments that the current user can access
+            current_user_accessible_tenants = set(get_user_accessible_tenant_ids(current_user, db))
+            target_user_tenant_ids = set([assignment.tenant_id for assignment in user.get_tenant_assignments()])
+            
+            # If there's no overlap in accessible tenants, deny access
+            if not current_user_accessible_tenants.intersection(target_user_tenant_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to delete this user"
+                )
         
-        # Prevent deleting yourself
+        # Prevent self-deletion
         if user.user_id == current_user.user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete your own user account"
+                detail="Cannot delete your own account"
             )
         
-        # Handle related records before deleting the user
-        # Import Dashboard model here to avoid circular imports
-        from app.models.dashboard import Dashboard
+        # Delete user tenant assignments first (foreign key constraint)
+        db.query(UserTenantAssignment).filter(
+            UserTenantAssignment.user_id == user.id
+        ).delete()
         
-        # Delete user's dashboards first (since they have NOT NULL constraint)
-        user_dashboards = db.query(Dashboard).filter(Dashboard.user_id == user.user_id).all()
-        for dashboard in user_dashboards:
-            db.delete(dashboard)
-        
-        # For other tables with nullable foreign keys, we could set them to NULL
-        # but since they're already nullable=True, SQLAlchemy should handle this automatically
-        
-        # Delete user
+        # Delete the user
         db.delete(user)
         db.commit()
         
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
-    
+        return {"message": f"User {user_id} deleted successfully"}
+        
     except HTTPException:
-        db.rollback()
         raise
     except Exception as e:
         db.rollback()
