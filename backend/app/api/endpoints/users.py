@@ -119,7 +119,7 @@ def get_user(
     Get a specific user by UUID
     """
     # Check if user has permission to view users
-    has_permission = any(p.name == "list:users" for p in current_user.role.permissions)
+    has_permission = any(p.name == "list:users" for p in current_user.role.permissions) if current_user.role else False
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -137,7 +137,8 @@ def get_user(
             )
         
         # Check if user has access to this user's tenant
-        if user.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+        current_user_role = current_user.role.name if current_user.role else None
+        if user.tenant_id != current_user.tenant_id and current_user_role != "admin" and current_user_role != "msp":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to access this user"
@@ -191,6 +192,10 @@ def create_user(
         # Default to current user's primary tenant for regular users
         primary_assignment = current_user.get_primary_tenant_assignment()
         target_tenant_id = primary_assignment.tenant_id if primary_assignment else None
+        
+        # Fallback to current user's tenant_id if no primary assignment
+        if not target_tenant_id:
+            target_tenant_id = current_user.tenant_id
     
     # Check permissions
     if user.is_msp_user:
@@ -339,7 +344,7 @@ def update_user(
     Update a user
     """
     # Check if user has permission to update users
-    has_permission = any(p.name == "update:users" for p in current_user.role.permissions)
+    has_permission = any(p.name == "update:users" for p in current_user.role.permissions) if current_user.role else False
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -357,7 +362,8 @@ def update_user(
             )
         
         # Check if user has access to this user's tenant
-        if user.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+        current_user_role = current_user.role.name if current_user.role else None
+        if user.tenant_id != current_user.tenant_id and current_user_role != "admin" and current_user_role != "msp":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to update this user"
@@ -440,7 +446,8 @@ def update_user(
                     )
                 
                 # Check if user has access to this tenant
-                if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+                current_user_role = current_user.role.name if current_user.role else None
+                if tenant.tenant_id != current_user.tenant_id and current_user_role != "admin" and current_user_role != "msp":
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to assign users to this tenant"
@@ -498,7 +505,7 @@ def delete_user(
     Delete a user
     """
     # Check if user has permission to delete users
-    has_permission = any(p.name == "delete:users" for p in current_user.role.permissions)
+    has_permission = any(p.name == "delete:users" for p in current_user.role.permissions) if current_user.role else False
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -516,7 +523,8 @@ def delete_user(
             )
         
         # Check if user has access to this user's tenant
-        if user.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+        current_user_role = current_user.role.name if current_user.role else None
+        if user.tenant_id != current_user.tenant_id and current_user_role != "admin" and current_user_role != "msp":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to delete this user"
