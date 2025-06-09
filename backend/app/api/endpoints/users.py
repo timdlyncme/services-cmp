@@ -302,7 +302,7 @@ def create_user(
         
         # Validate role assignment for MSP users
         if user.is_msp_user:
-            if not role or role.name != "msp":
+            if not role or (role and role.name != "msp"):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="MSP users must have 'msp' role"
@@ -396,7 +396,7 @@ def create_user(
             full_name=new_user.full_name,
             email=new_user.email,
             is_active=new_user.is_active,
-            role=role.name,
+            role=role.name if role else None,
             tenant_id=target_tenant_id if not user.is_msp_user else "msp",
             is_msp_user=new_user.is_msp_user
         )
