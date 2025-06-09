@@ -250,10 +250,17 @@ const UsersAndGroups = () => {
   const confirmDeleteUser = async () => {
     if (!userToDelete) return;
     
+    // Validate tenant context before attempting deletion
+    if (!currentTenant || !currentTenant.tenant_id) {
+      toast.error("No tenant context available. Please refresh the page and try again.");
+      setIsDeleteDialogOpen(false);
+      return;
+    }
+    
     setIsDeletingUser(true);
     
     try {
-      await cmpService.deleteUser(userToDelete.id, currentTenant?.tenant_id);
+      await cmpService.deleteUser(userToDelete.id, currentTenant.tenant_id);
       
       setUserToDelete(null);
       setIsDeleteDialogOpen(false);
@@ -526,7 +533,13 @@ const UsersAndGroups = () => {
                       </TableCell>
                       {canManageUsers && (
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(user)}>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={!currentTenant || !currentTenant.tenant_id}
+                            title={!currentTenant ? "No tenant context available" : "Delete user"}
+                          >
                             <Trash className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="icon" onClick={() => handleEditUser(user)}>

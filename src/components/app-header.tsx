@@ -28,21 +28,28 @@ export function AppHeader() {
 
   // Get role from tenant assignments based on current tenant
   const getCurrentTenantRole = () => {
-    if (!currentTenant || !user.tenant_assignments) {
-      return user.role || "user"; // Fallback to user.role or "user"
+    // If no current tenant or no tenant assignments, fall back to user.role or default
+    if (!currentTenant || !user.tenant_assignments || !Array.isArray(user.tenant_assignments)) {
+      return user.role || "user";
     }
     
+    // Find the assignment for the current tenant
     const currentAssignment = user.tenant_assignments.find(
-      assignment => assignment.tenant_id === currentTenant.tenant_id
+      assignment => assignment && assignment.tenant_id === currentTenant.tenant_id
     );
     
+    // Return the role from the assignment, or fall back to user.role, or default to "user"
     return currentAssignment?.role_name || user.role || "user";
   };
 
   const userRole = getCurrentTenantRole();
+  
+  // Ensure userRole is never null/undefined to prevent toUpperCase() error
+  const safeUserRole = (userRole && typeof userRole === 'string') ? userRole : "user";
+  
   const roleBadgeVariant = 
-    userRole === "admin" ? "default" :
-    userRole === "msp" ? "destructive" : "outline";
+    safeUserRole === "admin" ? "default" :
+    safeUserRole === "msp" ? "destructive" : "outline";
 
   return (
     <header className="sticky top-0 z-30 h-16 border-b bg-background/95 backdrop-blur">
@@ -68,7 +75,7 @@ export function AppHeader() {
                     {user.email}
                   </p>
                   <Badge variant={roleBadgeVariant} className="mt-2 w-min">
-                    {userRole.toUpperCase()}
+                    {safeUserRole.toUpperCase()}
                   </Badge>
                 </div>
               </DropdownMenuLabel>
