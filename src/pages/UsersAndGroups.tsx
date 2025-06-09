@@ -144,7 +144,10 @@ const UsersAndGroups = () => {
   };
   
   const handleCreateUser = async () => {
-    if (!currentTenant) return;
+    if (!currentTenant) {
+      toast.error("No tenant context available. Please refresh the page and try again.");
+      return;
+    }
     
     // Validation
     if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword.trim()) {
@@ -157,13 +160,22 @@ const UsersAndGroups = () => {
       return;
     }
     
+    // Validate that at least one tenant assignment has a role
+    const hasValidRoleAssignment = newUserTenantAssignments.some(
+      assignment => assignment.role_name && assignment.role_name.trim() !== ""
+    );
+    
+    if (!hasValidRoleAssignment) {
+      toast.error("Please assign a role to the user for at least one tenant");
+      return;
+    }
+    
     setIsCreatingUser(true);
     
     try {
       const userData = mapFrontendUserToBackend({
         full_name: newUserName,
         email: newUserEmail,
-        
         password: newUserPassword,
         tenant_assignments: newUserTenantAssignments
       });
@@ -175,7 +187,6 @@ const UsersAndGroups = () => {
       // Reset form
       setNewUserName("");
       setNewUserEmail("");
-      
       setNewUserPassword("");
       setNewUserTenantAssignments([]);
       setIsNewUserDialogOpen(false);
@@ -203,8 +214,23 @@ const UsersAndGroups = () => {
   const handleUpdateUser = async () => {
     if (!editingUser) return;
     
+    if (!currentTenant) {
+      toast.error("No tenant context available. Please refresh the page and try again.");
+      return;
+    }
+    
     if (editUserTenantAssignments.length === 0) {
       toast.error("Please assign the user to at least one tenant");
+      return;
+    }
+    
+    // Validate that at least one tenant assignment has a role
+    const hasValidRoleAssignment = editUserTenantAssignments.some(
+      assignment => assignment.role_name && assignment.role_name.trim() !== ""
+    );
+    
+    if (!hasValidRoleAssignment) {
+      toast.error("Please assign a role to the user for at least one tenant");
       return;
     }
     
@@ -214,12 +240,11 @@ const UsersAndGroups = () => {
       const updateData = {
         full_name: editUserName,
         email: editUserEmail,
-        
         is_active: editUserActive,
         tenant_assignments: editUserTenantAssignments
       };
       
-      await cmpService.updateUser(editingUser.id, updateData, currentTenant?.tenant_id);
+      await cmpService.updateUser(editingUser.id, updateData, currentTenant.tenant_id);
       
       toast.success("User updated successfully");
       
@@ -227,7 +252,6 @@ const UsersAndGroups = () => {
       setEditingUser(null);
       setEditUserName("");
       setEditUserEmail("");
-      
       setEditUserActive(true);
       setEditUserTenantAssignments([]);
       setIsEditUserDialogOpen(false);
@@ -250,10 +274,17 @@ const UsersAndGroups = () => {
   const confirmDeleteUser = async () => {
     if (!userToDelete) return;
     
+    // Validate tenant context before attempting deletion
+    if (!currentTenant || !currentTenant.tenant_id) {
+      toast.error("No tenant context available. Please refresh the page and try again.");
+      setIsDeleteDialogOpen(false);
+      return;
+    }
+    
     setIsDeletingUser(true);
     
     try {
-      await cmpService.deleteUser(userToDelete.id);
+      await cmpService.deleteUser(userToDelete.id, currentTenant.tenant_id);
       
       setUserToDelete(null);
       setIsDeleteDialogOpen(false);
@@ -526,7 +557,13 @@ const UsersAndGroups = () => {
                       </TableCell>
                       {canManageUsers && (
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(user)}>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={!currentTenant || !currentTenant.tenant_id}
+                            title={!currentTenant ? "No tenant context available" : "Delete user"}
+                          >
                             <Trash className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="icon" onClick={() => handleEditUser(user)}>

@@ -18,7 +18,8 @@ from app.core.tenant_utils import (
     resolve_tenant_context,
     get_user_accessible_tenant_ids,
     validate_admin_tenant_assignment_permission,
-    ensure_single_primary_tenant
+    ensure_single_primary_tenant,
+    get_user_role_name_in_tenant
 )
 
 router = APIRouter()
@@ -84,13 +85,13 @@ def get_users(
         # Convert to response format
         result = []
         for user in users:
-            # Get user's role in this tenant (or global role for MSP users)
-            role_name = None
-            if user.is_msp_user:
-                role_name = user.role.name if user.role else None
-            else:
-                role_in_tenant = user.get_role_in_tenant(target_tenant_id)
-                role_name = role_in_tenant.name if role_in_tenant else None
+            # Convert role object to role name using new tenant-based system
+            role_name = get_user_role_name_in_tenant(user, tenant_id)
+            
+            # Get tenant_id from tenant object
+            tenant_id = None
+            if hasattr(user, 'tenant') and user.tenant:
+                tenant_id = user.tenant.tenant_id
             
             # Get all tenant assignments for this user
             tenant_assignments = []
@@ -167,7 +168,7 @@ def get_user(
     SSO_FUTURE: Will include SSO user information and external identity details.
     """
     # Resolve tenant context for permission checking
-    operation_tenant_id = resolve_tenant_context(current_user, tenant_id, db)
+    operation_tenant_id = resolve_tenant_context(current_user, tenant_id)
     
     # Check if user has permission to view users in the tenant
     if not has_permission_in_tenant(current_user, "list:users", operation_tenant_id, db):
@@ -202,9 +203,8 @@ def get_user(
         
         # Convert role object to role name
         role_name = None
-        if hasattr(user, 'role') and user.role:
-            role_name = user.role.name
-        
+        # Convert role object to role name using new tenant-based system
+        role_name = get_user_role_name_in_tenant(user, tenant_id)
         # Get tenant_id from tenant object
         tenant_id = None
         if hasattr(user, 'tenant') and user.tenant:
@@ -290,9 +290,9 @@ def create_user(
                 detail="Username or email already registered"
             )
         
-        # Get role
+        # Get role (for validation purposes only, since role is now managed through tenant assignments)
         role = None
-        if user.role:
+        if hasattr(user, 'role') and user.role:
             role = db.query(Role).filter(Role.name == user.role).first()
             if not role:
                 raise HTTPException(
@@ -308,13 +308,12 @@ def create_user(
                     detail="MSP users must have 'msp' role"
                 )
         
-        # Create new user
+        # Create new user (without role_id since we removed that column)
         new_user = User(
             username=user.username,
             full_name=user.full_name,
             email=user.email,
             hashed_password=get_password_hash(user.password),
-            role_id=role.id if role else None,
             is_active=user.is_active,
             is_msp_user=user.is_msp_user,
             user_id=str(uuid.uuid4())
@@ -426,7 +425,7 @@ def update_user(
     SSO_FUTURE: Will handle SSO user updates and external identity synchronization.
     """
     # Resolve tenant context for permission checking
-    operation_tenant_id = resolve_tenant_context(current_user, tenant_id, db)
+    operation_tenant_id = resolve_tenant_context(current_user, tenant_id)
     
     # Check if user has permission to update users in the tenant
     if not has_permission_in_tenant(current_user, "update:users", operation_tenant_id, db):
@@ -472,7 +471,7 @@ def update_user(
         if user_update.is_msp_user is not None:
             user.is_msp_user = user_update.is_msp_user
         
-        # Handle role updates
+        # Handle role updates (note: role is now managed through tenant assignments)
         if user_update.role is not None:
             role = db.query(Role).filter(Role.name == user_update.role).first()
             if not role:
@@ -480,7 +479,8 @@ def update_user(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Role '{user_update.role}' not found"
                 )
-            user.role_id = role.id
+            # Note: We no longer set user.role_id directly since that column was removed
+            # Role assignment is now handled through tenant assignments below
         
         # Handle tenant assignment updates
         if user_update.tenant_assignments is not None:
@@ -529,9 +529,8 @@ def update_user(
         db.refresh(user)
         
         # Convert role object to role name
-        role_name = None
-        if hasattr(user, 'role') and user.role:
-            role_name = user.role.name
+        # Convert role object to role name using new tenant-based system
+        role_name = get_user_role_name_in_tenant(user, tenant_id)
         
         # Get tenant_id from tenant object
         tenant_id = None
@@ -545,7 +544,7 @@ def update_user(
             full_name=user.full_name,
             email=user.email,
             is_active=user.is_active,
-            role=user.role.name if user.role else None,
+            role=get_user_role_name_in_tenant(user),
             tenant_id=user.get_primary_tenant_id(),  # Backward compatibility
             primary_tenant_id=user.get_primary_tenant_id(),
             tenant_assignments=[],  # Will be populated with actual assignments
@@ -579,7 +578,7 @@ def delete_user(
     SSO_FUTURE: Will handle SSO user deletion and external identity cleanup.
     """
     # Resolve tenant context for permission checking
-    operation_tenant_id = resolve_tenant_context(current_user, tenant_id, db)
+    operation_tenant_id = resolve_tenant_context(current_user, tenant_id)
     
     # Check if user has permission to delete users in the tenant
     if not has_permission_in_tenant(current_user, "delete:users", operation_tenant_id, db):

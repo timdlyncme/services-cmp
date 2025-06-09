@@ -37,7 +37,7 @@ class Role(Base):
     
     # Relationships
     permissions = relationship("Permission", secondary=role_permission, back_populates="roles")
-    users = relationship("User", back_populates="role")
+    # users = relationship("User", back_populates="role")  # REMOVED: Users are now managed through tenant assignments
 
 
 class Tenant(Base):
@@ -93,8 +93,8 @@ class User(Base):
     identity_provider = Column(String, default="local", nullable=False)  # "local", "azure_ad", "saml", etc.
     
     # Relationships
-    role_id = Column(Integer, ForeignKey("roles.id"))
-    role = relationship("Role", back_populates="users")
+    # role_id = Column(Integer, ForeignKey("roles.id"))  # REMOVED: Role is now managed through tenant assignments
+    # role = relationship("Role", back_populates="users")  # REMOVED: Role is now managed through tenant assignments
     
     # Multi-tenant relationship - this is now the ONLY way users are assigned to tenants
     tenant_assignments = relationship("UserTenantAssignment", back_populates="user")

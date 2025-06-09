@@ -141,13 +141,13 @@ def has_permission_in_tenant(
     Returns:
         bool: True if user has the permission in the tenant context
     """
+    # Import here to avoid circular imports
+    from app.core.tenant_utils import get_user_role_in_tenant, user_has_permission_in_tenant
+    
     # MSP users have global access to all tenants
     if user.is_msp_user:
-        # Check if user has the permission in their role
-        if user.role:
-            user_permissions = {p.name for p in user.role.permissions}
-            return permission_name in user_permissions
-        return False
+        # Check if user has the permission through their tenant assignments
+        return user_has_permission_in_tenant(user, permission_name, tenant_id)
     
     # For non-MSP users, check tenant-specific assignment
     if is_global_permission(permission_name):
@@ -158,14 +158,8 @@ def has_permission_in_tenant(
     if not user.has_tenant_access(tenant_id):
         return False
     
-    # Get user's role in this specific tenant
-    role_in_tenant = user.get_role_in_tenant(tenant_id)
-    if not role_in_tenant:
-        return False
-    
-    # Check if the role has the required permission
-    role_permissions = {p.name for p in role_in_tenant.permissions}
-    return permission_name in role_permissions
+    # Use the tenant utils function to check permission
+    return user_has_permission_in_tenant(user, permission_name, tenant_id)
 
 
 def has_global_permission(user: User, permission_name: str) -> bool:
@@ -186,10 +180,19 @@ def has_global_permission(user: User, permission_name: str) -> bool:
     if not is_global_permission(permission_name):
         return False
     
-    # Check if user's role has the global permission
-    if user.role:
-        user_permissions = {p.name for p in user.role.permissions}
-        return permission_name in user_permissions
+    # Check if user has the global permission through any of their tenant assignments
+    # MSP users typically have admin/msp roles that include global permissions
+    from app.core.tenant_utils import get_user_role_in_tenant
+    
+    # For MSP users, check if they have admin/msp role in any tenant
+    for assignment in user.get_tenant_assignments():
+        role_name = get_user_role_in_tenant(user, assignment.tenant_id)
+        if role_name in ["admin", "msp"]:
+            # Get role permissions from the assignment
+            if assignment.role and assignment.role.permissions:
+                user_permissions = {p.name for p in assignment.role.permissions}
+                if permission_name in user_permissions:
+                    return True
     
     return False
 
@@ -207,16 +210,12 @@ def get_user_permissions_in_tenant(user: User, tenant_id: str) -> Set[str]:
     """
     permissions = set()
     
-    # MSP users get all permissions they have in their role
-    if user.is_msp_user and user.role:
-        permissions.update(p.name for p in user.role.permissions)
-        return permissions
+    # Use the new tenant-based permission system
+    from app.core.tenant_utils import get_user_permissions_in_tenant as get_tenant_perms
     
-    # For regular users, get permissions from their role in this tenant
-    if user.has_tenant_access(tenant_id):
-        role_in_tenant = user.get_role_in_tenant(tenant_id)
-        if role_in_tenant:
-            permissions.update(p.name for p in role_in_tenant.permissions)
+    # Get permissions through tenant assignments
+    tenant_permissions = get_tenant_perms(user, tenant_id)
+    permissions.update(tenant_permissions)
     
     return permissions
 
@@ -260,9 +259,9 @@ def can_user_switch_to_tenant(user: User, tenant_id: str) -> bool:
     return user.has_tenant_access(tenant_id)
 
 
-def get_user_role_in_tenant(user: User, tenant_id: str) -> Optional[str]:
+def get_user_role_name(user: User, tenant_id: str = None) -> Optional[str]:
     """
-    Get the user's role name within a specific tenant.
+    Get the user's role name in a specific tenant context.
     
     Args:
         user: The user to check
@@ -271,8 +270,14 @@ def get_user_role_in_tenant(user: User, tenant_id: str) -> Optional[str]:
     Returns:
         Optional[str]: Role name in the tenant, or None if no access
     """
-    if user.is_msp_user:
-        return user.role.name if user.role else None
+    from app.core.tenant_utils import get_user_role_in_tenant
     
-    role = user.get_role_in_tenant(tenant_id)
-    return role.name if role else None
+    if tenant_id is None:
+        # Get primary tenant
+        primary_assignment = user.get_primary_tenant_assignment()
+        tenant_id = primary_assignment.tenant_id if primary_assignment else None
+    
+    if not tenant_id:
+        return None
+        
+    return get_user_role_in_tenant(user, tenant_id)

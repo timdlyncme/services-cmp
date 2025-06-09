@@ -7,6 +7,12 @@ from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import Permission, User, Role
 from app.schemas.permission import PermissionResponse, PermissionCreate
+from app.core.tenant_utils import (
+    resolve_tenant_context,
+    get_user_role_name_in_tenant,
+    user_has_admin_or_msp_role,
+    user_has_any_permission
+)
 
 router = APIRouter()
 
@@ -26,7 +32,7 @@ def get_permissions(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view permissions
-    has_permission = any(p.name == "list:permissions" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:permissions"], None)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -59,7 +65,7 @@ def create_permission(
     Create a new permission with role assignment
     """
     # Check if user has permission to create permissions
-    has_permission = any(p.name == "create:permissions" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["create:permissions"], None)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -126,4 +132,3 @@ def options_permissions():
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
-

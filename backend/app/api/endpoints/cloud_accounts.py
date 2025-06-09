@@ -13,6 +13,12 @@ from app.schemas.deployment import (
     CloudAccountFrontendResponse
 )
 from app.core.utils import format_error_response
+from app.core.permissions import has_permission_in_tenant
+from app.core.tenant_utils import (
+    resolve_tenant_context,
+    get_user_role_name_in_tenant,
+    user_has_admin_or_msp_role
+)
 import requests
 
 router = APIRouter()
@@ -33,32 +39,25 @@ def get_cloud_accounts(
     response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
-    # Check if user has permission to view cloud accounts
-    has_permission = any(p.name == "list:cloud-accounts" for p in current_user.role.permissions)
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
     try:
         query = db.query(CloudAccount).join(Tenant, CloudAccount.tenant_id == Tenant.tenant_id)
         
         # Filter by tenant
         if not tenant_id:
-            # Use the user's tenant if no tenant_id is provided
-            tenant_id = current_user.tenant.tenant_id
+            # Use the user's primary tenant if no tenant_id is provided
+            target_tenant_id = resolve_tenant_context(current_user, None)
+        else:
+            target_tenant_id = tenant_id
         
-        # Check if tenant exists
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
-        if not tenant:
+        # Check if user has permission to view cloud accounts in the target tenant
+        if not has_permission_in_tenant(current_user, "list:cloud-accounts", target_tenant_id, db):
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tenant with ID {tenant_id} not found"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
             )
         
         # Filter by tenant
-        query = query.filter(CloudAccount.tenant_id == tenant_id)
+        query = query.filter(CloudAccount.tenant_id == target_tenant_id)
         
         # Get all cloud accounts
         cloud_accounts = query.all()
@@ -124,13 +123,6 @@ def get_cloud_account(
     response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
-    # Check if user has permission to view cloud accounts
-    has_permission = any(p.name == "list:cloud-accounts" for p in current_user.role.permissions)
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     
     try:
         # Get the cloud account
@@ -142,14 +134,12 @@ def get_cloud_account(
                 detail=f"Cloud account with ID {account_id} not found"
             )
         
-        # Check if user has access to this account's tenant
-        if account.tenant_id != current_user.tenant_id:
-            # Admin users can view all accounts
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to access this cloud account"
-                )
+        # Check if user has permission to view cloud accounts in this account's tenant
+        if not has_permission_in_tenant(current_user, "list:cloud-accounts", account.tenant_id, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
         
         # Get the tenant associated with this account
         tenant = db.query(Tenant).filter(Tenant.id == account.tenant_id).first()
@@ -219,17 +209,17 @@ def create_cloud_account(
     response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
-    # Check if user has permission to create cloud accounts
-    has_permission = any(p.name == "create:cloud-accounts" for p in current_user.role.permissions)
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     
     try:
         # Use the provided tenant_id if it exists, otherwise use the current user's tenant
         account_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        
+        # Check if user has permission to create cloud accounts in the target tenant
+        if not has_permission_in_tenant(current_user, "create:cloud-accounts", account_tenant_id, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
         
         # Check if tenant exists
         tenant = db.query(Tenant).filter(Tenant.tenant_id == account_tenant_id).first()
@@ -242,7 +232,7 @@ def create_cloud_account(
         # Check if user has permission to create for this tenant
         if account_tenant_id != current_user.tenant.tenant_id:
             # Only admin or MSP users can create for other tenants
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, account_tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to create cloud accounts for other tenants"
@@ -328,13 +318,6 @@ def update_cloud_account(
     response.headers["Access-Control-Allow-Methods"] = "PUT, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
-    # Check if user has permission to update cloud accounts
-    has_permission = any(p.name == "update:cloud-accounts" for p in current_user.role.permissions)
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     
     try:
         # Get the cloud account
@@ -345,15 +328,12 @@ def update_cloud_account(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Cloud account with ID {account_id} not found"
             )
-        
-        # Check if user has access to this account's tenant
-        if account.tenant_id != current_user.tenant_id:
-            # Admin users can update all accounts
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to update this cloud account"
-                )
+        # Check if user has permission to update cloud accounts in this account's tenant
+        if not has_permission_in_tenant(current_user, "update:cloud-accounts", account.tenant_id, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
         
         # If settings_id is provided, verify it exists
         settings_id = account.settings_id
@@ -448,13 +428,6 @@ def delete_cloud_account(
     """
     Delete a cloud account
     """
-    # Check if user has permission to delete cloud accounts
-    has_permission = any(p.name == "delete:cloud-accounts" for p in current_user.role.permissions)
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     
     try:
         # Get the cloud account
@@ -465,15 +438,12 @@ def delete_cloud_account(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Cloud account with ID {account_id} not found"
             )
-        
-        # Check if user has access to this account's tenant
-        if account.tenant_id != current_user.tenant_id:
-            # Admin users can delete all accounts
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to delete this cloud account"
-                )
+        # Check if user has permission to delete cloud accounts in this account's tenant
+        if not has_permission_in_tenant(current_user, "delete:cloud-accounts", account.tenant_id, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
         
         # Check if account is used by any deployments
         deployments = db.query(CloudAccount).filter(CloudAccount.id == account.id).first()
@@ -542,13 +512,6 @@ def list_azure_subscriptions(
     """
     List available Azure subscriptions for a specific credential
     """
-    # Check if user has permission to view cloud accounts
-    has_permission = any(p.name == "list:cloud-accounts" for p in current_user.role.permissions)
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     
     try:
         # Get credential from database
@@ -563,6 +526,13 @@ def list_azure_subscriptions(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Credential not found"
+            )
+        
+        # Check if user has permission to view cloud accounts in this tenant
+        if not has_permission_in_tenant(current_user, "list:cloud-accounts", creds.tenant_id, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
             )
         
         # Forward request to deployment engine

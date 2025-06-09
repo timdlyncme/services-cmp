@@ -11,8 +11,9 @@ from app.api.deps import get_current_user, get_db
 from app.core.config import settings
 from app.core.security import authenticate_user, create_access_token
 from app.core.permissions import get_user_accessible_tenants, get_user_permissions_in_tenant, can_user_switch_to_tenant
+from app.core.tenant_utils import get_user_role_in_tenant, get_user_permissions_in_tenant as get_tenant_permissions
 from app.models.user import User
-from app.schemas.user import Token, LoginResponse, User
+from app.schemas.user import Token, LoginResponse, User, TenantAssignmentResponse
 from app.db.session import get_db
 
 router = APIRouter()
@@ -54,13 +55,14 @@ def login_for_access_token(
         primary_assignment = user.get_primary_tenant_assignment()
         current_tenant_id = primary_assignment.tenant_id if primary_assignment else None
     
-    # Get permissions for the current tenant
-    permissions = []
+    # Get current role and permissions based on tenant context
+    current_role = get_user_role_in_tenant(user, current_tenant_id)
+    
     if current_tenant_id:
-        permissions = list(get_user_permissions_in_tenant(user, current_tenant_id))
-    elif user.role:
-        # Fallback to role permissions if no tenant context
-        permissions = [p.name for p in user.role.permissions]
+        permissions = get_tenant_permissions(user, current_tenant_id)
+    else:
+        # Fallback to legacy permission system if no tenant context
+        permissions = get_user_permissions_in_tenant(user, current_tenant_id)
 
     # Create access token with tenant context
     access_token = create_access_token(
@@ -74,11 +76,24 @@ def login_for_access_token(
             id=user.user_id,
             name=user.full_name,
             email=user.email,
-            role=user.role.name if user.role else None,
+            role=current_role,
             tenantId=current_tenant_id,
             permissions=permissions,
             accessibleTenants=accessible_tenants,
-            isMspUser=user.is_msp_user
+            isMspUser=user.is_msp_user,
+            tenant_assignments=[
+                TenantAssignmentResponse(
+                    tenant_id=assignment.tenant_id,
+                    tenant_name=assignment.tenant.name if assignment.tenant else None,
+                    role_id=assignment.role_id,
+                    role_name=assignment.role.name if assignment.role else None,
+                    is_primary=assignment.is_primary,
+                    is_active=assignment.is_active,
+                    provisioned_via=assignment.provisioned_via,
+                    external_group_id=assignment.external_group_id,
+                    external_role_mapping=assignment.external_role_mapping
+                ) for assignment in user.get_tenant_assignments()
+            ]
         )
     )
 
@@ -123,23 +138,37 @@ def read_users_me(
         primary_assignment = current_user.get_primary_tenant_assignment()
         current_tenant_id = primary_assignment.tenant_id if primary_assignment else None
     
-    # Get permissions for the current tenant
-    permissions = []
+    # Get current role and permissions based on tenant context
+    current_role = get_user_role_in_tenant(current_user, current_tenant_id)
+    
     if current_tenant_id:
-        permissions = list(get_user_permissions_in_tenant(current_user, current_tenant_id))
-    elif current_user.role:
-        # Fallback to role permissions if no tenant context
-        permissions = [p.name for p in current_user.role.permissions]
+        permissions = get_tenant_permissions(current_user, current_tenant_id)
+    else:
+        # Fallback to legacy permission system if no tenant context
+        permissions = get_user_permissions_in_tenant(current_user, current_tenant_id)
 
     return User(
         id=current_user.user_id,
         name=current_user.full_name,
         email=current_user.email,
-        role=current_user.role.name if current_user.role else None,
+        role=current_role,
         tenantId=current_tenant_id,
         permissions=permissions,
         accessibleTenants=accessible_tenants,
-        isMspUser=current_user.is_msp_user
+        isMspUser=current_user.is_msp_user,
+        tenant_assignments=[
+            TenantAssignmentResponse(
+                tenant_id=assignment.tenant_id,
+                tenant_name=assignment.tenant.name if assignment.tenant else None,
+                role_id=assignment.role_id,
+                role_name=assignment.role.name if assignment.role else None,
+                is_primary=assignment.is_primary,
+                is_active=assignment.is_active,
+                provisioned_via=assignment.provisioned_via,
+                external_group_id=assignment.external_group_id,
+                external_role_mapping=assignment.external_role_mapping
+            ) for assignment in current_user.get_tenant_assignments()
+        ]
     )
 
 
@@ -169,17 +198,17 @@ def switch_tenant(
             detail="You don't have access to this tenant"
         )
     
-    # Get permissions for the new tenant
-    permissions = list(get_user_permissions_in_tenant(current_user, request.tenant_id))
+    # Get role and permissions for the new tenant
+    current_role = get_user_role_in_tenant(current_user, request.tenant_id)
+    permissions = get_tenant_permissions(current_user, request.tenant_id)
     
-    # Get user's accessible tenants
     accessible_tenants = get_user_accessible_tenants(current_user, db)
     
     return User(
         id=current_user.user_id,
         name=current_user.full_name,
         email=current_user.email,
-        role=current_user.role.name if current_user.role else None,
+        role=current_role,
         tenantId=request.tenant_id,
         permissions=permissions,
         accessibleTenants=accessible_tenants,

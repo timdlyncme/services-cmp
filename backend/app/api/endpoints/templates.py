@@ -13,6 +13,12 @@ from app.schemas.deployment import (
     TemplateResponse, TemplateCreate, TemplateUpdate,
     CloudTemplateResponse, TemplateVersionCreate, TemplateVersionResponse
 )
+from app.core.tenant_utils import (
+    resolve_tenant_context,
+    get_user_role_name_in_tenant,
+    user_has_admin_or_msp_role,
+    user_has_any_permission
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -28,7 +34,7 @@ def get_template_categories(
     """
     try:
         # Check if user has permission to view templates or catalog
-        has_permission = any(p.name in ["list:templates", "list:catalog"] for p in current_user.role.permissions)
+        has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], tenant_id)
         if not has_permission:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -57,7 +63,7 @@ def get_template_categories(
                 )
 
             # Admin and MSP users can view all tenants
-            if current_user.role.name not in ["admin", "msp"]:
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 if tenant.tenant_id != user_tenant.tenant_id:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
@@ -107,7 +113,7 @@ def get_templates(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view templates or catalog
-    has_permission = any(p.name in ["list:templates", "list:catalog"] for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -148,7 +154,7 @@ def get_templates(
                     )
                 
                 # Check if user has access to this tenant
-                if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+                if tenant.tenant_id != current_user.tenant_id and not user_has_admin_or_msp_role(current_user, tenant_id):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to view templates for this tenant"
@@ -250,7 +256,7 @@ def get_template(
     Get a specific template by ID
     """
     # Check if user has permission to view templates or catalog
-    has_permission = any(p.name in ["list:templates", "list:catalog"] for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -269,7 +275,7 @@ def get_template(
         # Check if user has access to this template
         if not template.is_public and template.tenant_id != current_user.tenant_id:
             # Admin users can view all templates
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to access this template"
@@ -364,7 +370,7 @@ def create_template(
     logger.debug(f"Requested tenant_id: {tenant_id}")
     
     # Check if user has permission to create templates
-    has_permission = any(p.name == "create:templates" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["create:templates"], tenant_id)
     if not has_permission:
         logger.warning(f"User {current_user.username} does not have permission to create templates")
         raise HTTPException(
@@ -389,7 +395,7 @@ def create_template(
         # Check if user has permission to create for this tenant
         if template_tenant_id != current_user.tenant_id:
             # Only admin or MSP users can create for other tenants
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 logger.warning(f"User {current_user.username} not authorized to create templates for tenant {template_tenant_id}")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -495,7 +501,7 @@ def update_template(
     Update a template
     """
     # Check if user has permission to update templates
-    has_permission = any(p.name == "update:templates" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["update:templates"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -514,7 +520,7 @@ def update_template(
         # Check if user has access to update this template
         if not template.is_public and template.tenant_id != current_user.tenant_id:
             # Admin users can update all templates
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to update this template"
@@ -647,7 +653,7 @@ def delete_template(
     Delete a template
     """
     # Check if user has permission to delete templates
-    has_permission = any(p.name == "delete:templates" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["delete:templates"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -667,7 +673,7 @@ def delete_template(
         # Check if user has access to delete this template
         if not template.is_public and template.tenant_id != current_user.tenant_id:
             # Admin users can delete all templates
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to delete this template"
@@ -711,7 +717,7 @@ def get_template_versions(
     Get all versions of a template
     """
     # Check if user has permission to view templates or catalog
-    has_permission = any(p.name in ["list:templates", "list:catalog"] for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -730,7 +736,7 @@ def get_template_versions(
         # Check if user has access to this template
         if not template.is_public and template.tenant_id != current_user.tenant_id:
             # Admin users can view all templates
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to access this template"
@@ -777,7 +783,7 @@ def create_template_version(
     Create a new version of a template
     """
     # Check if user has permission to update templates
-    has_permission = any(p.name == "update:templates" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["update:templates"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -796,7 +802,7 @@ def create_template_version(
         # Check if user has access to update this template
         if not template.is_public and template.tenant_id != current_user.tenant_id:
             # Admin users can update all templates
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to update this template"
@@ -878,7 +884,7 @@ def get_template_version(
     Get a specific version of a template
     """
     # Check if user has permission to view templates or catalog
-    has_permission = any(p.name in ["list:templates", "list:catalog"] for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -897,7 +903,7 @@ def get_template_version(
         # Check if user has access to this template
         if not template.is_public and template.tenant_id != current_user.tenant_id:
             # Admin users can view all templates
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to access this template"

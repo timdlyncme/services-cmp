@@ -152,7 +152,7 @@ export class CMPService {
         }
       });
     } catch (error) {
-      console.error(`Delete cloud account ${accountId} error:`, error);
+      console.error('Delete cloud account error:', error);
       throw error;
     }
   }
@@ -648,14 +648,21 @@ export class CMPService {
   /**
    * Delete a user
    */
-  async deleteUser(userId: string): Promise<void> {
+  async deleteUser(userId: string, tenantId?: string): Promise<void> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication token not found');
       }
 
-      await api.delete(`/users/${userId}`, {
+      const params = new URLSearchParams();
+      if (tenantId) {
+        params.append('tenant_id', tenantId);
+      }
+
+      const url = `/users/${userId}${params.toString() ? `?${params.toString()}` : ''}`;
+
+      await api.delete(url, {
         headers: {
           Authorization: `Bearer ${token}`
         }

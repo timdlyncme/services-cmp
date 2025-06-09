@@ -505,7 +505,7 @@ def init_db(db: Session) -> None:
                     username=user_data["username"],
                     full_name=user_data["full_name"],
                     hashed_password=get_password_hash(user_data["password"]),
-                    role_id=role.id,
+                    # REMOVED: role_id=role.id,  # Role is now managed through tenant assignments
                     # REMOVED: tenant_id=tenant.tenant_id,  # Legacy field removed - using user_tenant_assignments only
                     user_id=user_data.get("user_id"),
                     is_msp_user=user_data.get("is_msp_user"),

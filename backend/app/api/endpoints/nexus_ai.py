@@ -120,7 +120,13 @@ async def chat(
     Chat with Azure OpenAI
     """
     # Check if user has permission to use NexusAI
-    has_permission = any(p.name == "use:nexus_ai" for p in current_user.role.permissions)
+    from app.core.tenant_utils import user_has_permission_in_tenant
+    
+    # Get user's primary tenant for permission check
+    primary_assignment = current_user.get_primary_tenant_assignment()
+    tenant_id = primary_assignment.tenant_id if primary_assignment else None
+    
+    has_permission = user_has_permission_in_tenant(current_user, "use:nexus_ai", tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -265,7 +271,13 @@ async def stream_chat_endpoint(
     Stream chat responses from Azure OpenAI
     """
     # Check if user has permission to use NexusAI
-    has_permission = any(p.name == "use:nexus_ai" for p in current_user.role.permissions)
+    from app.core.tenant_utils import user_has_permission_in_tenant
+    
+    # Get user's primary tenant for permission check
+    primary_assignment = current_user.get_primary_tenant_assignment()
+    tenant_id = primary_assignment.tenant_id if primary_assignment else None
+    
+    has_permission = user_has_permission_in_tenant(current_user, "use:nexus_ai", tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -423,7 +435,13 @@ async def get_config_endpoint(
     Get Azure OpenAI configuration
     """
     # Check if user has permission to manage NexusAI
-    has_permission = any(p.name == "manage:nexus_ai" for p in current_user.role.permissions)
+    from app.core.tenant_utils import user_has_permission_in_tenant
+    
+    # Get user's primary tenant for permission check
+    primary_assignment = current_user.get_primary_tenant_assignment()
+    tenant_id = primary_assignment.tenant_id if primary_assignment else None
+    
+    has_permission = user_has_permission_in_tenant(current_user, "manage:nexus_ai", tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -452,7 +470,13 @@ async def update_config(
     Update Azure OpenAI configuration
     """
     # Check if user has permission to manage NexusAI
-    has_permission = any(p.name == "manage:nexus_ai" for p in current_user.role.permissions)
+    from app.core.tenant_utils import user_has_permission_in_tenant
+    
+    # Get user's primary tenant for permission check
+    primary_assignment = current_user.get_primary_tenant_assignment()
+    tenant_id = primary_assignment.tenant_id if primary_assignment else None
+    
+    has_permission = user_has_permission_in_tenant(current_user, "manage:nexus_ai", tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -502,7 +526,13 @@ async def get_status(
     Get Azure OpenAI connection status
     """
     # Check if user has permission to use NexusAI
-    has_permission = any(p.name == "use:nexus_ai" for p in current_user.role.permissions)
+    from app.core.tenant_utils import user_has_permission_in_tenant
+    
+    # Get user's primary tenant for permission check
+    primary_assignment = current_user.get_primary_tenant_assignment()
+    tenant_id = primary_assignment.tenant_id if primary_assignment else None
+    
+    has_permission = user_has_permission_in_tenant(current_user, "use:nexus_ai", tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -591,7 +621,13 @@ async def get_logs(
     Get debug logs
     """
     # Check if user has permission to manage NexusAI
-    has_permission = any(p.name == "manage:nexus_ai" for p in current_user.role.permissions)
+    from app.core.tenant_utils import user_has_permission_in_tenant
+    
+    # Get user's primary tenant for permission check
+    primary_assignment = current_user.get_primary_tenant_assignment()
+    tenant_id = primary_assignment.tenant_id if primary_assignment else None
+    
+    has_permission = user_has_permission_in_tenant(current_user, "manage:nexus_ai", tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

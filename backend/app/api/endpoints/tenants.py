@@ -10,6 +10,12 @@ from app.db.session import get_db
 from app.models.user import Tenant, User
 from app.schemas.tenant import TenantResponse, TenantCreate, TenantUpdate
 from app.core.permissions import has_global_permission, get_user_accessible_tenants
+from app.core.tenant_utils import (
+    resolve_tenant_context,
+    get_user_role_name_in_tenant,
+    user_has_admin_or_msp_role,
+    user_has_any_permission
+)
 
 router = APIRouter()
 
@@ -71,7 +77,7 @@ def get_tenant(
     Get a specific tenant by ID
     """
     # Check if user has permission to view tenants
-    has_permission = any(p.name == "list:tenants" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:tenants"], None)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -143,7 +149,7 @@ def create_tenant(
     Create a new tenant
     """
     # Check if user has permission to create tenants
-    has_permission = any(p.name == "create:tenants" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["create:tenants"], None)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -193,7 +199,7 @@ def update_tenant(
     Update a tenant
     """
     # Check if user has permission to update tenants
-    has_permission = any(p.name == "update:tenants" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["update:tenants"], None)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -248,7 +254,7 @@ def delete_tenant(
     Delete a tenant
     """
     # Check if user has permission to delete tenants
-    has_permission = any(p.name == "delete:tenants" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["delete:tenants"], None)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
