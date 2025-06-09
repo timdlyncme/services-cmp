@@ -149,9 +149,21 @@ class User(Base):
         return None
     
     # SSO_FUTURE: Additional methods for SSO user management
+    @property
     def is_sso_user(self) -> bool:
         """Check if user authenticates via SSO"""
         return self.identity_provider != "local"
+    
+    @property
+    def tenant_id(self) -> str:
+        """Backward compatibility property for primary tenant ID"""
+        return self.get_primary_tenant_id()
+    
+    @property
+    def tenant(self):
+        """Backward compatibility property for primary tenant relationship"""
+        primary_assignment = self.get_primary_tenant_assignment()
+        return primary_assignment.tenant if primary_assignment else None
     
     def can_login_locally(self) -> bool:
         """Check if user can authenticate with local password"""
