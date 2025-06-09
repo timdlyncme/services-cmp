@@ -97,7 +97,7 @@ def create_msp_user(
     try:
         # Force MSP user creation
         user.is_msp_user = True
-        user.role = "msp"  # Force MSP role
+        # Note: Role will be assigned through tenant assignments, not user.role
         
         # Check if username or email already exists
         existing_user = db.query(User).filter(
@@ -118,13 +118,12 @@ def create_msp_user(
                 detail="MSP role not found in database"
             )
         
-        # Create new MSP user
+        # Create new MSP user (without role_id since we removed that column)
         new_user = User(
             username=user.username,
             full_name=user.full_name,
             email=user.email,
             hashed_password=get_password_hash(user.password),
-            role_id=msp_role.id,
             is_active=user.is_active,
             is_msp_user=True,
             user_id=str(uuid.uuid4())
@@ -439,10 +438,11 @@ def get_platform_analytics(
         role_distribution = {}
         roles = db.query(Role).all()
         for role in roles:
-            count = db.query(User).filter(
-                User.role_id == role.id,
-                User.is_msp_user == False
-            ).count()
+            # Count users with this role through tenant assignments
+            count = db.query(UserTenantAssignment).filter(
+                UserTenantAssignment.role_id == role.id,
+                UserTenantAssignment.is_active == True
+            ).join(User).filter(User.is_msp_user == False).count()
             role_distribution[role.name] = count
         
         # Get tenant user counts

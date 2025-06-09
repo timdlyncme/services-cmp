@@ -290,9 +290,9 @@ def create_user(
                 detail="Username or email already registered"
             )
         
-        # Get role
+        # Get role (for validation purposes only, since role is now managed through tenant assignments)
         role = None
-        if user.role:
+        if hasattr(user, 'role') and user.role:
             role = db.query(Role).filter(Role.name == user.role).first()
             if not role:
                 raise HTTPException(
@@ -308,13 +308,12 @@ def create_user(
                     detail="MSP users must have 'msp' role"
                 )
         
-        # Create new user
+        # Create new user (without role_id since we removed that column)
         new_user = User(
             username=user.username,
             full_name=user.full_name,
             email=user.email,
             hashed_password=get_password_hash(user.password),
-            role_id=role.id if role else None,
             is_active=user.is_active,
             is_msp_user=user.is_msp_user,
             user_id=str(uuid.uuid4())
@@ -472,7 +471,7 @@ def update_user(
         if user_update.is_msp_user is not None:
             user.is_msp_user = user_update.is_msp_user
         
-        # Handle role updates
+        # Handle role updates (note: role is now managed through tenant assignments)
         if user_update.role is not None:
             role = db.query(Role).filter(Role.name == user_update.role).first()
             if not role:
@@ -480,7 +479,8 @@ def update_user(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Role '{user_update.role}' not found"
                 )
-            user.role_id = role.id
+            # Note: We no longer set user.role_id directly since that column was removed
+            # Role assignment is now handled through tenant assignments below
         
         # Handle tenant assignment updates
         if user_update.tenant_assignments is not None:

@@ -141,13 +141,13 @@ def has_permission_in_tenant(
     Returns:
         bool: True if user has the permission in the tenant context
     """
+    # Import here to avoid circular imports
+    from app.core.tenant_utils import get_user_role_in_tenant, user_has_permission_in_tenant
+    
     # MSP users have global access to all tenants
     if user.is_msp_user:
-        # Check if user has the permission in their role
-        if user.role:
-            user_permissions = {p.name for p in user.role.permissions}
-            return permission_name in user_permissions
-        return False
+        # Check if user has the permission through their tenant assignments
+        return user_has_permission_in_tenant(user, permission_name, tenant_id)
     
     # For non-MSP users, check tenant-specific assignment
     if is_global_permission(permission_name):
@@ -158,14 +158,8 @@ def has_permission_in_tenant(
     if not user.has_tenant_access(tenant_id):
         return False
     
-    # Get user's role in this specific tenant
-    role_in_tenant = user.get_role_in_tenant(tenant_id)
-    if not role_in_tenant:
-        return False
-    
-    # Check if the role has the required permission
-    role_permissions = {p.name for p in role_in_tenant.permissions}
-    return permission_name in role_permissions
+    # Use the tenant utils function to check permission
+    return user_has_permission_in_tenant(user, permission_name, tenant_id)
 
 
 def has_global_permission(user: User, permission_name: str) -> bool:
@@ -217,10 +211,10 @@ def get_user_permissions_in_tenant(user: User, tenant_id: str) -> Set[str]:
     permissions = set()
     
     # Use the new tenant-based permission system
-    from app.core.tenant_utils import get_tenant_permissions
+    from app.core.tenant_utils import get_user_permissions_in_tenant as get_tenant_perms
     
     # Get permissions through tenant assignments
-    tenant_permissions = get_tenant_permissions(user, tenant_id)
+    tenant_permissions = get_tenant_perms(user, tenant_id)
     permissions.update(tenant_permissions)
     
     return permissions

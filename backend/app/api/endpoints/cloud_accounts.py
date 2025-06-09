@@ -44,8 +44,8 @@ def get_cloud_accounts(
         
         # Filter by tenant
         if not tenant_id:
-            # Use the user's tenant if no tenant_id is provided
-            target_tenant_id = current_user.tenant.tenant_id
+            # Use the user's primary tenant if no tenant_id is provided
+            target_tenant_id = resolve_tenant_context(current_user, None)
         else:
             target_tenant_id = tenant_id
         
