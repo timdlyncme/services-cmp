@@ -38,7 +38,6 @@ const mapFrontendUserToBackend = (frontendUser: any) => {
     username: frontendUser.username || frontendUser.email?.split('@')[0] || '',
     full_name: frontendUser.full_name || frontendUser.name || '',
     email: frontendUser.email,
-    role: frontendUser.role,
     password: frontendUser.password,
     is_active: frontendUser.is_active !== undefined ? frontendUser.is_active : true,
     tenant_assignments: frontendUser.tenant_assignments || []
@@ -58,7 +57,6 @@ const UsersAndGroups = () => {
   const [isNewUserDialogOpen, setIsNewUserDialogOpen] = useState(false);
   const [newUserName, setNewUserName] = useState("");
   const [newUserEmail, setNewUserEmail] = useState("");
-  const [newUserRole, setNewUserRole] = useState("user");
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserTenantAssignments, setNewUserTenantAssignments] = useState<Array<{
     tenant_id: string;
@@ -75,7 +73,6 @@ const UsersAndGroups = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editUserName, setEditUserName] = useState("");
   const [editUserEmail, setEditUserEmail] = useState("");
-  const [editUserRole, setEditUserRole] = useState("user");
   const [editUserActive, setEditUserActive] = useState(true);
   const [editUserTenantAssignments, setEditUserTenantAssignments] = useState<Array<{
     tenant_id: string;
@@ -166,7 +163,7 @@ const UsersAndGroups = () => {
       const userData = mapFrontendUserToBackend({
         full_name: newUserName,
         email: newUserEmail,
-        role: newUserRole,
+        
         password: newUserPassword,
         tenant_assignments: newUserTenantAssignments
       });
@@ -178,7 +175,7 @@ const UsersAndGroups = () => {
       // Reset form
       setNewUserName("");
       setNewUserEmail("");
-      setNewUserRole("user");
+      
       setNewUserPassword("");
       setNewUserTenantAssignments([]);
       setIsNewUserDialogOpen(false);
@@ -197,7 +194,7 @@ const UsersAndGroups = () => {
     setEditingUser(userToEdit);
     setEditUserName(userToEdit.full_name);
     setEditUserEmail(userToEdit.email);
-    setEditUserRole(userToEdit.role);
+    
     setEditUserActive(userToEdit.is_active !== false); // Default to active since we don't have this field in the current User type
     setEditUserTenantAssignments(userToEdit.tenant_assignments || []);
     setIsEditUserDialogOpen(true);
@@ -217,7 +214,7 @@ const UsersAndGroups = () => {
       const updateData = {
         full_name: editUserName,
         email: editUserEmail,
-        role: editUserRole,
+        
         is_active: editUserActive,
         tenant_assignments: editUserTenantAssignments
       };
@@ -230,7 +227,7 @@ const UsersAndGroups = () => {
       setEditingUser(null);
       setEditUserName("");
       setEditUserEmail("");
-      setEditUserRole("user");
+      
       setEditUserActive(true);
       setEditUserTenantAssignments([]);
       setIsEditUserDialogOpen(false);
@@ -341,17 +338,6 @@ const UsersAndGroups = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <label htmlFor="role" className="text-sm font-medium">Role</label>
-                    <select
-                      id="role"
-                      value={newUserRole}
-                      onChange={(e) => setNewUserRole(e.target.value)}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                      {user?.role === "msp" && <option value="msp">MSP</option>}
-                    </select>
                   </div>
                   
                   <div className="space-y-2">
@@ -420,17 +406,6 @@ const UsersAndGroups = () => {
             </div>
             
             <div className="space-y-2">
-              <label htmlFor="edit-role" className="text-sm font-medium">Role</label>
-              <select
-                id="edit-role"
-                value={editUserRole}
-                onChange={(e) => setEditUserRole(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-                {user?.role === "msp" && <option value="msp">MSP</option>}
-              </select>
             </div>
             
             <div className="flex items-center space-x-2">

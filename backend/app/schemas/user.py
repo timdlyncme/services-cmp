@@ -13,8 +13,10 @@ class TenantAssignmentCreate(BaseModel):
     tenant_id: str
     role_id: int
     is_primary: bool = False
+    is_active: bool = True  # Add missing is_active field
     
     # SSO_FUTURE: Fields for SSO-based assignments
+    provisioned_via: Optional[str] = "manual"  # "manual", "sso", "api"
     external_group_id: Optional[str] = None  # Azure AD Group ID
     external_role_mapping: Optional[str] = None  # Azure AD role claim
 
@@ -48,7 +50,7 @@ class User(BaseModel):
     id: str  # Changed to str for UUID
     name: str  # Changed from full_name for consistency
     email: EmailStr
-    role: str
+    role: Optional[str] = None  # Made optional since roles are now per-tenant
     tenantId: Optional[str] = None  # Current/primary tenant
     permissions: List[str] = []
     accessibleTenants: List[str] = []  # List of tenant IDs user can access
@@ -67,7 +69,7 @@ class LoginResponse(BaseModel):
 
 class UserCreate(UserBase):
     password: Optional[str] = None  # SSO_FUTURE: Made optional for SSO users
-    role: str
+    role: Optional[str] = None  # Made optional since roles are now per-tenant
     
     # Multi-tenant assignment support
     tenant_assignments: List[TenantAssignmentCreate] = []

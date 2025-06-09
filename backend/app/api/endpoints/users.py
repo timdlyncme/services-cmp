@@ -92,6 +92,40 @@ def get_users(
                 role_in_tenant = user.get_role_in_tenant(target_tenant_id)
                 role_name = role_in_tenant.name if role_in_tenant else None
             
+            # Get all tenant assignments for this user
+            tenant_assignments = []
+            user_tenant_assignments = db.query(UserTenantAssignment).filter(
+                UserTenantAssignment.user_id == user.id,
+                UserTenantAssignment.is_active == True
+            ).all()
+            
+            for assignment in user_tenant_assignments:
+                # Get tenant name
+                tenant = db.query(Tenant).filter(Tenant.tenant_id == assignment.tenant_id).first()
+                tenant_name = tenant.name if tenant else assignment.tenant_id
+                
+                # Get role name
+                role = db.query(Role).filter(Role.id == assignment.role_id).first()
+                role_name_for_tenant = role.name if role else None
+                
+                tenant_assignments.append(
+                    TenantAssignmentResponse(
+                        tenant_id=assignment.tenant_id,
+                        tenant_name=tenant_name,
+                        role_id=assignment.role_id,
+                        role_name=role_name_for_tenant,
+                        is_primary=assignment.is_primary,
+                        is_active=assignment.is_active,
+                        provisioned_via=assignment.provisioned_via,
+                        external_group_id=assignment.external_group_id,
+                        external_role_mapping=assignment.external_role_mapping
+                    )
+                )
+            
+            # Get primary tenant ID
+            primary_assignment = next((a for a in user_tenant_assignments if a.is_primary), None)
+            primary_tenant_id = primary_assignment.tenant_id if primary_assignment else None
+            
             result.append(
                 UserResponse(
                     id=user.user_id,
@@ -102,7 +136,12 @@ def get_users(
                     is_active=user.is_active,
                     role=role_name,
                     tenant_id=target_tenant_id if not user.is_msp_user else "msp",
-                    is_msp_user=user.is_msp_user
+                    tenant_assignments=tenant_assignments,
+                    primary_tenant_id=primary_tenant_id,
+                    is_msp_user=user.is_msp_user,
+                    external_id=user.external_id,
+                    identity_provider=user.identity_provider or "local",
+                    is_sso_user=user.is_sso_user or False
                 )
             )
         
