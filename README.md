@@ -5,13 +5,22 @@ A comprehensive, multi-tenant cloud management platform designed for Managed Ser
 ## 🚀 Features
 
 ### Core Platform Features
-- **Multi-Tenant Architecture**: Complete tenant isolation with role-based access control
-- **User Authentication & Authorization**: JWT-based authentication with granular permissions
+- **Advanced Multi-Tenant Architecture**: Complete tenant isolation with dynamic role-based access control
+- **Tenant-Aware Role System**: Users can have different roles across multiple tenants with seamless switching
+- **User Authentication & Authorization**: JWT-based authentication with granular, tenant-specific permissions
+- **SSO-Ready Architecture**: Built-in support for future Azure AD integration with automated provisioning
 - **Cloud Account Management**: Integrated Azure cloud account management with credential handling
 - **Template Management**: Create, version, and deploy infrastructure templates
 - **Deployment Engine**: Automated cloud resource deployment and management
 - **Environment Management**: Organize and manage multiple deployment environments
 - **Approval Workflows**: Built-in approval processes for deployment requests
+
+### Multi-Tenant Features
+- **Dynamic Role Assignment**: Users can have different roles (admin, user, MSP) in different tenants
+- **Tenant Switching**: Seamless switching between tenants with automatic role context updates
+- **Tenant Isolation**: Complete data and resource isolation between tenant organizations
+- **Primary Tenant Management**: Users can designate a primary tenant for default access
+- **Cross-Tenant User Management**: MSP users can manage multiple client tenants from a single interface
 
 ### AI-Powered Features
 - **AI Assistant**: Azure OpenAI-powered chat assistant for platform guidance
@@ -63,7 +72,13 @@ The platform consists of three main components:
 
 ### Core Tables
 - **tenants**: Tenant organization information and settings
-- **users**: User accounts with tenant association and role assignment
+- **users**: User accounts (role_id removed - now uses tenant assignments)
+- **user_tenant_assignments**: Core table for multi-tenant role system
+  - Maps users to tenants with specific roles
+  - Supports primary tenant designation
+  - SSO-ready with Azure AD group mapping fields
+  - Tracks provisioning method (manual, SSO auto, SSO JIT)
+  - Includes audit timestamps for compliance
 - **roles**: User roles (admin, user, msp) with permission mappings
 - **permissions**: Granular permission definitions
 - **role_permissions**: Many-to-many role-permission associations
@@ -86,6 +101,46 @@ The platform consists of three main components:
 - **nexus_ai**: NexusAI configuration and usage tracking
 - **integrations**: Third-party service integration settings
 - **dashboards**: Custom dashboard configurations
+
+
+## 🔄 Migration from Previous Versions
+
+### Upgrading to Multi-Tenant Role System
+
+If you're upgrading from a previous version that used direct role assignment in the users table, follow these steps:
+
+#### 1. Backup Your Database
+```bash
+# Create a backup before migration
+docker-compose exec db pg_dump -U cmpuser cmpdb > backup_before_migration.sql
+```
+
+#### 2. Run the Migration
+```bash
+# The migration will automatically run when you start the updated backend
+docker-compose up -d api
+
+# Or run manually if needed
+docker-compose exec api python -m app.db.migrations.remove_role_id_from_users
+```
+
+#### 3. Verify Migration
+```bash
+# Check that user_tenant_assignments table exists and is populated
+docker-compose exec db psql -U cmpuser -d cmpdb -c "SELECT COUNT(*) FROM user_tenant_assignments;"
+
+# Verify users no longer have role_id column
+docker-compose exec db psql -U cmpuser -d cmpdb -c "\d users"
+```
+
+#### 4. Update Environment Variables
+No new environment variables are required, but ensure your JWT configuration is up to date.
+
+### Migration Details
+- **Automatic Data Migration**: Existing user roles are automatically migrated to tenant assignments
+- **Primary Tenant Assignment**: Users are assigned to their first available tenant as primary
+- **Role Preservation**: All existing role assignments are preserved in the new system
+- **Backward Compatibility**: API endpoints maintain compatibility with tenant_id parameters
 
 ## 🚀 Getting Started
 
@@ -181,15 +236,16 @@ The platform uses Docker Compose with the following services:
 ## 📡 API Reference
 
 ### Authentication Endpoints
-- `POST /api/auth/login` - User authentication
-- `GET /api/auth/me` - Get current user profile
+- `POST /api/auth/login` - User authentication with tenant context
+- `POST /api/auth/switch-tenant` - Switch between tenants with role updates
+- `GET /api/auth/me` - Get current user profile with tenant assignments
 - `GET /api/auth/verify` - Verify JWT token
 
-### User Management
-- `GET /api/users` - List users (admin only)
-- `POST /api/users` - Create new user
-- `PUT /api/users/{user_id}` - Update user
-- `DELETE /api/users/{user_id}` - Delete user
+### User Management (Tenant-Aware)
+- `GET /api/users?tenant_id={tenant_id}` - List users in tenant (admin only)
+- `POST /api/users` - Create new user with tenant assignment
+- `PUT /api/users/{user_id}?tenant_id={tenant_id}` - Update user in tenant context
+- `DELETE /api/users/{user_id}?tenant_id={tenant_id}` - Delete user from tenant
 
 ### Tenant Management
 - `GET /api/tenants` - List tenants
@@ -241,7 +297,7 @@ services-cmp/
 │   │   ├── api/           # API routes and endpoints
 │   │   ├── core/          # Core functionality (auth, config)
 │   │   ├── db/            # Database models and migrations
-│   │   ├── models/        # SQLAlchemy models
+│   │   �����── models/        # SQLAlchemy models
 │   │   ├── schemas/       # Pydantic schemas
 │   │   └── services/      # Business logic services
 │   └── requirements.txt   # Python dependencies
@@ -401,15 +457,35 @@ docker-compose ps
 
 ### Common Issues
 
-#### Database Connection Issues
-```bash
-# Check database status
-docker-compose logs db
+#### Multi-Tenant System Issues
 
-# Reset database
-docker-compose down -v
-docker-compose up -d db
+**Role Resolution Problems**
+```bash
+# Check user tenant assignments
+docker-compose exec db psql -U cmpuser -d cmpdb -c "
+SELECT u.email, t.name as tenant, r.name as role, uta.is_primary 
+FROM users u 
+JOIN user_tenant_assignments uta ON u.id = uta.user_id 
+JOIN tenants t ON uta.tenant_id = t.tenant_id 
+JOIN roles r ON uta.role_id = r.id 
+WHERE u.email = 'user@example.com';"
 ```
+
+**Tenant Switching Issues**
+```bash
+# Verify tenant switching endpoint
+curl -X POST http://localhost:8000/api/auth/switch-tenant \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tenant_id": "tenant-uuid-here"}'
+```
+
+**User Deletion Errors (Missing tenant_id)**
+- Ensure all user management requests include the `tenant_id` parameter
+- Example: `DELETE /api/users/123?tenant_id=tenant-uuid`
+
+#### Database Connection Issues
+# ... existing database troubleshooting ...
 
 #### API Authentication Problems
 ```bash
@@ -671,4 +747,3 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 ---
 
 **Built with ❤️ for the cloud management community**
-
