@@ -36,10 +36,11 @@ export interface TenantAssignment {
 
 export interface User {
   id: string;
-  full_name: string;  // Keep full_name for consistency with backend
+  name: string;  // Changed from full_name to match backend
+  full_name?: string;  // Keep for backward compatibility
   email: string;
-  role: UserRole;
-  tenantId: string;  // Primary tenant ID for backward compatibility
+  role?: UserRole;  // Made optional since it can be null
+  tenantId?: string;  // Primary tenant ID for backward compatibility, made optional
   avatar?: string;
   permissions?: (Permission | string)[];  // Allow both Permission objects and strings
   accessibleTenants?: string[];  // List of tenant IDs user can access

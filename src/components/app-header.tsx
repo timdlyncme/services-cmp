@@ -13,12 +13,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 export function AppHeader() {
-  const { user, logout } = useAuth();
+  const { user, logout, currentTenant } = useAuth();
 
   if (!user) return null;
   
   // Safely handle user.name - use email or default if name is not available
-  const userName = user.name || user.email || "User";
+  const userName = user.name || user.full_name || user.email || "User";
   
   const initials = userName
     .split(" ")
@@ -26,8 +26,20 @@ export function AppHeader() {
     .join("")
     .toUpperCase();
 
-  // Safely handle role - use tenant-specific role or fallback to "user"
-  const userRole = user.role || "user";
+  // Get role from tenant assignments based on current tenant
+  const getCurrentTenantRole = () => {
+    if (!currentTenant || !user.tenant_assignments) {
+      return user.role || "user"; // Fallback to user.role or "user"
+    }
+    
+    const currentAssignment = user.tenant_assignments.find(
+      assignment => assignment.tenant_id === currentTenant.tenant_id
+    );
+    
+    return currentAssignment?.role_name || user.role || "user";
+  };
+
+  const userRole = getCurrentTenantRole();
   const roleBadgeVariant = 
     userRole === "admin" ? "default" :
     userRole === "msp" ? "destructive" : "outline";
@@ -51,7 +63,7 @@ export function AppHeader() {
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{user.full_name}</p>
+                  <p className="text-sm font-medium leading-none">{userName}</p>
                   <p className="text-xs leading-none text-muted-foreground">
                     {user.email}
                   </p>

@@ -56,9 +56,15 @@ class User(BaseModel):
     accessibleTenants: List[str] = []  # List of tenant IDs user can access
     isMspUser: bool = False
     
+    # Multi-tenant support
+    tenant_assignments: List[TenantAssignmentResponse] = []
+    
     # SSO_FUTURE: Additional fields for SSO user information
     isSSO: bool = False  # Whether user authenticates via SSO
     identityProvider: Optional[str] = "local"  # "local", "azure_ad", etc.
+
+    class Config:
+        from_attributes = True
 
 
 class LoginResponse(BaseModel):
