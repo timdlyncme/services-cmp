@@ -140,8 +140,8 @@ def get_users(
                     primary_tenant_id=primary_tenant_id,
                     is_msp_user=user.is_msp_user,
                     external_id=user.external_id,
-                    identity_provider=user.identity_provider or "local",
-                    is_sso_user=user.is_sso_user or False
+                    identity_provider=user.identity_provider,
+                    is_sso_user=user.is_sso_user
                 )
             )
         
@@ -225,7 +225,7 @@ def get_user(
             # SSO_FUTURE: SSO user information
             external_id=user.external_id,
             identity_provider=user.identity_provider,
-            is_sso_user=user.is_sso_user()
+            is_sso_user=user.is_sso_user
         )
     
     except HTTPException:
@@ -548,7 +548,7 @@ def update_user(
             # SSO_FUTURE: SSO user information
             external_id=user.external_id,
             identity_provider=user.identity_provider,
-            is_sso_user=user.is_sso_user()
+            is_sso_user=user.is_sso_user
         )
     
     except HTTPException:
