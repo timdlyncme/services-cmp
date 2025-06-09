@@ -256,7 +256,7 @@ def get_template(
     Get a specific template by ID
     """
     # Check if user has permission to view templates or catalog
-    has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], tenant_id)
+    has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], current_user.tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -275,7 +275,7 @@ def get_template(
         # Check if user has access to this template
         if not template.is_public and template.tenant_id != current_user.tenant_id:
             # Admin users can view all templates
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
+            if not user_has_admin_or_msp_role(current_user, current_user.tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to access this template"
@@ -717,7 +717,7 @@ def get_template_versions(
     Get all versions of a template
     """
     # Check if user has permission to view templates or catalog
-    has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], tenant_id)
+    has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], current_user.tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -736,7 +736,7 @@ def get_template_versions(
         # Check if user has access to this template
         if not template.is_public and template.tenant_id != current_user.tenant_id:
             # Admin users can view all templates
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
+            if not user_has_admin_or_msp_role(current_user, current_user.tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to access this template"
