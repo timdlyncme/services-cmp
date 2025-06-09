@@ -168,7 +168,7 @@ def get_user(
     SSO_FUTURE: Will include SSO user information and external identity details.
     """
     # Resolve tenant context for permission checking
-    operation_tenant_id = resolve_tenant_context(current_user, tenant_id, db)
+    operation_tenant_id = resolve_tenant_context(current_user, tenant_id)
     
     # Check if user has permission to view users in the tenant
     if not has_permission_in_tenant(current_user, "list:users", operation_tenant_id, db):
@@ -425,7 +425,7 @@ def update_user(
     SSO_FUTURE: Will handle SSO user updates and external identity synchronization.
     """
     # Resolve tenant context for permission checking
-    operation_tenant_id = resolve_tenant_context(current_user, tenant_id, db)
+    operation_tenant_id = resolve_tenant_context(current_user, tenant_id)
     
     # Check if user has permission to update users in the tenant
     if not has_permission_in_tenant(current_user, "update:users", operation_tenant_id, db):
@@ -578,7 +578,7 @@ def delete_user(
     SSO_FUTURE: Will handle SSO user deletion and external identity cleanup.
     """
     # Resolve tenant context for permission checking
-    operation_tenant_id = resolve_tenant_context(current_user, tenant_id, db)
+    operation_tenant_id = resolve_tenant_context(current_user, tenant_id)
     
     # Check if user has permission to delete users in the tenant
     if not has_permission_in_tenant(current_user, "delete:users", operation_tenant_id, db):
