@@ -620,19 +620,23 @@ export class CMPService {
   /**
    * Update a user
    */
-  async updateUser(userId: string, user: any): Promise<any> {
+  async updateUser(userId: string, user: any, tenantId?: string): Promise<any> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication token not found');
       }
 
+      // Add tenant_id as query parameter if provided
+      const params = tenantId ? { tenant_id: tenantId } : {};
+
       const response = await api.put(`/users/${userId}`, {
         ...user
       }, {
         headers: {
           Authorization: `Bearer ${token}`
-        }
+        },
+        params
       });
       return response.data;
     } catch (error) {

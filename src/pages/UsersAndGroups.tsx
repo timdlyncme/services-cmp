@@ -222,7 +222,7 @@ const UsersAndGroups = () => {
         tenant_assignments: editUserTenantAssignments
       };
       
-      await cmpService.updateUser(editingUser.id, updateData);
+      await cmpService.updateUser(editingUser.id, updateData, currentTenant?.tenant_id);
       
       toast.success("User updated successfully");
       

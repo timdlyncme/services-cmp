@@ -292,28 +292,43 @@ def create_user(
         
         # Create tenant assignments for non-MSP users
         if not user.is_msp_user:
-            # Create primary tenant assignment
-            primary_assignment = UserTenantAssignment(
-                user_id=new_user.id,  # Use integer primary key instead of UUID
-                tenant_id=target_tenant_id,
-                role_id=role.id,
-                is_primary=True,
-                is_active=True
-            )
-            db.add(primary_assignment)
-            
-            # Create additional tenant assignments if specified
-            if user.additional_tenant_ids:
-                for additional_tenant_id in user.additional_tenant_ids:
-                    if additional_tenant_id != target_tenant_id:  # Don't duplicate primary
-                        additional_assignment = UserTenantAssignment(
-                            user_id=new_user.id,  # Use integer primary key instead of UUID
-                            tenant_id=additional_tenant_id,
-                            role_id=role.id,
-                            is_primary=False,
-                            is_active=True
-                        )
-                        db.add(additional_assignment)
+            # Use new tenant_assignments structure if provided
+            if user.tenant_assignments:
+                for assignment in user.tenant_assignments:
+                    tenant_assignment = UserTenantAssignment(
+                        user_id=new_user.id,
+                        tenant_id=assignment.tenant_id,
+                        role_id=assignment.role_id or role.id,  # Use specified role or default
+                        is_primary=assignment.is_primary,
+                        is_active=assignment.is_active,
+                        provisioned_via=assignment.provisioned_via or "manual",
+                        external_group_id=assignment.external_group_id,
+                        external_role_mapping=assignment.external_role_mapping
+                    )
+                    db.add(tenant_assignment)
+            else:
+                # Fallback: Create primary tenant assignment
+                primary_assignment = UserTenantAssignment(
+                    user_id=new_user.id,  # Use integer primary key instead of UUID
+                    tenant_id=target_tenant_id,
+                    role_id=role.id,
+                    is_primary=True,
+                    is_active=True
+                )
+                db.add(primary_assignment)
+                
+                # Create additional tenant assignments if specified (backward compatibility)
+                if hasattr(user, 'additional_tenant_ids') and user.additional_tenant_ids:
+                    for additional_tenant_id in user.additional_tenant_ids:
+                        if additional_tenant_id != target_tenant_id:  # Don't duplicate primary
+                            additional_assignment = UserTenantAssignment(
+                                user_id=new_user.id,  # Use integer primary key instead of UUID
+                                tenant_id=additional_tenant_id,
+                                role_id=role.id,
+                                is_primary=False,
+                                is_active=True
+                            )
+                            db.add(additional_assignment)
         else:
             # MSP users get assignments to all tenants
             all_tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
