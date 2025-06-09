@@ -26,9 +26,11 @@ export function AppHeader() {
     .join("")
     .toUpperCase();
 
+  // Safely handle role - use tenant-specific role or fallback to "user"
+  const userRole = user.role || "user";
   const roleBadgeVariant = 
-    user.role === "admin" ? "default" :
-    user.role === "msp" ? "destructive" : "outline";
+    userRole === "admin" ? "default" :
+    userRole === "msp" ? "destructive" : "outline";
 
   return (
     <header className="sticky top-0 z-30 h-16 border-b bg-background/95 backdrop-blur">
@@ -54,7 +56,7 @@ export function AppHeader() {
                     {user.email}
                   </p>
                   <Badge variant={roleBadgeVariant} className="mt-2 w-min">
-                    {user.role.toUpperCase()}
+                    {userRole.toUpperCase()}
                   </Badge>
                 </div>
               </DropdownMenuLabel>

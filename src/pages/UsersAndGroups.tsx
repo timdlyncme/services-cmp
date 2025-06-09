@@ -253,7 +253,7 @@ const UsersAndGroups = () => {
     setIsDeletingUser(true);
     
     try {
-      await cmpService.deleteUser(userToDelete.id);
+      await cmpService.deleteUser(userToDelete.id, currentTenant?.tenant_id);
       
       setUserToDelete(null);
       setIsDeleteDialogOpen(false);
