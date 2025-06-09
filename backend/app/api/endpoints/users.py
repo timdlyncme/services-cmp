@@ -291,24 +291,22 @@ def create_user(
             )
         
         # Get role
-        role = db.query(Role).filter(Role.name == user.role).first()
-        if not role:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Role '{user.role}' not found"
-            )
+        role = None
+        if user.role:
+            role = db.query(Role).filter(Role.name == user.role).first()
+            if not role:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Role '{user.role}' not found"
+                )
         
-        # Validate role assignment
-        if user.is_msp_user and role.name != "msp":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="MSP users must have MSP role"
-            )
-        elif not user.is_msp_user and role.name == "msp":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Non-MSP users cannot have MSP role"
-            )
+        # Validate role assignment for MSP users
+        if user.is_msp_user:
+            if not role or role.name != "msp":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="MSP users must have 'msp' role"
+                )
         
         # Create new user
         new_user = User(
@@ -316,7 +314,7 @@ def create_user(
             full_name=user.full_name,
             email=user.email,
             hashed_password=get_password_hash(user.password),
-            role_id=role.id,
+            role_id=role.id if role else None,
             is_active=user.is_active,
             is_msp_user=user.is_msp_user,
             user_id=str(uuid.uuid4())
@@ -347,10 +345,21 @@ def create_user(
                     db.add(tenant_assignment)
             else:
                 # Fallback: Create primary tenant assignment
+                # For regular users without explicit role, use default 'user' role
+                assignment_role_id = role.id if role else None
+                if not assignment_role_id:
+                    default_role = db.query(Role).filter(Role.name == "user").first()
+                    if not default_role:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Default 'user' role not found in system"
+                        )
+                    assignment_role_id = default_role.id
+                
                 primary_assignment = UserTenantAssignment(
                     user_id=new_user.id,  # Use integer primary key instead of UUID
                     tenant_id=target_tenant_id,
-                    role_id=role.id,
+                    role_id=assignment_role_id,
                     is_primary=True,
                     is_active=True
                 )
@@ -363,7 +372,7 @@ def create_user(
                             additional_assignment = UserTenantAssignment(
                                 user_id=new_user.id,  # Use integer primary key instead of UUID
                                 tenant_id=additional_tenant_id,
-                                role_id=role.id,
+                                role_id=assignment_role_id,
                                 is_primary=False,
                                 is_active=True
                             )
