@@ -54,17 +54,9 @@ def get_template_categories(
                     detail=f"Tenant with ID {tenant_id} not found"
                 )
 
-            # Check if user has access to this tenant
-            user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
-            if not user_tenant:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="User tenant not found"
-                )
-
-            # Admin and MSP users can view all tenants
+            # Check if user has access to this tenant using the proper multi-tenant method
             if not user_has_admin_or_msp_role(current_user, tenant_id):
-                if tenant.tenant_id != user_tenant.tenant_id:
+                if not current_user.has_tenant_access(tenant_id):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to view templates for this tenant"
@@ -73,10 +65,10 @@ def get_template_categories(
             # Only return templates that belong to the specified tenant
             query = query.filter(Template.tenant_id == tenant.tenant_id)
         else:
-            # No tenant specified, default to user's tenant (like environments and cloud-accounts endpoints)
-            user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
-            if user_tenant:
-                query = query.filter(Template.tenant_id == user_tenant.tenant_id)
+            # No tenant specified, default to user's primary tenant
+            primary_tenant_id = current_user.get_primary_tenant_id()
+            if primary_tenant_id:
+                query = query.filter(Template.tenant_id == primary_tenant_id)
 
         templates = query.all()
 
@@ -124,8 +116,7 @@ def get_templates(
         # Get templates that the user has access to
         query = db.query(Template)
         
-        # Get the user's tenant
-        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
+        # Get user's primary tenant for default filtering
         
         # Filter by tenant if specified
         if tenant_id:
@@ -154,7 +145,7 @@ def get_templates(
                     )
                 
                 # Check if user has access to this tenant
-                if tenant.tenant_id != current_user.tenant_id and not user_has_admin_or_msp_role(current_user, tenant_id):
+                if not user_has_admin_or_msp_role(current_user, tenant_id) and not current_user.has_tenant_access(tenant_id):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to view templates for this tenant"
@@ -168,9 +159,10 @@ def get_templates(
                     detail=f"Invalid tenant ID format: {str(e)}"
                 )
         else:
-            # No tenant specified, default to user's tenant (like environments and cloud-accounts endpoints)
-            if user_tenant:
-                query = query.filter(Template.tenant_id == user_tenant.tenant_id)
+            # No tenant specified, default to user's primary tenant
+            primary_tenant_id = current_user.get_primary_tenant_id()
+            if primary_tenant_id:
+                query = query.filter(Template.tenant_id == primary_tenant_id)
 
         templates = query.all()
         
@@ -213,17 +205,6 @@ def get_templates(
             # Get the last user who updated the template
             last_updated_by = current_user.full_name or current_user.username
             
-            # Debug log for parameters and variables
-            print(f"Template parameters: {template.parameters}")
-            print(f"Template variables: {template.variables}")
-            
-            result.append(CloudTemplateResponse(
-                id=template.template_id,
-                template_id=template.template_id,  # Explicitly include template_id
-                name=template.name,
-                description=template.description or "",
-                type=template.type,  # Use the actual template type from the database
-                provider=template.provider,
                 code=template_code,
                 deploymentCount=deployment_count,
                 uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
@@ -312,17 +293,6 @@ def get_template(
         # Get the last user who updated the template
         last_updated_by = current_user.full_name or current_user.username
         
-        # Debug log for parameters and variables
-        print(f"Template parameters: {template.parameters}")
-        print(f"Template variables: {template.variables}")
-        
-        return CloudTemplateResponse(
-            id=template.template_id,
-            template_id=template.template_id,  # Explicitly include template_id
-            name=template.name,
-            description=template.description or "",
-            type=template.type,  # Use the actual template type from the database
-            provider=template.provider,
             code=code,
             deploymentCount=deployment_count,
             uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
