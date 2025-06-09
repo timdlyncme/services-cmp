@@ -8,6 +8,12 @@ from app.models.user import User, Tenant
 from app.models.deployment import Environment, CloudAccount
 from app.schemas.deployment import EnvironmentResponse, EnvironmentCreate, EnvironmentUpdate, CloudAccountResponse
 from app.core.utils import format_error_response
+from app.core.tenant_utils import (
+    resolve_tenant_context,
+    get_user_role_name_in_tenant,
+    user_has_admin_or_msp_role,
+    user_has_any_permission
+)
 
 router = APIRouter()
 
@@ -28,7 +34,7 @@ def get_environments(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view environments
-    has_permission = any(p.name == "list:environments" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:environments"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -101,7 +107,7 @@ def get_environment(
     Get a specific environment by ID
     """
     # Check if user has permission to view environments
-    has_permission = any(p.name == "list:environments" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:environments"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -120,7 +126,7 @@ def get_environment(
         # Check if user has access to this environment's tenant
         if environment.tenant_id != current_user.tenant_id:
             # Admin users can view all environments
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to access this environment"
@@ -172,7 +178,7 @@ def create_environment(
     Create a new environment
     """
     # Check if user has permission to create environments
-    has_permission = any(p.name == "create:environments" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["create:environments"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -194,7 +200,7 @@ def create_environment(
         # Check if user has permission to create for this tenant
         if env_tenant_id != current_user.tenant.tenant_id:
             # Only admin or MSP users can create for other tenants
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to create environments for other tenants"
@@ -295,7 +301,7 @@ def update_environment(
     Update an environment
     """
     # Check if user has permission to update environments
-    has_permission = any(p.name == "update:environments" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["update:environments"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -315,7 +321,7 @@ def update_environment(
         # Check if user has access to this environment's tenant
         if environment.tenant_id != current_user.tenant_id:
             # Admin users can update all environments
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to update this environment"
@@ -424,7 +430,7 @@ def delete_environment(
     Delete an environment
     """
     # Check if user has permission to delete environments
-    has_permission = any(p.name == "delete:environments" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["delete:environments"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -444,7 +450,7 @@ def delete_environment(
         # Check if user has access to this environment's tenant
         if environment.tenant_id != current_user.tenant_id:
             # Admin users can delete all environments
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to delete this environment"

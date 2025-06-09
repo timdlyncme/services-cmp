@@ -10,6 +10,12 @@ from app.schemas.integration import (
     IntegrationConfigResponse, IntegrationConfigCreate, IntegrationConfigUpdate,
     IntegrationConfigFrontendResponse
 )
+from app.core.tenant_utils import (
+    resolve_tenant_context,
+    get_user_role_name_in_tenant,
+    user_has_admin_or_msp_role,
+    user_has_any_permission
+)
 
 router = APIRouter()
 
@@ -30,7 +36,7 @@ def get_integrations(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view settings
-    has_permission = any(p.name == "list:settings" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:settings"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -87,7 +93,7 @@ def get_integration(
     Get a specific integration config by ID
     """
     # Check if user has permission to view settings
-    has_permission = any(p.name == "list:settings" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:settings"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -106,7 +112,7 @@ def get_integration(
         # Check if user has access to this integration's tenant
         if integration.tenant_id != current_user.tenant_id:
             # Admin users can view all integrations
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to access this integration"
@@ -143,7 +149,7 @@ def create_integration(
     Create a new integration config
     """
     # Check if user has permission to update settings
-    has_permission = any(p.name == "update:settings" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["update:settings"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -201,7 +207,7 @@ def update_integration(
     Update an integration config
     """
     # Check if user has permission to update settings
-    has_permission = any(p.name == "update:settings" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["update:settings"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -221,7 +227,7 @@ def update_integration(
         # Check if user has access to this integration's tenant
         if integration.tenant_id != current_user.tenant_id:
             # Admin users can update all integrations
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to update this integration"
@@ -273,7 +279,7 @@ def delete_integration(
     Delete an integration config
     """
     # Check if user has permission to update settings
-    has_permission = any(p.name == "update:settings" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["update:settings"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -293,7 +299,7 @@ def delete_integration(
         # Check if user has access to this integration's tenant
         if integration.tenant_id != current_user.tenant_id:
             # Admin users can delete all integrations
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to delete this integration"

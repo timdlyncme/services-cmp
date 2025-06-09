@@ -14,6 +14,11 @@ from app.schemas.deployment import (
 )
 from app.core.utils import format_error_response
 from app.core.permissions import has_permission_in_tenant
+from app.core.tenant_utils import (
+    resolve_tenant_context,
+    get_user_role_name_in_tenant,
+    user_has_admin_or_msp_role
+)
 import requests
 
 router = APIRouter()
@@ -227,7 +232,7 @@ def create_cloud_account(
         # Check if user has permission to create for this tenant
         if account_tenant_id != current_user.tenant.tenant_id:
             # Only admin or MSP users can create for other tenants
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, account_tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to create cloud accounts for other tenants"

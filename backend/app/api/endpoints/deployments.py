@@ -25,6 +25,12 @@ from app.schemas.deployment import (
     DeploymentResponse, DeploymentCreate, DeploymentUpdate,
     CloudDeploymentResponse
 )
+from app.core.tenant_utils import (
+    resolve_tenant_context,
+    get_user_role_name_in_tenant,
+    user_has_admin_or_msp_role,
+    user_has_any_permission
+)
 
 router = APIRouter()
 
@@ -64,7 +70,7 @@ def get_azure_credentials(
     Get all Azure credentials for the tenant
     """
     # Check if user has permission to view credentials
-    if not current_user.role or "list:deployments" not in [p.name for p in current_user.role.permissions]:
+    if not user_has_any_permission(current_user, ["list:deployments"], tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -82,7 +88,7 @@ def get_azure_credentials(
         # Check if user has permission to view credentials for this tenant
         if creds_tenant_id != current_user.tenant.tenant_id:
             # Only admin or MSP users can view credentials for other tenants
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to view credentials for other tenants"
@@ -157,7 +163,7 @@ def set_azure_credentials(
     Set Azure credentials for deployments
     """
     # Check if user has permission to manage credentials
-    if not current_user.role or "manage:deployments" not in [p.name for p in current_user.role.permissions]:
+    if not user_has_any_permission(current_user, ["manage:deployments"], tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -175,7 +181,7 @@ def set_azure_credentials(
         # Check if user has permission to create for this tenant
         if creds_tenant_id != current_user.tenant.tenant_id:
             # Only admin or MSP users can create for other tenants
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to create credentials for other tenants"
@@ -229,7 +235,7 @@ def get_azure_credential(
     Get a specific Azure credential by settings_id
     """
     # Check if user has permission to view credentials
-    if not current_user.role or "list:deployments" not in [p.name for p in current_user.role.permissions]:
+    if not user_has_any_permission(current_user, ["list:deployments"], tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -247,7 +253,7 @@ def get_azure_credential(
         # Check if user has permission to view credentials for this tenant
         if creds_tenant_id != current_user.tenant.tenant_id:
             # Only admin or MSP users can view credentials for other tenants
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to view credentials for other tenants"
@@ -311,7 +317,7 @@ def delete_azure_credential(
     Delete a specific Azure credential by settings_id
     """
     # Check if user has permission to manage credentials
-    if not current_user.role or "manage:deployments" not in [p.name for p in current_user.role.permissions]:
+    if not user_has_any_permission(current_user, ["manage:deployments"], tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -329,7 +335,7 @@ def delete_azure_credential(
         # Check if user has permission to delete credentials for this tenant
         if creds_tenant_id != current_user.tenant.tenant_id:
             # Only admin or MSP users can delete credentials for other tenants
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to delete credentials for other tenants"
@@ -385,7 +391,7 @@ def update_deployment_status(
     logger.debug(f"User: {current_user.username} (ID: {current_user.id})")
     
     # Check if user has permission to update deployments
-    has_permission = any(p.name == "update:deployments" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["update:deployments"], tenant_id)
     logger.debug(f"User has update:deployments permission: {has_permission}")
     
     if not has_permission:
@@ -523,7 +529,7 @@ def list_azure_subscriptions(
     Otherwise, the current user's tenant ID will be used.
     """
     # Check if user has permission to view credentials
-    if not current_user.role or "list:deployments" not in [p.name for p in current_user.role.permissions]:
+    if not user_has_any_permission(current_user, ["list:deployments"], tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -541,7 +547,7 @@ def list_azure_subscriptions(
         # Check if user has permission to access this tenant
         if account_tenant_id != current_user.tenant.tenant_id:
             # Only admin or MSP users can access other tenants
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=403,
                     detail="Not authorized to access credentials for other tenants"
@@ -613,7 +619,7 @@ def get_deployments(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     # Check if user has permission to view deployments
-    has_permission = any(p.name == "list:deployments" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:deployments"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -651,7 +657,7 @@ def get_deployments(
                     )
                 
                 # Check if user has access to this tenant
-                if tenant.tenant_id != current_user.tenant_id and current_user.role.name != "admin" and current_user.role.name != "msp":
+                if tenant.tenant_id != current_user.tenant_id and not user_has_admin_or_msp_role(current_user, tenant.tenant_id):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to view deployments for this tenant"
@@ -665,7 +671,7 @@ def get_deployments(
                 )
         else:
             # No tenant specified, show deployments from the user's tenant
-            if current_user.role.name == "admin" or current_user.role.name == "msp":
+            if user_has_admin_or_msp_role(current_user, tenant_id):
                 # Admin and MSP users can see all deployments if no tenant is specified
                 pass
             else:
@@ -736,7 +742,7 @@ def get_deployment(
     Get a specific deployment by ID
     """
     # Check if user has permission to view deployments
-    has_permission = any(p.name == "list:deployments" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:deployments"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -767,7 +773,7 @@ def get_deployment(
         # Check if user has access to this deployment's tenant
         if deployment.tenant_id != current_user.tenant_id:
             # Admin users can view all deployments
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to access this deployment"
@@ -825,7 +831,7 @@ def create_deployment(
     If tenant_id is provided in the query string, it will be used instead of the current user's tenant_id.
     """
     # Check if user has permission to create deployments
-    has_permission = any(p.name == "create:deployments" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["create:deployments"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -875,7 +881,7 @@ def create_deployment(
             # Check if user has access to this tenant
             if tenant_id != current_user.tenant_id:
                 # Only admin or MSP users can create deployments for other tenants
-                if current_user.role.name != "admin" and current_user.role.name != "msp":
+                if not user_has_admin_or_msp_role(current_user, tenant_id):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to create deployments for other tenants"
@@ -1115,7 +1121,7 @@ def update_deployment(
     Update a deployment
     """
     # Check if user has permission to update deployments
-    has_permission = any(p.name == "update:deployments" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["update:deployments"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1147,7 +1153,7 @@ def update_deployment(
         # Check if user has access to this deployment's tenant
         if deployment.tenant_id != current_user.tenant_id:
             # Admin users can update all deployments
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to update this deployment"
@@ -1204,7 +1210,7 @@ def delete_deployment(
     Delete a deployment and all related records
     """
     # Check if user has permission to delete deployments
-    has_permission = any(p.name == "delete:deployments" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["delete:deployments"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1224,7 +1230,7 @@ def delete_deployment(
         # Check if user has access to this deployment's tenant
         if deployment.tenant_id != current_user.tenant_id:
             # Admin users can delete all deployments
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to delete this deployment"
@@ -1301,7 +1307,7 @@ def get_deployment_logs(
     Get logs for a specific deployment from the deployment_history table
     """
     # Check if user has permission to view deployments
-    has_permission = any(p.name == "list:deployments" for p in current_user.role.permissions)
+    has_permission = user_has_any_permission(current_user, ["list:deployments"], tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1321,7 +1327,7 @@ def get_deployment_logs(
         # Check if user has access to this deployment's tenant
         if deployment.tenant_id != current_user.tenant_id:
             # Admin users can view all deployments
-            if current_user.role.name != "admin" and current_user.role.name != "msp":
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to view this deployment"
