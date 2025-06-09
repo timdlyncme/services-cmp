@@ -186,10 +186,19 @@ def has_global_permission(user: User, permission_name: str) -> bool:
     if not is_global_permission(permission_name):
         return False
     
-    # Check if user's role has the global permission
-    if user.role:
-        user_permissions = {p.name for p in user.role.permissions}
-        return permission_name in user_permissions
+    # Check if user has the global permission through any of their tenant assignments
+    # MSP users typically have admin/msp roles that include global permissions
+    from app.core.tenant_utils import get_user_role_in_tenant
+    
+    # For MSP users, check if they have admin/msp role in any tenant
+    for assignment in user.get_tenant_assignments():
+        role_name = get_user_role_in_tenant(user, assignment.tenant_id)
+        if role_name in ["admin", "msp"]:
+            # Get role permissions from the assignment
+            if assignment.role and assignment.role.permissions:
+                user_permissions = {p.name for p in assignment.role.permissions}
+                if permission_name in user_permissions:
+                    return True
     
     return False
 

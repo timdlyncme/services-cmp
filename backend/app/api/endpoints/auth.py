@@ -152,7 +152,7 @@ def read_users_me(
         name=current_user.full_name,
         email=current_user.email,
         role=current_role,
-        tenantId=request.tenant_id,
+        tenantId=current_tenant_id,
         permissions=permissions,
         accessibleTenants=accessible_tenants,
         isMspUser=current_user.is_msp_user,
