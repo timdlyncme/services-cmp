@@ -250,7 +250,7 @@ def create_user(
     Regular users can only create users in their assigned tenants.
     """
     # Determine target tenant
-    target_tenant_id = tenant_id or user.tenant_id
+    target_tenant_id = tenant_id
     if not target_tenant_id and not user.is_msp_user:
         # Default to current user's primary tenant for regular users
         primary_assignment = current_user.get_primary_tenant_assignment()
