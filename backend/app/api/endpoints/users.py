@@ -320,10 +320,6 @@ def create_user(
             user_id=str(uuid.uuid4())
         )
         
-        # Set legacy tenant_id for backward compatibility
-        if target_tenant_id:
-            new_user.tenant_id = target_tenant_id
-        
         db.add(new_user)
         db.flush()  # Get the user ID
         
