@@ -17,6 +17,7 @@ from app.models.user_tenant_assignment import UserTenantAssignment
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.core.security import get_password_hash
 from app.core.permissions import has_global_permission
+from app.core.tenant_utils import get_user_role_name_in_tenant
 
 router = APIRouter()
 
@@ -56,7 +57,7 @@ def get_msp_users(
                     full_name=user.full_name,
                     email=user.email,
                     is_active=user.is_active,
-                    role=user.role.name if user.role else None,
+                    role=get_user_role_name_in_tenant(user) or "msp",
                     tenant_id="msp",  # MSP users don't belong to specific tenants
                     is_msp_user=True
                 )
@@ -472,4 +473,3 @@ def get_platform_analytics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving platform analytics: {str(e)}"
         )
-

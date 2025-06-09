@@ -216,16 +216,12 @@ def get_user_permissions_in_tenant(user: User, tenant_id: str) -> Set[str]:
     """
     permissions = set()
     
-    # MSP users get all permissions they have in their role
-    if user.is_msp_user and user.role:
-        permissions.update(p.name for p in user.role.permissions)
-        return permissions
+    # Use the new tenant-based permission system
+    from app.core.tenant_utils import get_tenant_permissions
     
-    # For regular users, get permissions from their role in this tenant
-    if user.has_tenant_access(tenant_id):
-        role_in_tenant = user.get_role_in_tenant(tenant_id)
-        if role_in_tenant:
-            permissions.update(p.name for p in role_in_tenant.permissions)
+    # Get permissions through tenant assignments
+    tenant_permissions = get_tenant_permissions(user, tenant_id)
+    permissions.update(tenant_permissions)
     
     return permissions
 
@@ -269,9 +265,9 @@ def can_user_switch_to_tenant(user: User, tenant_id: str) -> bool:
     return user.has_tenant_access(tenant_id)
 
 
-def get_user_role_in_tenant(user: User, tenant_id: str) -> Optional[str]:
+def get_user_role_name(user: User, tenant_id: str = None) -> Optional[str]:
     """
-    Get the user's role name within a specific tenant.
+    Get the user's role name in a specific tenant context.
     
     Args:
         user: The user to check
@@ -280,8 +276,14 @@ def get_user_role_in_tenant(user: User, tenant_id: str) -> Optional[str]:
     Returns:
         Optional[str]: Role name in the tenant, or None if no access
     """
-    if user.is_msp_user:
-        return user.role.name if user.role else None
+    from app.core.tenant_utils import get_user_role_in_tenant
     
-    role = user.get_role_in_tenant(tenant_id)
-    return role.name if role else None
+    if tenant_id is None:
+        # Get primary tenant
+        primary_assignment = user.get_primary_tenant_assignment()
+        tenant_id = primary_assignment.tenant_id if primary_assignment else None
+    
+    if not tenant_id:
+        return None
+        
+    return get_user_role_in_tenant(user, tenant_id)

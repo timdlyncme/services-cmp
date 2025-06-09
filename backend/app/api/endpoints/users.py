@@ -18,7 +18,8 @@ from app.core.tenant_utils import (
     resolve_tenant_context,
     get_user_accessible_tenant_ids,
     validate_admin_tenant_assignment_permission,
-    ensure_single_primary_tenant
+    ensure_single_primary_tenant,
+    get_user_role_name_in_tenant
 )
 
 router = APIRouter()
@@ -84,13 +85,13 @@ def get_users(
         # Convert to response format
         result = []
         for user in users:
-            # Get user's role in this tenant (or global role for MSP users)
-            role_name = None
-            if user.is_msp_user:
-                role_name = user.role.name if user.role else None
-            else:
-                role_in_tenant = user.get_role_in_tenant(target_tenant_id)
-                role_name = role_in_tenant.name if role_in_tenant else None
+            # Convert role object to role name using new tenant-based system
+            role_name = get_user_role_name_in_tenant(user, tenant_id)
+            
+            # Get tenant_id from tenant object
+            tenant_id = None
+            if hasattr(user, 'tenant') and user.tenant:
+                tenant_id = user.tenant.tenant_id
             
             # Get all tenant assignments for this user
             tenant_assignments = []
@@ -202,9 +203,8 @@ def get_user(
         
         # Convert role object to role name
         role_name = None
-        if hasattr(user, 'role') and user.role:
-            role_name = user.role.name
-        
+        # Convert role object to role name using new tenant-based system
+        role_name = get_user_role_name_in_tenant(user, tenant_id)
         # Get tenant_id from tenant object
         tenant_id = None
         if hasattr(user, 'tenant') and user.tenant:
@@ -529,9 +529,8 @@ def update_user(
         db.refresh(user)
         
         # Convert role object to role name
-        role_name = None
-        if hasattr(user, 'role') and user.role:
-            role_name = user.role.name
+        # Convert role object to role name using new tenant-based system
+        role_name = get_user_role_name_in_tenant(user, tenant_id)
         
         # Get tenant_id from tenant object
         tenant_id = None
@@ -545,7 +544,7 @@ def update_user(
             full_name=user.full_name,
             email=user.email,
             is_active=user.is_active,
-            role=user.role.name if user.role else None,
+            role=get_user_role_name_in_tenant(user),
             tenant_id=user.get_primary_tenant_id(),  # Backward compatibility
             primary_tenant_id=user.get_primary_tenant_id(),
             tenant_assignments=[],  # Will be populated with actual assignments

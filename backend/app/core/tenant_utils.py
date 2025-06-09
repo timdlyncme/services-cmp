@@ -192,49 +192,117 @@ def get_user_primary_tenant_id(user: User) -> Optional[str]:
     return primary_assignment.tenant_id if primary_assignment else None
 
 
-def resolve_tenant_context(
-    user: User, 
-    tenant_id_param: Optional[str] = None,
-    db: Session = None
-) -> str:
+def get_user_role_name_in_tenant(user: "User", tenant_id: str = None) -> str:
     """
-    Resolve the tenant context for an API request.
-    
-    This function implements the logic:
-    1. If tenant_id parameter provided, validate access and use it
-    2. If no tenant_id parameter, use user's primary tenant
-    3. Raise error if user has no access to resolved tenant
+    Get the user's role name in a specific tenant.
     
     Args:
-        user: Current authenticated user
-        tenant_id_param: Optional tenant_id from query parameter
-        db: Database session for validation
+        user: The user object
+        tenant_id: The tenant ID (if None, uses primary tenant)
         
     Returns:
-        str: Resolved tenant ID to use for the request
-        
-    Raises:
-        HTTPException: If user doesn't have access to requested tenant
+        str: The role name (e.g., 'admin', 'user', 'msp') or None
     """
-    if tenant_id_param:
-        # Validate user has access to requested tenant
-        if not user.has_tenant_access(tenant_id_param):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"You don't have access to tenant {tenant_id_param}"
-            )
-        return tenant_id_param
+    if tenant_id is None:
+        # Get primary tenant
+        primary_assignment = user.get_primary_tenant_assignment()
+        tenant_id = primary_assignment.tenant_id if primary_assignment else None
     
-    # Use user's primary tenant
-    primary_tenant_id = get_user_primary_tenant_id(user)
-    if not primary_tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No tenant context available. Please specify tenant_id parameter."
-        )
-    
-    return primary_tenant_id
+    if not tenant_id:
+        return None
+        
+    return get_user_role_in_tenant(user, tenant_id)
 
+
+def user_has_role_in_tenant(user: "User", role_name: str, tenant_id: str = None) -> bool:
+    """
+    Check if user has a specific role in a tenant.
+    
+    Args:
+        user: The user object
+        role_name: The role name to check (e.g., 'admin', 'msp')
+        tenant_id: The tenant ID (if None, uses primary tenant)
+        
+    Returns:
+        bool: True if user has the role in the tenant
+    """
+    current_role = get_user_role_name_in_tenant(user, tenant_id)
+    return current_role == role_name
+
+
+def user_has_admin_or_msp_role(user: "User", tenant_id: str = None) -> bool:
+    """
+    Check if user has admin or msp role in a tenant.
+    Common pattern used throughout the codebase.
+    
+    Args:
+        user: The user object
+        tenant_id: The tenant ID (if None, uses primary tenant)
+        
+    Returns:
+        bool: True if user has admin or msp role
+    """
+    role_name = get_user_role_name_in_tenant(user, tenant_id)
+    return role_name in ["admin", "msp"]
+
+
+def get_user_permissions_list(user: "User", tenant_id: str = None) -> List[str]:
+    """
+    Get a list of permission names for a user in a specific tenant.
+    
+    Args:
+        user: The user object
+        tenant_id: The tenant ID (if None, uses primary tenant)
+        
+    Returns:
+        List[str]: List of permission names
+    """
+    if tenant_id is None:
+        # Get primary tenant
+        primary_assignment = user.get_primary_tenant_assignment()
+        tenant_id = primary_assignment.tenant_id if primary_assignment else None
+    
+    if not tenant_id:
+        return []
+    
+    permissions = get_tenant_permissions(user, tenant_id)
+    return list(permissions)
+
+
+def user_has_any_permission(user: "User", permission_names: List[str], tenant_id: str = None) -> bool:
+    """
+    Check if user has any of the specified permissions in a tenant.
+    
+    Args:
+        user: The user object
+        permission_names: List of permission names to check
+        tenant_id: The tenant ID (if None, uses primary tenant)
+        
+    Returns:
+        bool: True if user has any of the permissions
+    """
+    user_permissions = get_user_permissions_list(user, tenant_id)
+    return any(perm in user_permissions for perm in permission_names)
+
+
+def resolve_tenant_context(user: "User", request_tenant_id: str = None) -> str:
+    """
+    Resolve the appropriate tenant context for a user.
+    
+    Args:
+        user: The user object
+        request_tenant_id: Tenant ID from request (query param, etc.)
+        
+    Returns:
+        str: The resolved tenant ID
+    """
+    # If tenant_id is provided in request, use it (if user has access)
+    if request_tenant_id and user.has_tenant_access(request_tenant_id):
+        return request_tenant_id
+    
+    # Otherwise, use primary tenant
+    primary_assignment = user.get_primary_tenant_assignment()
+    return primary_assignment.tenant_id if primary_assignment else None
 
 def get_user_accessible_tenant_ids(user: User, db: Session) -> List[str]:
     """
