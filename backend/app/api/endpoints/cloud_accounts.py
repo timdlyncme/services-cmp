@@ -329,8 +329,6 @@ def update_cloud_account(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not enough permissions"
             )
-                    detail="Not authorized to update this cloud account"
-                )
         
         # If settings_id is provided, verify it exists
         settings_id = account.settings_id
@@ -441,8 +439,6 @@ def delete_cloud_account(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not enough permissions"
             )
-                    detail="Not authorized to delete this cloud account"
-                )
         
         # Check if account is used by any deployments
         deployments = db.query(CloudAccount).filter(CloudAccount.id == account.id).first()
