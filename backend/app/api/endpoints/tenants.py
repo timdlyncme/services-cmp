@@ -35,14 +35,6 @@ def get_tenants(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     try:
-        # Check if user has permission to list tenants
-        has_permission = user_has_any_permission(current_user, ["list:tenants", "list:all-tenants"], None)
-        if not has_permission:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions"
-            )
-        
         # MSP users with global permissions can see all tenants
         if user_has_any_permission(current_user, ["list:all-tenants"], None):
             tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
