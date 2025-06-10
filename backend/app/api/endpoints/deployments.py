@@ -659,14 +659,9 @@ def get_deployments(
                         detail=f"Tenant with ID {tenant_id} not found"
                     )
                 
-                # Add debug logging for tenant access
-                has_tenant_access = current_user.has_tenant_access(tenant.tenant_id)
-                has_admin_or_msp = user_has_admin_or_msp_role(current_user, tenant.tenant_id)
-                logger.debug(f"User {current_user.username} access check for tenant {tenant.tenant_id}: has_tenant_access={has_tenant_access}, has_admin_or_msp={has_admin_or_msp}")
-
-                # Check if user has access to this tenant
-                if not has_tenant_access and not has_admin_or_msp:
-                    logger.warning(f"User {current_user.username} not authorized for tenant {tenant_id}")
+                # Check if user has access to this tenant - admins must also have tenant access
+                if not current_user.has_tenant_access(tenant.tenant_id):
+                    logger.warning(f"User {current_user.username} does not have access to tenant {tenant_id}")
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to view deployments for this tenant"
@@ -897,19 +892,11 @@ def create_deployment(
                     detail=f"Tenant with ID {tenant_id} not found"
                 )
             
-                # Add debug logging for tenant access
-                has_tenant_access = current_user.has_tenant_access(tenant.tenant_id)
-                has_admin_or_msp = user_has_admin_or_msp_role(current_user, tenant.tenant_id)
-                logger.debug(f"User {current_user.username} access check for tenant {tenant.tenant_id}: has_tenant_access={has_tenant_access}, has_admin_or_msp={has_admin_or_msp}")
-
-            # Check if user has access to this tenant
-            if tenant_id != current_user.tenant_id:
-                # Only admin or MSP users can create deployments for other tenants
-                if not user_has_admin_or_msp_role(current_user, tenant_id):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Not authorized to create deployments for other tenants"
-                    )
+                logger.warning(f"User {current_user.username} does not have access to tenant {tenant_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to create deployments for other tenants"
+                )
             
             deployment_tenant_id = tenant_id
             print(f"Using tenant_id from query parameter: {deployment_tenant_id}")
@@ -918,6 +905,7 @@ def create_deployment(
         
         # Get tenant for response
         tenant = db.query(Tenant).filter(Tenant.tenant_id == deployment_tenant_id).first()
+            )
         
         # Create new deployment
         import uuid
