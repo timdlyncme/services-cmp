@@ -802,7 +802,6 @@ def create_template_version(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to update this template"
                     )
-                )
         
         # Determine the new version number
         new_version_number = version.version
@@ -905,7 +904,6 @@ def get_template_version(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to access this template"
                     )
-                )
         
         # Get the specific version
         version = db.query(TemplateVersion).filter(
