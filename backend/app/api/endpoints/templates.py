@@ -212,7 +212,7 @@ def get_templates(
                 description=template.description or "",
                 type=template.type,  # Use the actual template type from the database
                 provider=template.provider,
-                code=code,
+                code=template_code,
                 deploymentCount=deployment_count,
                 uploadedAt=template.created_at.isoformat() if hasattr(template, 'created_at') else "",
                 updatedAt=template.updated_at.isoformat() if hasattr(template, 'updated_at') else "",
@@ -720,7 +720,7 @@ def get_template_versions(
         # Check if user has access to this template
         if not template.is_public and template.tenant_id != current_user.tenant_id:
             # Admin users can view all templates
-            if not user_has_admin_or_msp_role(current_user, current_user.tenant_id):
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to access this template"
