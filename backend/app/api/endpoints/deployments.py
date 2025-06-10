@@ -202,9 +202,8 @@ def set_azure_credentials(
         db.commit()
         db.refresh(new_creds)
         
-        # Note: Deployment engine now uses database-driven credential management
-        # The POST /credentials endpoint is deprecated and no longer needed
-        # Credentials are automatically loaded from the database when needed
+
+        logger.info(f"New Azure credentials added for tenant ID: {creds_tenant_id}, settings ID: {new_creds.settings_id}")
         
         return {"message": "Azure credentials added successfully", "id": str(new_creds.settings_id)}
     
