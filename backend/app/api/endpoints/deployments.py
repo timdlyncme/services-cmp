@@ -28,7 +28,6 @@ from app.schemas.deployment import (
 from app.core.tenant_utils import (
     resolve_tenant_context,
     get_user_role_name_in_tenant,
-    user_has_admin_or_msp_role,
     user_has_any_permission
 )
 
@@ -1169,4 +1168,4 @@ def update_deployment(
             )
         
         deployment, template, environment, tenant = result
-        
+   
