@@ -741,15 +741,25 @@ def get_deployment(
     """
     Get a specific deployment by ID
     """
-    # Check if user has permission to view deployments
-    has_permission = user_has_any_permission(current_user, ["list:deployments"], tenant_id)
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
     try:
+        # First, get the deployment to check if it exists and get its tenant_id
+        deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
+        
+        if not deployment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Deployment with ID {deployment_id} not found"
+            )
+        
+        # Check if user has permission to view deployments for this tenant
+        has_permission = user_has_any_permission(current_user, ["list:deployments"], deployment.tenant_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
+        
+        # Now get the full deployment data with joins
         result = db.query(
             Deployment, Template, Environment, Tenant
         ).join(
@@ -773,7 +783,7 @@ def get_deployment(
         # Check if user has access to this deployment's tenant
         if deployment.tenant_id != current_user.tenant_id:
             # Admin users can view all deployments
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
+            if not user_has_admin_or_msp_role(current_user, deployment.tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to access this deployment"
@@ -796,7 +806,7 @@ def get_deployment(
             templateId=template.template_id,
             templateName=template.name,
             templateVersion=deployment.template_version,  # Add template version
-            provider=deployment.deployment_type,
+            provider=template.provider,
             status=deployment.status,
             environment=environment.name,
             createdAt=deployment.created_at.isoformat(),
@@ -1153,7 +1163,7 @@ def update_deployment(
         # Check if user has access to this deployment's tenant
         if deployment.tenant_id != current_user.tenant_id:
             # Admin users can update all deployments
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
+            if not user_has_admin_or_msp_role(current_user, deployment.tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to update this deployment"
@@ -1230,7 +1240,7 @@ def delete_deployment(
         # Check if user has access to this deployment's tenant
         if deployment.tenant_id != current_user.tenant_id:
             # Admin users can delete all deployments
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
+            if not user_has_admin_or_msp_role(current_user, deployment.tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to delete this deployment"
@@ -1306,16 +1316,8 @@ def get_deployment_logs(
     """
     Get logs for a specific deployment from the deployment_history table
     """
-    # Check if user has permission to view deployments
-    has_permission = user_has_any_permission(current_user, ["list:deployments"], tenant_id)
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
     try:
-        # First, get the deployment to check if it exists and if the user has access
+        # First, get the deployment to check if it exists and get its tenant_id
         deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
         
         if not deployment:
@@ -1324,10 +1326,39 @@ def get_deployment_logs(
                 detail=f"Deployment with ID {deployment_id} not found"
             )
         
+        # Check if user has permission to view deployments for this tenant
+        has_permission = user_has_any_permission(current_user, ["list:deployments"], deployment.tenant_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
+        
+        # Now get the full deployment data with joins
+        result = db.query(
+            Deployment, Template, Environment, Tenant
+        ).join(
+            Template, Deployment.template_id == Template.id
+        ).join(
+            Environment, Deployment.environment_id == Environment.id
+        ).join(
+            Tenant, Deployment.tenant_id == Tenant.tenant_id  # Join on tenant_id (UUID) instead of id (Integer)
+        ).filter(
+            Deployment.deployment_id == deployment_id
+        ).first()
+        
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Deployment with ID {deployment_id} not found"
+            )
+        
+        deployment, template, environment, tenant = result
+        
         # Check if user has access to this deployment's tenant
         if deployment.tenant_id != current_user.tenant_id:
             # Admin users can view all deployments
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
+            if not user_has_admin_or_msp_role(current_user, deployment.tenant_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to view this deployment"
