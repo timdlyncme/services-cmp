@@ -390,6 +390,22 @@ def update_deployment_status(
     logger.debug(f"Update data: {json.dumps(update_data, default=str)}")
     logger.debug(f"User: {current_user.username} (ID: {current_user.id})")
     
+    # Find the deployment first to get tenant_id
+    logger.debug(f"Looking for deployment with ID: {deployment_id}")
+    deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
+    
+    if not deployment:
+        logger.warning(f"Deployment not found: {deployment_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Deployment not found"
+        )
+    
+    logger.debug(f"Found deployment: {deployment.name} (ID: {deployment.id}, DB ID: {deployment.deployment_id})")
+    
+    # Get tenant_id from deployment for permission check
+    tenant_id = deployment.tenant_id
+    
     # Check if user has permission to update deployments
     has_permission = user_has_any_permission(current_user, ["update:deployments"], tenant_id)
     logger.debug(f"User has update:deployments permission: {has_permission}")
@@ -402,19 +418,6 @@ def update_deployment_status(
         )
     
     try:
-        # Find the deployment
-        logger.debug(f"Looking for deployment with ID: {deployment_id}")
-        deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
-        
-        if not deployment:
-            logger.warning(f"Deployment not found: {deployment_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Deployment not found"
-            )
-        
-        logger.debug(f"Found deployment: {deployment.name} (ID: {deployment.id}, DB ID: {deployment.deployment_id})")
-        
         # Get or create deployment details
         logger.debug(f"Looking for deployment details for deployment ID: {deployment.id}")
         deployment_details = db.query(DeploymentDetails).filter(
