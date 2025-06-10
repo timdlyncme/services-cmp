@@ -529,13 +529,6 @@ def list_azure_subscriptions(
                 detail=f"Tenant with ID {account_tenant_id} not found"
             )
         
-        # Check if user has permission to access this tenant
-        has_permission = user_has_any_permission(current_user, ["list:cloud_accounts"], account_tenant_id)
-        if not has_permission:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions"
-            )
         
         # Get credential from database
         creds = db.query(CloudSettings).filter(
