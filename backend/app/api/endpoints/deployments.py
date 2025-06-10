@@ -92,7 +92,6 @@ def get_azure_credentials(
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to view credentials for other tenants"
-                )
         
         # Get all credentials from database
         creds_list = db.query(CloudSettings).filter(
@@ -184,7 +183,6 @@ def set_azure_credentials(
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to create credentials for other tenants"
-                )
         
         # Create new credentials with connection_details as JSON
         new_creds = CloudSettings(
@@ -264,7 +262,6 @@ def get_azure_credential(
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to view credentials for other tenants"
-                )
         
         # Get credential from database
         creds = db.query(CloudSettings).filter(
@@ -346,7 +343,6 @@ def delete_azure_credential(
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to delete credentials for other tenants"
-                )
         
         # Get credential from database
         creds = db.query(CloudSettings).filter(
@@ -561,7 +557,6 @@ def list_azure_subscriptions(
                 raise HTTPException(
                     status_code=403,
                     detail="Not authorized to access credentials for other tenants"
-                )
         
         # Get credential from database
         creds = db.query(CloudSettings).filter(
@@ -679,7 +674,6 @@ def get_deployments(
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid tenant ID format: {str(e)}"
-                )
         else:
             # No tenant specified, show deployments from the user's tenant
             if user_has_admin_or_msp_role(current_user, tenant_id):
@@ -747,12 +741,22 @@ def get_deployments(
 def get_deployment(
     deployment_id: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    tenant_id: Optional[str] = None
 ) -> Any:
     """
     Get a specific deployment by ID
     """
     try:
+        # Resolve tenant context
+        target_tenant_id = resolve_tenant_context(current_user, tenant_id)
+        
+        if not target_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You must provide a valid tenant"
+            )
+        
         # First, get the deployment to check if it exists and get its tenant_id
         deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
         
@@ -762,8 +766,15 @@ def get_deployment(
                 detail=f"Deployment with ID {deployment_id} not found"
             )
         
+        # Validate that the deployment belongs to the requested tenant
+        if deployment.tenant_id != target_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Deployment with ID {deployment_id} not found"
+            )
+        
         # Check if user has permission to view deployments for this tenant
-        has_permission = user_has_any_permission(current_user, ["list:deployments"], deployment.tenant_id)
+        has_permission = user_has_any_permission(current_user, ["list:deployments"], target_tenant_id)
         if not has_permission:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -791,14 +802,6 @@ def get_deployment(
         
         deployment, template, environment, tenant = result
         
-        # Check if user has access to this deployment's tenant
-        if deployment.tenant_id != current_user.tenant_id:
-            # Admin users can view all deployments
-            if not user_has_admin_or_msp_role(current_user, deployment.tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to access this deployment"
-                )
         
         # Get deployment details if available
         deployment_details = db.query(DeploymentDetails).filter(
@@ -875,7 +878,6 @@ def create_deployment(
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Template with ID {deployment.template_id} not found"
-                )
             print(f"Template found by id: {template.id}, template_id: {template.template_id}")
         else:
             print(f"Template found by template_id: {template.template_id}, id: {template.id}")
@@ -897,7 +899,6 @@ def create_deployment(
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Tenant with ID {tenant_id} not found"
-                )
             
             # Check if user has access to this tenant - admins must also have tenant access
             if not current_user.has_tenant_access(tenant_obj.tenant_id):
@@ -905,7 +906,6 @@ def create_deployment(
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to create deployments for other tenants"
-                )
             
             deployment_tenant_id = tenant_id
             print(f"Using tenant_id from query parameter: {deployment_tenant_id}")
@@ -1170,233 +1170,3 @@ def update_deployment(
         
         deployment, template, environment, tenant = result
         
-        # Check if user has access to this deployment's tenant
-        if deployment.tenant_id != current_user.tenant_id:
-            # Admin users can update all deployments
-            if not user_has_admin_or_msp_role(current_user, deployment.tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to update this deployment"
-                )
-        
-        # Update deployment
-        deployment.name = deployment_update.name
-        deployment.status = deployment_update.status
-        deployment.parameters = deployment_update.parameters
-        deployment.resources = deployment_update.resources
-        deployment.region = deployment_update.region
-        
-        db.commit()
-        db.refresh(deployment)
-        
-        # Return frontend-compatible response
-        return CloudDeploymentResponse(
-            id=deployment.deployment_id,
-            name=deployment.name,
-            templateId=template.template_id,
-            templateName=template.name,
-            templateVersion=deployment.template_version,  # Add template version
-            provider=template.provider,
-            status=deployment.status,
-            environment=environment.name,
-            createdAt=deployment.created_at.isoformat(),
-            updatedAt=deployment.updated_at.isoformat(),
-            parameters=deployment.parameters or {},
-            resources=[],  # Default empty list if not available
-            tenantId=tenant.tenant_id,
-            region=deployment.region,
-            details={
-                "outputs": deployment_details.outputs if deployment_details else {}
-            } if deployment_details else None
-        )
-    
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating deployment: {str(e)}"
-        )
-
-@router.delete("/{deployment_id}", tags=["deployments"])
-def delete_deployment(
-    deployment_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-) -> Any:
-    """
-    Delete a deployment and all related records
-    """
-    try:
-        # First, get the deployment to check if it exists and get its tenant_id
-        deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
-        
-        if not deployment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Deployment with ID {deployment_id} not found"
-            )
-        
-        # Check if user has permission to delete deployments for this tenant
-        has_permission = user_has_any_permission(current_user, ["delete:deployments"], deployment.tenant_id)
-        if not has_permission:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions"
-            )
-        
-        # Check if user has access to this deployment's tenant
-        if deployment.tenant_id != current_user.tenant_id:
-            # Admin users can delete all deployments
-            if not user_has_admin_or_msp_role(current_user, deployment.tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to delete this deployment"
-                )
-        
-        # Delete related records in the correct order to maintain referential integrity
-        
-        # 1. Delete deployment history records
-        deployment_history_records = db.query(DeploymentHistory).filter(
-            DeploymentHistory.deployment_id == deployment.id
-        ).all()
-        
-        for history_record in deployment_history_records:
-            db.delete(history_record)
-        
-        # 2. Delete deployment details records
-        deployment_details_records = db.query(DeploymentDetails).filter(
-            DeploymentDetails.deployment_id == deployment.id
-        ).all()
-        
-        for details_record in deployment_details_records:
-            db.delete(details_record)
-        
-        # 3. Finally delete the main deployment record
-        db.delete(deployment)
-        
-        # Commit all deletions in a single transaction
-        db.commit()
-        
-        logger.info(f"Successfully deleted deployment {deployment_id} and all related records")
-        
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
-    
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error deleting deployment {deployment_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting deployment: {str(e)}"
-        )
-
-@router.options("/", tags=["deployments"])
-def options_deployments():
-    """
-    Handle preflight requests for deployments
-    """
-    response = Response(status_code=200)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    return response
-
-@router.options("/{deployment_id}", tags=["deployments"])
-def options_deployment_by_id():
-    """
-    Handle preflight requests for specific deployment
-    """
-    response = Response(status_code=200)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    return response
-
-@router.get("/{deployment_id}/logs", tags=["deployments"], response_model=List[Dict[str, Any]])
-def get_deployment_logs(
-    deployment_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-) -> Any:
-    """
-    Get logs for a specific deployment from the deployment_history table
-    """
-    try:
-        # First, get the deployment to check if it exists and get its tenant_id
-        deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
-        
-        if not deployment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Deployment with ID {deployment_id} not found"
-            )
-        
-        # Check if user has permission to view deployments for this tenant
-        has_permission = user_has_any_permission(current_user, ["list:deployments"], deployment.tenant_id)
-        if not has_permission:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions"
-            )
-        
-        # Now get the full deployment data with joins
-        result = db.query(
-            Deployment, Template, Environment, Tenant
-        ).join(
-            Template, Deployment.template_id == Template.id
-        ).join(
-            Environment, Deployment.environment_id == Environment.id
-        ).join(
-            Tenant, Deployment.tenant_id == Tenant.tenant_id  # Join on tenant_id (UUID) instead of id (Integer)
-        ).filter(
-            Deployment.deployment_id == deployment_id
-        ).first()
-        
-        if not result:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Deployment with ID {deployment_id} not found"
-            )
-        
-        deployment, template, environment, tenant = result
-        
-        # Check if user has access to this deployment's tenant
-        if deployment.tenant_id != current_user.tenant_id:
-            # Admin users can view all deployments
-            if not user_has_admin_or_msp_role(current_user, deployment.tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to view this deployment"
-                )
-        
-        # Get logs from deployment_history table
-        logs = db.query(DeploymentHistory).filter(
-            DeploymentHistory.deployment_id == deployment.id
-        ).order_by(DeploymentHistory.created_at.desc()).all()
-        
-        # Format logs for response
-        formatted_logs = []
-        for log in logs:
-            formatted_logs.append({
-                "id": log.id,
-                "status": log.status,
-                "message": log.message,
-                "details": log.details,
-                "timestamp": log.created_at.isoformat(),
-                "user_id": log.user_id
-            })
-        
-        return formatted_logs
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving deployment logs: {str(e)}"
-        )
