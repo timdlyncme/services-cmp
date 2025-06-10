@@ -892,6 +892,8 @@ def create_deployment(
                     detail=f"Tenant with ID {tenant_id} not found"
                 )
             
+            # Check if user has access to this tenant - admins must also have tenant access
+            if not current_user.has_tenant_access(tenant_obj.tenant_id):
                 logger.warning(f"User {current_user.username} does not have access to tenant {tenant_id}")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -905,7 +907,6 @@ def create_deployment(
         
         # Get tenant for response
         tenant = db.query(Tenant).filter(Tenant.tenant_id == deployment_tenant_id).first()
-            )
         
         # Create new deployment
         import uuid
