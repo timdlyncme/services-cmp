@@ -182,7 +182,12 @@ def get_current_user(authorization: str = Header(None)):
         # Extract role from user data
         role = user_data.get("role", "user")
         
+        # Extract multi-tenant access information
+        accessible_tenants = user_data.get("accessibleTenants", [])
+        is_msp_user = user_data.get("isMspUser", False)
+        
         logger.debug(f"Extracted user info: user_id={user_id}, username={username}, tenant_id={tenant_id}, role={role}")
+        logger.debug(f"Multi-tenant info: accessible_tenants={accessible_tenants}, is_msp_user={is_msp_user}")
         
         return {
             "user_id": user_id,
@@ -190,6 +195,8 @@ def get_current_user(authorization: str = Header(None)):
             "tenant_id": tenant_id,
             "permissions": permissions,
             "role": role,
+            "accessible_tenants": accessible_tenants,
+            "is_msp_user": is_msp_user,
             "token": token  # Include the token for background tasks
         }
     except Exception as e:
@@ -261,10 +268,14 @@ def get_credentials(
         # Determine which tenant to use
         tenant_id = user["tenant_id"]
         
-        # If target_tenant_id is provided, check if user has permission to access other tenants
+        # If target_tenant_id is provided, check if user has access to that tenant
         if target_tenant_id and target_tenant_id != user["tenant_id"]:
-            # Only admin or MSP users can access other tenants
-            if user.get("role") not in ["admin", "msp"]:
+            # Check if user has access to the target tenant
+            accessible_tenants = user.get("accessible_tenants", [])
+            is_msp_user = user.get("is_msp_user", False)
+            
+            # MSP users have access to all tenants, or check if target tenant is in accessible list
+            if not is_msp_user and target_tenant_id not in accessible_tenants:
                 raise HTTPException(
                     status_code=403, 
                     detail="Not authorized to access credentials for other tenants"
@@ -315,8 +326,12 @@ def list_subscriptions(
         
         # If target_tenant_id is provided, check if user has permission to access other tenants
         if target_tenant_id and target_tenant_id != user["tenant_id"]:
-            # Only admin or MSP users can access other tenants
-            if user.get("role") not in ["admin", "msp"]:
+            # Check if user has access to the target tenant
+            accessible_tenants = user.get("accessible_tenants", [])
+            is_msp_user = user.get("is_msp_user", False)
+            
+            # MSP users have access to all tenants, or check if target tenant is in accessible list
+            if not is_msp_user and target_tenant_id not in accessible_tenants:
                 raise HTTPException(
                     status_code=403, 
                     detail="Not authorized to access credentials for other tenants"
@@ -360,7 +375,11 @@ def create_deployment(
         # If target_tenant_id is provided, check if user has permission to deploy for other tenants
         if target_tenant_id and target_tenant_id != user["tenant_id"]:
             # Only admin or MSP users can deploy for other tenants
-            if user.get("role") not in ["admin", "msp"]:
+            accessible_tenants = user.get("accessible_tenants", [])
+            is_msp_user = user.get("is_msp_user", False)
+            
+            # MSP users have access to all tenants, or check if target tenant is in accessible list
+            if not is_msp_user and target_tenant_id not in accessible_tenants:
                 raise HTTPException(
                     status_code=403, 
                     detail="Not authorized to create deployments for other tenants"
@@ -556,8 +575,12 @@ def get_resource_details(
         
         # If target_tenant_id is provided, check if user has permission to access other tenants
         if target_tenant_id and target_tenant_id != user["tenant_id"]:
-            # Only admin or MSP users can access other tenants
-            if user.get("role") not in ["admin", "msp"]:
+            # Check if user has access to the target tenant
+            accessible_tenants = user.get("accessible_tenants", [])
+            is_msp_user = user.get("is_msp_user", False)
+            
+            # MSP users have access to all tenants, or check if target tenant is in accessible list
+            if not is_msp_user and target_tenant_id not in accessible_tenants:
                 raise HTTPException(
                     status_code=403, 
                     detail="Not authorized to access resources for other tenants"
@@ -662,8 +685,12 @@ def list_resource_providers(
         
         # If target_tenant_id is provided, check if user has permission to access other tenants
         if target_tenant_id and target_tenant_id != user["tenant_id"]:
-            # Only admin or MSP users can access other tenants
-            if user.get("role") not in ["admin", "msp"]:
+            # Check if user has access to the target tenant
+            accessible_tenants = user.get("accessible_tenants", [])
+            is_msp_user = user.get("is_msp_user", False)
+            
+            # MSP users have access to all tenants, or check if target tenant is in accessible list
+            if not is_msp_user and target_tenant_id not in accessible_tenants:
                 raise HTTPException(
                     status_code=403, 
                     detail="Not authorized to access resources for other tenants"
@@ -769,10 +796,14 @@ def get_resource_provider(
         # Determine which tenant to use
         tenant_id = user["tenant_id"]
         
-        # If target_tenant_id is provided, check if user has permission to access other tenants
+        # If target_tenant_id is provided, check if user has access to that tenant
         if target_tenant_id and target_tenant_id != user["tenant_id"]:
-            # Only admin or MSP users can access other tenants
-            if user.get("role") not in ["admin", "msp"]:
+            # Check if user has access to the target tenant
+            accessible_tenants = user.get("accessible_tenants", [])
+            is_msp_user = user.get("is_msp_user", False)
+            
+            # MSP users have access to all tenants, or check if target tenant is in accessible list
+            if not is_msp_user and target_tenant_id not in accessible_tenants:
                 raise HTTPException(
                     status_code=403, 
                     detail="Not authorized to access resources for other tenants"
@@ -875,10 +906,14 @@ def query_azure_resource_graph(
         # Determine which tenant to use
         tenant_id = user["tenant_id"]
         
-        # If target_tenant_id is provided, check if user has permission to access other tenants
+        # If target_tenant_id is provided, check if user has access to that tenant
         if target_tenant_id and target_tenant_id != user["tenant_id"]:
-            # Only admin or MSP users can access other tenants
-            if user.get("role") not in ["admin", "msp"]:
+            # Check if user has access to the target tenant
+            accessible_tenants = user.get("accessible_tenants", [])
+            is_msp_user = user.get("is_msp_user", False)
+            
+            # MSP users have access to all tenants, or check if target tenant is in accessible list
+            if not is_msp_user and target_tenant_id not in accessible_tenants:
                 raise HTTPException(
                     status_code=403, 
                     detail="Not authorized to access resources for other tenants"
@@ -965,10 +1000,14 @@ def get_subscription_locations(
         # Determine which tenant to use
         tenant_id = user["tenant_id"]
         
-        # If target_tenant_id is provided, check if user has permission to access other tenants
+        # If target_tenant_id is provided, check if user has access to that tenant
         if target_tenant_id and target_tenant_id != user["tenant_id"]:
-            # Only admin or MSP users can access other tenants
-            if user.get("role") not in ["admin", "msp"]:
+            # Check if user has access to the target tenant
+            accessible_tenants = user.get("accessible_tenants", [])
+            is_msp_user = user.get("is_msp_user", False)
+            
+            # MSP users have access to all tenants, or check if target tenant is in accessible list
+            if not is_msp_user and target_tenant_id not in accessible_tenants:
                 raise HTTPException(
                     status_code=403, 
                     detail="Not authorized to access resources for other tenants"
