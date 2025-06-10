@@ -55,7 +55,7 @@ def get_template_categories(
                 )
 
             # Check if user has access to this tenant using the proper multi-tenant method
-            if not user_has_admin_or_msp_role(current_user, template_tenant_id):
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
                 if not current_user.has_tenant_access(tenant_id):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
@@ -145,7 +145,7 @@ def get_templates(
                     )
                 
                 # Check if user has access to this tenant
-                if not user_has_admin_or_msp_role(current_user, template_tenant_id) and not current_user.has_tenant_access(tenant_id):
+                if not user_has_admin_or_msp_role(current_user, tenant_id) and not current_user.has_tenant_access(tenant_id):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to view templates for this tenant"
