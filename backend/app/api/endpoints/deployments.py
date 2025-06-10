@@ -69,7 +69,7 @@ def get_azure_credentials(
     Get all Azure credentials for the tenant
     """
     # Check if user has permission to view credentials
-    if not user_has_any_permission(current_user, ["list:deployments"], tenant_id):
+    if not user_has_any_permission(current_user, ["list:azure_credentials"], tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -160,8 +160,8 @@ def set_azure_credentials(
     """
     Set Azure credentials for deployments
     """
-    # Check if user has permission to manage credentials
-    if not user_has_any_permission(current_user, ["manage:deployments"], tenant_id):
+    # Check if user has permission to create credentials
+    if not user_has_any_permission(current_user, ["create:azure_credentials"], tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -220,7 +220,7 @@ def get_azure_credential(
     Get a specific Azure credential by settings_id
     """
     # Check if user has permission to view credentials
-    if not user_has_any_permission(current_user, ["list:deployments"], tenant_id):
+    if not user_has_any_permission(current_user, ["list:azure_credentials"], tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -300,8 +300,8 @@ def delete_azure_credential(
     """
     Delete a specific Azure credential by settings_id
     """
-    # Check if user has permission to manage credentials
-    if not user_has_any_permission(current_user, ["manage:deployments"], tenant_id):
+    # Check if user has permission to delete credentials
+    if not user_has_any_permission(current_user, ["delete:azure_credentials"], tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
@@ -514,7 +514,7 @@ def list_azure_subscriptions(
     Otherwise, the current user's tenant ID will be used.
     """
     # Check if user has permission to view credentials
-    if not user_has_any_permission(current_user, ["list:deployments"], tenant_id):
+    if not user_has_any_permission(current_user, ["list:azure_credentials"], tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
