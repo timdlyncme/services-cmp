@@ -53,7 +53,7 @@ def get_users(
     if not has_permission_in_tenant(current_user, "list:users", target_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to view users in this tenant"
+            detail="Not enough permissions"
         )
     
     try:
@@ -174,7 +174,7 @@ def get_user(
     if not has_permission_in_tenant(current_user, "list:users", operation_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to view users in this tenant"
+            detail="Not enough permissions"
         )
     
     try:
@@ -198,7 +198,7 @@ def get_user(
             if not current_user_accessible_tenants.intersection(target_user_tenant_ids):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to access this user"
+                    detail="Not enough permissions"
                 )
         
         # Convert role object to role name
@@ -262,7 +262,7 @@ def create_user(
         if not has_global_permission(current_user, "create:msp-users"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions to create MSP users"
+                detail="Not enough permissions"
             )
     else:
         # Creating regular user requires tenant permission
@@ -275,7 +275,7 @@ def create_user(
         if not has_permission_in_tenant(current_user, "create:users", target_tenant_id, db):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions to create users in this tenant"
+                detail="Not enough permissions"
             )
     
     try:
@@ -431,7 +431,7 @@ def update_user(
     if not has_permission_in_tenant(current_user, "update:users", operation_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to update users in this tenant"
+            detail="Not enough permissions"
         )
     
     try:
@@ -454,7 +454,7 @@ def update_user(
             if not current_user_accessible_tenants.intersection(target_user_tenant_ids):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to update this user"
+                    detail="Not enough permissions"
                 )
         
         # Update basic user fields
@@ -584,7 +584,7 @@ def delete_user(
     if not has_permission_in_tenant(current_user, "delete:users", operation_tenant_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to delete users in this tenant"
+            detail="Not enough permissions"
         )
     
     try:
@@ -607,7 +607,7 @@ def delete_user(
             if not current_user_accessible_tenants.intersection(target_user_tenant_ids):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to delete this user"
+                    detail="Not enough permissions"
                 )
         
         # Prevent self-deletion
