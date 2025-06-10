@@ -9,11 +9,10 @@ from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import Tenant, User
 from app.schemas.tenant import TenantResponse, TenantCreate, TenantUpdate
-from app.core.permissions import has_global_permission, get_user_accessible_tenants
+from app.core.permissions import get_user_accessible_tenants
 from app.core.tenant_utils import (
     resolve_tenant_context,
     get_user_role_name_in_tenant,
-    user_has_admin_or_msp_role,
     user_has_any_permission
 )
 
@@ -36,8 +35,16 @@ def get_tenants(
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
     try:
-        # MSP users can see all tenants
-        if current_user.is_msp_user and has_global_permission(current_user, "list:all-tenants"):
+        # Check if user has permission to list tenants
+        has_permission = user_has_any_permission(current_user, ["list:tenants", "list:all-tenants"], None)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
+        
+        # MSP users with global permissions can see all tenants
+        if user_has_any_permission(current_user, ["list:all-tenants"], None):
             tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
         else:
             # Regular users can only see their assigned tenants
