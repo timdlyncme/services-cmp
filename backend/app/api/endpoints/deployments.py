@@ -621,12 +621,6 @@ def get_deployments(
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
-    # Handle empty string tenant_id (convert to None)
-    if tenant_id is not None and tenant_id.strip() == "":
-        tenant_id = None
-    
-    logger.debug(f"get_deployments called with tenant_id: '{tenant_id}' (type: {type(tenant_id)})")
-    
     # Check if user has permission to view deployments
     has_permission = user_has_any_permission(current_user, ["list:deployments"], tenant_id)
     if not has_permission:
@@ -653,28 +647,25 @@ def get_deployments(
         if tenant_id:
             # Handle different tenant ID formats
             try:
-                logger.debug(f"Processing tenant_id: '{tenant_id}' (type: {type(tenant_id)})")
-                
                 # Remove 'tenant-' prefix if present
                 if tenant_id.startswith('tenant-'):
                     tenant_id = tenant_id[7:]
                 
-                logger.debug(f"After prefix removal: '{tenant_id}'")
-                
                 # Check if tenant exists
                 tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
                 if not tenant:
-                    logger.warning(f"Tenant not found: {tenant_id}")
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail=f"Tenant with ID {tenant_id} not found"
                     )
                 
-                logger.debug(f"Found tenant: {tenant.name} (ID: {tenant.tenant_id})")
-                logger.debug(f"Current user tenant_id: {current_user.tenant_id}")
-                
+                # Add debug logging for tenant access
+                has_tenant_access = current_user.has_tenant_access(tenant.tenant_id)
+                has_admin_or_msp = user_has_admin_or_msp_role(current_user, tenant.tenant_id)
+                logger.debug(f"User {current_user.username} access check for tenant {tenant.tenant_id}: has_tenant_access={has_tenant_access}, has_admin_or_msp={has_admin_or_msp}")
+
                 # Check if user has access to this tenant
-                if tenant.tenant_id != current_user.tenant_id and not user_has_admin_or_msp_role(current_user, tenant.tenant_id):
+                if not has_tenant_access and not has_admin_or_msp:
                     logger.warning(f"User {current_user.username} not authorized for tenant {tenant_id}")
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
@@ -682,11 +673,7 @@ def get_deployments(
                     )
                 
                 query = query.filter(Tenant.tenant_id == tenant_id)
-            except HTTPException:
-                # Re-raise HTTP exceptions as-is
-                raise
             except Exception as e:
-                logger.error(f"Exception in tenant filtering: {str(e)}, tenant_id: '{tenant_id}'")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid tenant ID format: {str(e)}"
@@ -910,6 +897,11 @@ def create_deployment(
                     detail=f"Tenant with ID {tenant_id} not found"
                 )
             
+                # Add debug logging for tenant access
+                has_tenant_access = current_user.has_tenant_access(tenant.tenant_id)
+                has_admin_or_msp = user_has_admin_or_msp_role(current_user, tenant.tenant_id)
+                logger.debug(f"User {current_user.username} access check for tenant {tenant.tenant_id}: has_tenant_access={has_tenant_access}, has_admin_or_msp={has_admin_or_msp}")
+
             # Check if user has access to this tenant
             if tenant_id != current_user.tenant_id:
                 # Only admin or MSP users can create deployments for other tenants
