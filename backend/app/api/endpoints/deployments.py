@@ -28,7 +28,6 @@ from app.schemas.deployment import (
 from app.core.tenant_utils import (
     resolve_tenant_context,
     get_user_role_name_in_tenant,
-    user_has_admin_or_msp_role,
     user_has_any_permission
 )
 
@@ -69,33 +68,31 @@ def get_azure_credentials(
     """
     Get all Azure credentials for the tenant
     """
+    # Resolve tenant context
+    target_tenant_id = resolve_tenant_context(current_user, tenant_id)
+    
+    if not target_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must provide a valid tenant"
+        )
+    
     # Check if user has permission to view credentials
-    if not user_has_any_permission(current_user, ["list:deployments"], tenant_id):
+    if not user_has_any_permission(current_user, ["list:deployments"], target_tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
-        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
-        
         # Check if tenant exists
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == target_tenant_id).first()
         if not tenant:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tenant with ID {creds_tenant_id} not found"
+                detail=f"Tenant with ID {target_tenant_id} not found"
             )
-        
-        # Check if user has permission to view credentials for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can view credentials for other tenants
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to view credentials for other tenants"
         
         # Get all credentials from database
         creds_list = db.query(CloudSettings).filter(
-            CloudSettings.tenant_id == creds_tenant_id,
+            CloudSettings.tenant_id == target_tenant_id,
             CloudSettings.provider == "azure"
         ).all()
         
@@ -108,8 +105,8 @@ def get_azure_credentials(
         # Prepare parameters for the deployment engine
         params = {}
         # If we're working with a different tenant than the user's primary, pass target_tenant_id
-        if creds_tenant_id != current_user.tenant.tenant_id:
-            params["target_tenant_id"] = creds_tenant_id
+        if target_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = target_tenant_id
         
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
@@ -160,29 +157,27 @@ def set_azure_credentials(
     """
     Set Azure credentials for deployments
     """
+    # Resolve tenant context
+    target_tenant_id = resolve_tenant_context(current_user, tenant_id)
+    
+    if not target_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must provide a valid tenant"
+        )
+    
     # Check if user has permission to manage credentials
-    if not user_has_any_permission(current_user, ["manage:deployments"], tenant_id):
+    if not user_has_any_permission(current_user, ["manage:deployments"], target_tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
-        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
-        
         # Check if tenant exists
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == target_tenant_id).first()
         if not tenant:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tenant with ID {creds_tenant_id} not found"
+                detail=f"Tenant with ID {target_tenant_id} not found"
             )
-        
-        # Check if user has permission to create for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can create for other tenants
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to create credentials for other tenants"
         
         # Create new credentials with connection_details as JSON
         new_creds = CloudSettings(
@@ -193,7 +188,7 @@ def set_azure_credentials(
                 "client_secret": credentials.client_secret,
                 "tenant_id": credentials.tenant_id
             },
-            tenant_id=creds_tenant_id
+            tenant_id=target_tenant_id
         )
         db.add(new_creds)
         db.commit()
@@ -205,8 +200,8 @@ def set_azure_credentials(
         # Prepare parameters for deployment engine
         params = {}
         # If we're working with a different tenant than the user's primary, pass target_tenant_id
-        if creds_tenant_id != current_user.tenant.tenant_id:
-            params["target_tenant_id"] = creds_tenant_id
+        if target_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = target_tenant_id
         
         response = requests.post(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
@@ -239,40 +234,35 @@ def get_azure_credential(
     """
     Get a specific Azure credential by settings_id
     """
+    # Resolve tenant context
+    target_tenant_id = resolve_tenant_context(current_user, tenant_id)
+    
+    if not target_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must provide a valid tenant"
+        )
+    
     # Check if user has permission to view credentials
-    if not user_has_any_permission(current_user, ["list:deployments"], tenant_id):
+    if not user_has_any_permission(current_user, ["list:deployments"], target_tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
-        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
-        
         # Check if tenant exists
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == target_tenant_id).first()
         if not tenant:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tenant with ID {creds_tenant_id} not found"
+                detail=f"Tenant with ID {target_tenant_id} not found"
             )
-        
-        # Check if user has permission to view credentials for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can view credentials for other tenants
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to view credentials for other tenants"
         
         # Get credential from database
         creds = db.query(CloudSettings).filter(
-            CloudSettings.tenant_id == creds_tenant_id,
+            CloudSettings.tenant_id == target_tenant_id,
             CloudSettings.provider == "azure",
             CloudSettings.settings_id == settings_id
         ).first()
-        
-        if not creds:
-            raise HTTPException(status_code=404, detail="Credential not found")
-        
+
         # Forward request to deployment engine to check status
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
         
@@ -280,8 +270,8 @@ def get_azure_credential(
         params = {"settings_id": settings_id}
         
         # If accessing a different tenant, pass target_tenant_id
-        if creds_tenant_id != current_user.tenant.tenant_id:
-            params["target_tenant_id"] = creds_tenant_id
+        if target_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = target_tenant_id
         
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
@@ -320,56 +310,36 @@ def delete_azure_credential(
     """
     Delete a specific Azure credential by settings_id
     """
+    # Resolve tenant context
+    target_tenant_id = resolve_tenant_context(current_user, tenant_id)
+    
+    if not target_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must provide a valid tenant"
+        )
+    
     # Check if user has permission to manage credentials
-    if not user_has_any_permission(current_user, ["manage:deployments"], tenant_id):
+    if not user_has_any_permission(current_user, ["manage:deployments"], target_tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
-        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
-        
         # Check if tenant exists
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == target_tenant_id).first()
         if not tenant:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tenant with ID {creds_tenant_id} not found"
+                detail=f"Tenant with ID {target_tenant_id} not found"
             )
-        
-        # Check if user has permission to delete credentials for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can delete credentials for other tenants
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to delete credentials for other tenants"
         
         # Get credential from database
         creds = db.query(CloudSettings).filter(
-            CloudSettings.tenant_id == creds_tenant_id,
+            CloudSettings.tenant_id == target_tenant_id,
             CloudSettings.provider == "azure",
             CloudSettings.settings_id == settings_id
         ).first()
-        
-        if not creds:
-            raise HTTPException(status_code=404, detail="Credential not found")
-        
-        # Check if credential is in use by any cloud accounts
-        in_use = db.query(CloudAccount).filter(
-            CloudAccount.settings_id == creds.id
-        ).first()
-        
-        if in_use:
-            raise HTTPException(
-                status_code=400, 
-                detail="Cannot delete credential that is in use by cloud accounts"
-            )
-        
-        # Delete credential
-        db.delete(creds)
-        db.commit()
-        
-        return {"message": "Azure credential deleted successfully"}
+
+        # ... rest of existing code ...
     
     except HTTPException:
         raise
@@ -529,45 +499,37 @@ def list_azure_subscriptions(
     tenant_id: Optional[str] = None
 ):
     """
-    List available Azure subscriptions for a specific credential
-    
-    If tenant_id is provided, it will be used to filter the credentials.
-    Otherwise, the current user's tenant ID will be used.
+    List Azure subscriptions for a specific credential
     """
-    # Check if user has permission to view credentials
-    if not user_has_any_permission(current_user, ["list:deployments"], tenant_id):
+    # Resolve tenant context
+    target_tenant_id = resolve_tenant_context(current_user, tenant_id)
+    
+    if not target_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must provide a valid tenant"
+        )
+    
+    # Check if user has permission to list subscriptions
+    if not user_has_any_permission(current_user, ["list:deployments"], target_tenant_id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     try:
-        # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        account_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
-        
         # Check if tenant exists
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == account_tenant_id).first()
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == target_tenant_id).first()
         if not tenant:
             raise HTTPException(
                 status_code=404,
-                detail=f"Tenant with ID {account_tenant_id} not found"
+                detail=f"Tenant with ID {target_tenant_id} not found"
             )
-        
-        # Check if user has permission to access this tenant
-        if account_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can access other tenants
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=403,
-                    detail="Not authorized to access credentials for other tenants"
         
         # Get credential from database
         creds = db.query(CloudSettings).filter(
-            CloudSettings.tenant_id == account_tenant_id,
+            CloudSettings.tenant_id == target_tenant_id,
             CloudSettings.provider == "azure",
             CloudSettings.settings_id == settings_id
         ).first()
-        
-        if not creds:
-            raise HTTPException(status_code=404, detail="Credential not found")
-        
+
         # Forward request to deployment engine with settings_id parameter
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
         
@@ -575,8 +537,8 @@ def list_azure_subscriptions(
         params = {"settings_id": settings_id}
         
         # If accessing a different tenant, pass target_tenant_id
-        if account_tenant_id != current_user.tenant.tenant_id:
-            params["target_tenant_id"] = account_tenant_id
+        if target_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = target_tenant_id
         
         # Call the subscriptions endpoint with parameters
         response = requests.get(
@@ -606,7 +568,10 @@ def list_azure_subscriptions(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving subscriptions: {str(e)}"
+        )
 
 @router.get("/", tags=["deployments"], response_model=List[CloudDeploymentResponse])
 def get_deployments(
@@ -615,7 +580,7 @@ def get_deployments(
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Get all deployments for the current user's tenant or a specific tenant
+    Get all deployments for a specific tenant
     """
     # Add CORS headers
     response = Response()
@@ -623,8 +588,17 @@ def get_deployments(
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
+    # Resolve tenant context - tenant_id is now required
+    target_tenant_id = resolve_tenant_context(current_user, tenant_id)
+    
+    if not target_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must provide a valid tenant"
+        )
+    
     # Check if user has permission to view deployments
-    has_permission = user_has_any_permission(current_user, ["list:deployments"], tenant_id)
+    has_permission = user_has_any_permission(current_user, ["list:deployments"], target_tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -642,50 +616,30 @@ def get_deployments(
             Tenant, Deployment.tenant_id == Tenant.tenant_id  # Join on tenant_id (UUID) instead of id (Integer)
         )
         
-        # Get the user's tenant
-        user_tenant = db.query(Tenant).filter(Tenant.tenant_id == current_user.tenant_id).first()
-        
-        # Filter by tenant if specified
-        if tenant_id:
-            # Handle different tenant ID formats
-            try:
-                # Remove 'tenant-' prefix if present
-                if tenant_id.startswith('tenant-'):
-                    tenant_id = tenant_id[7:]
-                
-                # Check if tenant exists
-                tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
-                if not tenant:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Tenant with ID {tenant_id} not found"
-                    )
-                
-                # Check if user has access to this tenant - admins must also have tenant access
-                if not current_user.has_tenant_access(tenant.tenant_id):
-                    logger.warning(f"User {current_user.username} does not have access to tenant {tenant_id}")
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Not authorized to view deployments for this tenant"
-                    )
-                
-                query = query.filter(Tenant.tenant_id == tenant_id)
-            except Exception as e:
+        # Handle different tenant ID formats
+        try:
+            # Remove 'tenant-' prefix if present
+            if target_tenant_id.startswith('tenant-'):
+                target_tenant_id = target_tenant_id[7:]
+            
+            # Check if tenant exists
+            tenant = db.query(Tenant).filter(Tenant.tenant_id == target_tenant_id).first()
+            if not tenant:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid tenant ID format: {str(e)}"
-        else:
-            # No tenant specified, show deployments from the user's tenant
-            if user_has_admin_or_msp_role(current_user, tenant_id):
-                # Admin and MSP users can see all deployments if no tenant is specified
-                pass
-            else:
-                # Regular users can only see deployments from their tenant
-                if user_tenant:
-                    query = query.filter(Tenant.tenant_id == user_tenant.tenant_id)
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Tenant with ID {target_tenant_id} not found"
+                )
+            
+            # Filter by the resolved tenant
+            query = query.filter(Tenant.tenant_id == target_tenant_id)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid tenant ID format: {str(e)}"
+            )
         
         results = query.all()
-        
+
         # Convert to frontend-compatible format
         deployments = []
         for deployment, template, environment, tenant in results:
@@ -1169,4 +1123,4 @@ def update_deployment(
             )
         
         deployment, template, environment, tenant = result
-        
+</initial_code>

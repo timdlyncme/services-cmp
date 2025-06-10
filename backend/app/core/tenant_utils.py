@@ -289,20 +289,29 @@ def resolve_tenant_context(user: "User", request_tenant_id: str = None) -> str:
     """
     Resolve the appropriate tenant context for a user.
     
+    IMPORTANT: This function now requires explicit tenant_id and does NOT default to primary tenant.
+    This ensures proper multi-tenant behavior where users must explicitly specify which tenant 
+    context they want to operate in.
+    
     Args:
         user: The user object
-        request_tenant_id: Tenant ID from request (query param, etc.)
+        request_tenant_id: Tenant ID from request (query param, etc.) - REQUIRED
         
     Returns:
-        str: The resolved tenant ID
+        str: The resolved tenant ID if valid, None if invalid/missing
+        
+    Raises:
+        No exceptions - returns None for invalid cases, let calling endpoint handle error
     """
-    # If tenant_id is provided in request, use it (if user has access)
-    if request_tenant_id and user.has_tenant_access(request_tenant_id):
-        return request_tenant_id
+    # Tenant ID is now required - no defaulting to primary tenant
+    if not request_tenant_id:
+        return None
     
-    # Otherwise, use primary tenant
-    primary_assignment = user.get_primary_tenant_assignment()
-    return primary_assignment.tenant_id if primary_assignment else None
+    # Validate user has access to the requested tenant
+    if not user.has_tenant_access(request_tenant_id):
+        return None
+    
+    return request_tenant_id
 
 def get_user_accessible_tenant_ids(user: User, db: Session) -> List[str]:
     """
