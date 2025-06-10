@@ -17,7 +17,6 @@ from app.core.permissions import has_permission_in_tenant
 from app.core.tenant_utils import (
     resolve_tenant_context,
     get_user_role_name_in_tenant,
-    user_has_admin_or_msp_role
 )
 import requests
 
@@ -228,15 +227,6 @@ def create_cloud_account(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Tenant with ID {account_tenant_id} not found"
             )
-        
-        # Check if user has permission to create for this tenant
-        if account_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can create for other tenants
-            if not user_has_admin_or_msp_role(current_user, account_tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to create cloud accounts for other tenants"
-                )
         
         # Get cloud settings if settings_id is provided
         cloud_settings = None
