@@ -484,14 +484,6 @@ def update_template(
     """
     Update a template
     """
-    # Check if user has permission to update templates
-    has_permission = user_has_any_permission(current_user, ["update:templates"], tenant_id)
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
     try:
         template = db.query(Template).filter(Template.template_id == template_id).first()
         
@@ -501,15 +493,26 @@ def update_template(
                 detail=f"Template with ID {template_id} not found"
             )
         
-        # Check if user has access to update this template
-        if not template.is_public and template.tenant_id != current_user.tenant_id:
-            # Admin users can update all templates
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to update this template"
-                )
+        # Get tenant_id from the template
+        tenant_id = template.tenant_id
         
+        # Check if user has permission to update templates
+        has_permission = user_has_any_permission(current_user, ["update:templates"], tenant_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
+        
+        # Check if user has access to update this template using proper multi-tenant method
+        if not template.is_public:
+            if not user_has_admin_or_msp_role(current_user, tenant_id):
+                if not current_user.has_tenant_access(tenant_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Not authorized to update this template"
+                    )
+
         # Update template fields
         if template_update.name is not None:
             template.name = template_update.name
