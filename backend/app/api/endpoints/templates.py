@@ -55,7 +55,7 @@ def get_template_categories(
                 )
 
             # Check if user has access to this tenant using the proper multi-tenant method
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
+            if not user_has_admin_or_msp_role(current_user, template_tenant_id):
                 if not current_user.has_tenant_access(tenant_id):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
@@ -145,7 +145,7 @@ def get_templates(
                     )
                 
                 # Check if user has access to this tenant
-                if not user_has_admin_or_msp_role(current_user, tenant_id) and not current_user.has_tenant_access(tenant_id):
+                if not user_has_admin_or_msp_role(current_user, template_tenant_id) and not current_user.has_tenant_access(tenant_id):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Not authorized to view templates for this tenant"
@@ -261,13 +261,15 @@ def get_template(
             )
         
         # Check if user has access to this template
-        if not template.is_public and template.tenant_id != current_user.tenant_id:
-            # Admin users can view all templates
-            if not user_has_admin_or_msp_role(current_user, current_user.tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to access this template"
-                )
+        # Check if user has access to this template using proper multi-tenant method
+        if not template.is_public:
+            template_tenant_id = template.tenant_id
+            if not user_has_admin_or_msp_role(current_user, template_tenant_id):
+                if not current_user.has_tenant_access(template_tenant_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Not authorized to access this template"
+                    )
         
         # Get tenant ID for the template
         tenant_id = "public"
@@ -379,7 +381,7 @@ def create_template(
         # Check if user has permission to create for this tenant
         if template_tenant_id != current_user.tenant_id:
             # Only admin or MSP users can create for other tenants
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
+            if not user_has_admin_or_msp_role(current_user, template_tenant_id):
                 logger.warning(f"User {current_user.username} not authorized to create templates for tenant {template_tenant_id}")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -506,13 +508,14 @@ def update_template(
         
         # Check if user has access to update this template using proper multi-tenant method
         if not template.is_public:
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                if not current_user.has_tenant_access(tenant_id):
+            template_tenant_id = template.tenant_id
+            if not user_has_admin_or_msp_role(current_user, template_tenant_id):
+                if not current_user.has_tenant_access(template_tenant_id):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Not authorized to update this template"
+                        detail="Not authorized to access this template"
                     )
-
+        
         # Update template fields
         if template_update.name is not None:
             template.name = template_update.name
@@ -658,13 +661,15 @@ def delete_template(
             )
         
         # Check if user has access to delete this template
-        if not template.is_public and template.tenant_id != current_user.tenant_id:
-            # Admin users can delete all templates
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to delete this template"
-                )
+        # Check if user has access to delete this template using proper multi-tenant method
+        if not template.is_public:
+            template_tenant_id = template.tenant_id
+            if not user_has_admin_or_msp_role(current_user, template_tenant_id):
+                if not current_user.has_tenant_access(template_tenant_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Not authorized to delete this template"
+                    )
         
         # Check if template is used by any deployments
         deployments = db.query(Deployment).filter(Deployment.template_id == template.id).first()
@@ -721,13 +726,15 @@ def get_template_versions(
             )
         
         # Check if user has access to this template
-        if not template.is_public and template.tenant_id != current_user.tenant_id:
-            # Admin users can view all templates
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to access this template"
-                )
+        # Check if user has access to this template using proper multi-tenant method
+        if not template.is_public:
+            template_tenant_id = template.tenant_id
+            if not user_has_admin_or_msp_role(current_user, template_tenant_id):
+                if not current_user.has_tenant_access(template_tenant_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Not authorized to access this template"
+                    )
         
         # Get all versions
         versions = db.query(TemplateVersion).filter(TemplateVersion.template_id == template.id).all()
@@ -786,13 +793,15 @@ def create_template_version(
                 detail=f"Template with ID {template_id} not found"
             )
         
-        # Check if user has access to update this template
-        if not template.is_public and template.tenant_id != current_user.tenant_id:
-            # Admin users can update all templates
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to update this template"
+        # Check if user has access to update this template using proper multi-tenant method
+        if not template.is_public:
+            template_tenant_id = template.tenant_id
+            if not user_has_admin_or_msp_role(current_user, template_tenant_id):
+                if not current_user.has_tenant_access(template_tenant_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Not authorized to update this template"
+                    )
                 )
         
         # Determine the new version number
@@ -887,13 +896,15 @@ def get_template_version(
                 detail=f"Template with ID {template_id} not found"
             )
         
-        # Check if user has access to this template
-        if not template.is_public and template.tenant_id != current_user.tenant_id:
-            # Admin users can view all templates
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to access this template"
+        # Check if user has access to this template using proper multi-tenant method
+        if not template.is_public:
+            template_tenant_id = template.tenant_id
+            if not user_has_admin_or_msp_role(current_user, template_tenant_id):
+                if not current_user.has_tenant_access(template_tenant_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Not authorized to access this template"
+                    )
                 )
         
         # Get the specific version
