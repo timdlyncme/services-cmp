@@ -237,7 +237,7 @@ const TemplateDetails = () => {
       console.log("fetchResourceGroupsForAccount - subscriptionId:", subscriptionId);
       console.log("fetchResourceGroupsForAccount - tenantId:", currentTenant?.tenant_id);
       
-      const query = "resourcecontainers | where type =~ 'microsoft.resources/subscriptions/resourcegroups' | project name, resourceGroup, location";
+      const query = `resourcecontainers | where type =~ 'microsoft.resources/subscriptions/resourcegroups' | where subscriptionId == '${subscriptionId}' | project name, resourceGroup, location`;
       const response = await deploymentService.queryResourceGraph(query, currentTenant?.tenant_id, settingsId, subscriptionId);
       if (response && response.data) {
         // Map location names to display names using the locations data
