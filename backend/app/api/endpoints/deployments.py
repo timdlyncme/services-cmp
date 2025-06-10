@@ -75,7 +75,7 @@ def get_azure_credentials(
     
     try:
         # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        creds_tenant_id = tenant_id if tenant_id else current_user.get_primary_tenant_id()
         
         # Check if tenant exists
         tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
@@ -86,7 +86,7 @@ def get_azure_credentials(
             )
         
         # Check if user has permission to view credentials for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
+        if creds_tenant_id != current_user.get_primary_tenant_id():
             # Only admin or MSP users can view credentials for other tenants
             if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
@@ -110,7 +110,7 @@ def get_azure_credentials(
         params = {}
         
         # If accessing a different tenant, pass target_tenant_id
-        if creds_tenant_id != current_user.tenant.tenant_id:
+        if creds_tenant_id != current_user.get_primary_tenant_id():
             params["target_tenant_id"] = creds_tenant_id
         
         response = requests.get(
@@ -168,7 +168,7 @@ def set_azure_credentials(
     
     try:
         # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        creds_tenant_id = tenant_id if tenant_id else current_user.get_primary_tenant_id()
         
         # Check if tenant exists
         tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
@@ -179,7 +179,7 @@ def set_azure_credentials(
             )
         
         # Check if user has permission to create for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
+        if creds_tenant_id != current_user.get_primary_tenant_id():
             # Only admin or MSP users can create for other tenants
             if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
@@ -204,9 +204,18 @@ def set_azure_credentials(
         
         # Forward credentials to deployment engine
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
+        
+        # Prepare parameters for the deployment engine
+        params = {}
+        
+        # If accessing a different tenant, pass target_tenant_id
+        if creds_tenant_id != current_user.get_primary_tenant_id():
+            params["target_tenant_id"] = creds_tenant_id
+        
         response = requests.post(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
             headers=headers,
+            params=params,
             json={
                 "client_id": credentials.client_id,
                 "client_secret": credentials.client_secret,
@@ -240,7 +249,7 @@ def get_azure_credential(
     
     try:
         # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        creds_tenant_id = tenant_id if tenant_id else current_user.get_primary_tenant_id()
         
         # Check if tenant exists
         tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
@@ -251,7 +260,7 @@ def get_azure_credential(
             )
         
         # Check if user has permission to view credentials for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
+        if creds_tenant_id != current_user.get_primary_tenant_id():
             # Only admin or MSP users can view credentials for other tenants
             if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
@@ -276,7 +285,7 @@ def get_azure_credential(
         params = {"settings_id": settings_id}
         
         # If accessing a different tenant, pass target_tenant_id
-        if creds_tenant_id != current_user.tenant.tenant_id:
+        if creds_tenant_id != current_user.get_primary_tenant_id():
             params["target_tenant_id"] = creds_tenant_id
         
         response = requests.get(
@@ -322,7 +331,7 @@ def delete_azure_credential(
     
     try:
         # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        creds_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        creds_tenant_id = tenant_id if tenant_id else current_user.get_primary_tenant_id()
         
         # Check if tenant exists
         tenant = db.query(Tenant).filter(Tenant.tenant_id == creds_tenant_id).first()
@@ -333,7 +342,7 @@ def delete_azure_credential(
             )
         
         # Check if user has permission to delete credentials for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
+        if creds_tenant_id != current_user.get_primary_tenant_id():
             # Only admin or MSP users can delete credentials for other tenants
             if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
@@ -537,7 +546,7 @@ def list_azure_subscriptions(
     
     try:
         # Use the provided tenant_id if it exists, otherwise use the current user's tenant
-        account_tenant_id = tenant_id if tenant_id else current_user.tenant.tenant_id
+        account_tenant_id = tenant_id if tenant_id else current_user.get_primary_tenant_id()
         
         # Check if tenant exists
         tenant = db.query(Tenant).filter(Tenant.tenant_id == account_tenant_id).first()
@@ -548,7 +557,7 @@ def list_azure_subscriptions(
             )
         
         # Check if user has permission to access this tenant
-        if account_tenant_id != current_user.tenant.tenant_id:
+        if account_tenant_id != current_user.get_primary_tenant_id():
             # Only admin or MSP users can access other tenants
             if not user_has_admin_or_msp_role(current_user, tenant_id):
                 raise HTTPException(
@@ -573,7 +582,7 @@ def list_azure_subscriptions(
         params = {"settings_id": settings_id}
         
         # If accessing a different tenant, pass target_tenant_id
-        if account_tenant_id != current_user.tenant.tenant_id:
+        if account_tenant_id != current_user.get_primary_tenant_id():
             params["target_tenant_id"] = account_tenant_id
         
         # Call the subscriptions endpoint with parameters
@@ -882,7 +891,7 @@ def create_deployment(
             )
         
         # Determine which tenant_id to use
-        deployment_tenant_id = current_user.tenant_id
+        deployment_tenant_id = current_user.get_primary_tenant_id()
         if tenant_id:
             # Verify the tenant exists and user has access to it
             tenant_obj = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
@@ -1022,7 +1031,7 @@ def create_deployment(
             headers = {"Authorization": f"Bearer {current_user.access_token}"}
             params = {}
             # If deploying to a different tenant, pass target_tenant_id
-            if deployment_tenant_id != current_user.tenant_id:
+            if deployment_tenant_id != current_user.get_primary_tenant_id():
                 params["target_tenant_id"] = deployment_tenant_id
             
             response = requests.post(
