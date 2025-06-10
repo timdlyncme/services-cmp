@@ -1293,6 +1293,7 @@ def options_deployment_by_id():
 @router.get("/{deployment_id}/logs", tags=["deployments"], response_model=List[Dict[str, Any]])
 def get_deployment_logs(
     deployment_id: str,
+    tenant_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -1338,14 +1339,6 @@ def get_deployment_logs(
         
         deployment, template, environment, tenant = result
         
-        # Check if user has access to this deployment's tenant
-        if deployment.tenant_id != current_user.tenant_id:
-            # Admin users can view all deployments
-            if not user_has_admin_or_msp_role(current_user, deployment.tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to view this deployment"
-                )
         
         # Get logs from deployment_history table
         logs = db.query(DeploymentHistory).filter(
