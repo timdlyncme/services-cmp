@@ -643,7 +643,7 @@ def delete_template(
     Delete a template
     """
     # Check if user has permission to delete templates
-    has_permission = user_has_any_permission(current_user, ["delete:templates"], tenant_id)
+    has_permission = user_has_any_permission(current_user, ["delete:templates"], current_user.tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -777,7 +777,7 @@ def create_template_version(
     Create a new version of a template
     """
     # Check if user has permission to update templates
-    has_permission = user_has_any_permission(current_user, ["update:templates"], tenant_id)
+    has_permission = user_has_any_permission(current_user, ["update:templates"], current_user.tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -879,7 +879,7 @@ def get_template_version(
     Get a specific version of a template
     """
     # Check if user has permission to view templates or catalog
-    has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], tenant_id)
+    has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], current_user.tenant_id)
     if not has_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
