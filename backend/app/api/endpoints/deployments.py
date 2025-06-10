@@ -1219,22 +1219,22 @@ def delete_deployment(
     """
     Delete a deployment and all related records
     """
-    # Check if user has permission to delete deployments
-    has_permission = user_has_any_permission(current_user, ["delete:deployments"], tenant_id)
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
     try:
-        # Get the deployment
+        # First, get the deployment to check if it exists and get its tenant_id
         deployment = db.query(Deployment).filter(Deployment.deployment_id == deployment_id).first()
         
         if not deployment:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Deployment with ID {deployment_id} not found"
+            )
+        
+        # Check if user has permission to delete deployments for this tenant
+        has_permission = user_has_any_permission(current_user, ["delete:deployments"], deployment.tenant_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
             )
         
         # Check if user has access to this deployment's tenant
