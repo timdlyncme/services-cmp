@@ -147,7 +147,7 @@ def poll_deployment_status(deployment_id, resource_group, azure_deployment_id, a
         logger.info(f"Stopped status polling for deployment {deployment_id}")
 
 # Authentication dependency
-def get_current_user(authorization: str = Header(None)):
+def get_current_user(authorization: str = Header(None), request: Request = None):
     if not authorization:
         raise HTTPException(status_code=401, detail="Authorization header missing")
     
@@ -158,9 +158,21 @@ def get_current_user(authorization: str = Header(None)):
         
         logger.debug(f"Validating token via backend API")
         
-        # Use the backend API to validate the token
+        # Extract tenant context from request parameters if available
+        tenant_id = None
+        if request:
+            # Check for target_tenant_id in query parameters
+            tenant_id = request.query_params.get("target_tenant_id")
+            logger.debug(f"Extracted tenant_id from request: {tenant_id}")
+        
+        # Use the backend API to validate the token with tenant context
         headers = {"Authorization": f"Bearer {token}"}
-        response = requests.get(f"{API_URL}/api/auth/me", headers=headers)
+        params = {}
+        if tenant_id:
+            params["tenant_id"] = tenant_id
+            logger.debug(f"Including tenant_id in auth validation: {tenant_id}")
+        
+        response = requests.get(f"{API_URL}/api/auth/me", headers=headers, params=params)
         
         if response.status_code != 200:
             logger.error(f"Token validation failed: {response.text}")
@@ -172,32 +184,34 @@ def get_current_user(authorization: str = Header(None)):
         # Extract user information
         user_id = user_data.get("id")
         username = user_data.get("username")
-        tenant_id = user_data.get("tenantId")  # Use camelCase as returned by backend API
+        current_tenant_id = user_data.get("tenantId")  # This will now be the correct tenant context
         
-        # Extract permissions from user data
+        # Extract permissions from user data (now tenant-aware)
         permissions = user_data.get("permissions", [])
         if not isinstance(permissions, list):
             permissions = []
         
-        # Extract role from user data
+        # Extract role from user data (now tenant-aware)
         role = user_data.get("role", "user")
         
         # Extract multi-tenant access information
         accessible_tenants = user_data.get("accessibleTenants", [])
         is_msp_user = user_data.get("isMspUser", False)
         
-        logger.debug(f"Extracted user info: user_id={user_id}, username={username}, tenant_id={tenant_id}, role={role}")
+        logger.debug(f"Extracted user info: user_id={user_id}, username={username}, tenant_id={current_tenant_id}, role={role}")
         logger.debug(f"Multi-tenant info: accessible_tenants={accessible_tenants}, is_msp_user={is_msp_user}")
+        logger.debug(f"Tenant-aware permissions: {permissions}")
         
         return {
             "user_id": user_id,
             "username": username,
-            "tenant_id": tenant_id,
+            "tenant_id": current_tenant_id,
             "permissions": permissions,
             "role": role,
             "accessible_tenants": accessible_tenants,
             "is_msp_user": is_msp_user,
-            "token": token  # Include the token for background tasks
+            "token": token,  # Include the token for background tasks
+            "requested_tenant_id": tenant_id  # Store the originally requested tenant for validation
         }
     except Exception as e:
         logger.error(f"Authentication error: {str(e)}")
@@ -208,16 +222,38 @@ def check_permission(required_permission: str):
     def check(user: dict = Depends(get_current_user)):
         logger.debug(f"Checking permission: {required_permission}")
         logger.debug(f"User permissions: {user['permissions']}")
+        logger.debug(f"User tenant context: {user['tenant_id']}")
+        logger.debug(f"Requested tenant: {user.get('requested_tenant_id')}")
         
-        # Check if user has the required permission
+        # Validate tenant access if a specific tenant was requested
+        requested_tenant_id = user.get("requested_tenant_id")
+        if requested_tenant_id:
+            accessible_tenants = user.get("accessible_tenants", [])
+            is_msp_user = user.get("is_msp_user", False)
+            
+            # MSP users have access to all tenants, others need explicit access
+            if not is_msp_user and requested_tenant_id not in accessible_tenants:
+                logger.warning(f"User {user['username']} attempted to access tenant {requested_tenant_id} without permission")
+                raise HTTPException(
+                    status_code=403, 
+                    detail=f"You don't have access to tenant {requested_tenant_id}"
+                )
+        
+        # Check if user has the required permission in the current tenant context
         if required_permission in user["permissions"]:
+            logger.debug(f"Permission {required_permission} granted via direct permission")
             return user
         
-        # Check for admin or msp role for manage:deployments
+        # Check for admin or msp role for manage:deployments (backward compatibility)
         if required_permission == "manage:deployments" and user["role"] in ["admin", "msp"]:
+            logger.debug(f"Permission {required_permission} granted via {user['role']} role")
             return user
         
-        raise HTTPException(status_code=403, detail=f"Insufficient permissions. Required: {required_permission}")
+        logger.warning(f"Permission {required_permission} denied for user {user['username']} in tenant {user['tenant_id']}")
+        raise HTTPException(
+            status_code=403, 
+            detail=f"Insufficient permissions. Required: {required_permission}"
+        )
     return check
 
 # Routes

@@ -17,7 +17,8 @@ from app.core.permissions import has_permission_in_tenant
 from app.core.tenant_utils import (
     resolve_tenant_context,
     get_user_role_name_in_tenant,
-    user_has_admin_or_msp_role
+    user_has_admin_or_msp_role,
+    user_has_any_permission
 )
 import requests
 
@@ -507,17 +508,35 @@ def list_azure_subscriptions(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    settings_id: str
+    settings_id: str,
+    tenant_id: Optional[str] = None
 ):
     """
     List available Azure subscriptions for a specific credential
     """
     
     try:
+        # Resolve tenant context
+        from app.core.tenant_utils import user_has_any_permission
+        target_tenant_id = resolve_tenant_context(current_user, tenant_id)
+        
+        if not target_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No tenant context available"
+            )
+        
+        # Check if user has permission to view cloud accounts in this tenant
+        if not user_has_any_permission(current_user, ["list:cloud-accounts"], target_tenant_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
+        
         # Get credential from database
         from app.models.cloud_settings import CloudSettings
         creds = db.query(CloudSettings).filter(
-            CloudSettings.tenant_id == current_user.tenant.tenant_id,
+            CloudSettings.tenant_id == target_tenant_id,
             CloudSettings.provider == "azure",
             CloudSettings.settings_id == settings_id
         ).first()
@@ -528,21 +547,22 @@ def list_azure_subscriptions(
                 detail="Credential not found"
             )
         
-        # Check if user has permission to view cloud accounts in this tenant
-        if not has_permission_in_tenant(current_user, "list:cloud-accounts", creds.tenant_id, db):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions"
-            )
-        
         # Forward request to deployment engine
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
+        
+        # Prepare parameters for the deployment engine
+        params = {"settings_id": settings_id}
+        
+        # If accessing a different tenant, pass target_tenant_id
+        if target_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = target_tenant_id
         
         # First set the credentials
         from app.api.endpoints.deployments import DEPLOYMENT_ENGINE_URL
         set_response = requests.post(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
             headers=headers,
+            params=params,
             json={
                 "client_id": creds.connection_details.get("client_id", "") if creds.connection_details else "",
                 "client_secret": creds.connection_details.get("client_secret", "") if creds.connection_details else "",
@@ -556,7 +576,8 @@ def list_azure_subscriptions(
         # Then list subscriptions
         response = requests.get(
             f"{DEPLOYMENT_ENGINE_URL}/credentials/subscriptions",
-            headers=headers
+            headers=headers,
+            params=params
         )
         
         if response.status_code != 200:

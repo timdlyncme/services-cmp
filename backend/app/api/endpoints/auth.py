@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any
+from typing import Any, Optional
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
@@ -113,10 +113,14 @@ def options_login():
 @router.get("/me", response_model=User)
 def read_users_me(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    tenant_id: Optional[str] = None
 ) -> Any:
     """
     Get current user information with tenant context
+    
+    Args:
+        tenant_id: Optional tenant ID to get permissions for. If not provided, uses primary tenant.
     """
     # Add CORS headers
     response = Response()
@@ -127,16 +131,26 @@ def read_users_me(
     # Get user's accessible tenants
     accessible_tenants = get_user_accessible_tenants(current_user, db)
     
-    # Determine current tenant (primary tenant or first available)
+    # Determine current tenant context
     current_tenant_id = None
-    if current_user.is_msp_user:
-        # MSP users default to the first tenant or their primary tenant
-        primary_assignment = current_user.get_primary_tenant_assignment()
-        current_tenant_id = primary_assignment.tenant_id if primary_assignment else (accessible_tenants[0] if accessible_tenants else None)
+    if tenant_id:
+        # Validate that user has access to the requested tenant
+        if not can_user_switch_to_tenant(current_user, tenant_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"You don't have access to tenant {tenant_id}"
+            )
+        current_tenant_id = tenant_id
     else:
-        # Regular users default to their primary tenant
-        primary_assignment = current_user.get_primary_tenant_assignment()
-        current_tenant_id = primary_assignment.tenant_id if primary_assignment else None
+        # Use primary tenant if no specific tenant requested
+        if current_user.is_msp_user:
+            # MSP users default to the first tenant or their primary tenant
+            primary_assignment = current_user.get_primary_tenant_assignment()
+            current_tenant_id = primary_assignment.tenant_id if primary_assignment else (accessible_tenants[0] if accessible_tenants else None)
+        else:
+            # Regular users default to their primary tenant
+            primary_assignment = current_user.get_primary_tenant_assignment()
+            current_tenant_id = primary_assignment.tenant_id if primary_assignment else None
     
     # Get current role and permissions based on tenant context
     current_role = get_user_role_in_tenant(current_user, current_tenant_id)
