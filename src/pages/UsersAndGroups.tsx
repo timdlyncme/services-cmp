@@ -383,7 +383,6 @@ const UsersAndGroups = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <label htmlFor="tenant-assignments" className="text-sm font-medium">Tenant Assignments</label>
                     <MultiTenantSelector
                       selectedTenants={newUserTenantAssignments}
                       onTenantsChange={setNewUserTenantAssignments}
@@ -451,7 +450,6 @@ const UsersAndGroups = () => {
             </div>
             
             <div className="space-y-2">
-              <label htmlFor="tenant-assignments" className="text-sm font-medium">Tenant Assignments</label>
               <MultiTenantSelector
                 selectedTenants={editUserTenantAssignments}
                 onTenantsChange={setEditUserTenantAssignments}
