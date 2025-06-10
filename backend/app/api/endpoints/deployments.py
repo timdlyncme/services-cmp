@@ -202,20 +202,9 @@ def set_azure_credentials(
         db.commit()
         db.refresh(new_creds)
         
-        # Forward credentials to deployment engine
-        headers = {"Authorization": f"Bearer {current_user.access_token}"}
-        response = requests.post(
-            f"{DEPLOYMENT_ENGINE_URL}/credentials",
-            headers=headers,
-            json={
-                "client_id": credentials.client_id,
-                "client_secret": credentials.client_secret,
-                "tenant_id": credentials.tenant_id
-            }
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Deployment engine error: {response.text}")
+        # Note: Deployment engine now uses database-driven credential management
+        # The POST /credentials endpoint is deprecated and no longer needed
+        # Credentials are automatically loaded from the database when needed
         
         return {"message": "Azure credentials added successfully", "id": str(new_creds.settings_id)}
     
