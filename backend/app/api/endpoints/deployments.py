@@ -108,8 +108,7 @@ def get_azure_credentials(
         
         # Prepare parameters for the deployment engine
         params = {}
-        
-        # If accessing a different tenant, pass target_tenant_id
+        # If we're working with a different tenant than the user's primary, pass target_tenant_id
         if creds_tenant_id != current_user.tenant.tenant_id:
             params["target_tenant_id"] = creds_tenant_id
         
@@ -204,9 +203,17 @@ def set_azure_credentials(
         
         # Forward credentials to deployment engine
         headers = {"Authorization": f"Bearer {current_user.access_token}"}
+        
+        # Prepare parameters for deployment engine
+        params = {}
+        # If we're working with a different tenant than the user's primary, pass target_tenant_id
+        if creds_tenant_id != current_user.tenant.tenant_id:
+            params["target_tenant_id"] = creds_tenant_id
+        
         response = requests.post(
             f"{DEPLOYMENT_ENGINE_URL}/credentials",
             headers=headers,
+            params=params,
             json={
                 "client_id": credentials.client_id,
                 "client_secret": credentials.client_secret,
