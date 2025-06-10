@@ -727,6 +727,7 @@ def get_deployments(
 @router.get("/{deployment_id}", tags=["deployments"], response_model=CloudDeploymentResponse)
 def get_deployment(
     deployment_id: str,
+    tenant_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -743,7 +744,7 @@ def get_deployment(
                 detail=f"Deployment with ID {deployment_id} not found"
             )
         
-        # Check if user has permission to view deployments for this tenant
+        # Check if user has permission to view deployments for this deployment's tenant
         has_permission = user_has_any_permission(current_user, ["list:deployments"], deployment.tenant_id)
         if not has_permission:
             raise HTTPException(
@@ -771,15 +772,6 @@ def get_deployment(
             )
         
         deployment, template, environment, tenant = result
-        
-        # Check if user has access to this deployment's tenant
-        if deployment.tenant_id != current_user.tenant_id:
-            # Admin users can view all deployments
-            if not user_has_admin_or_msp_role(current_user, deployment.tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to access this deployment"
-                )
         
         # Get deployment details if available
         deployment_details = db.query(DeploymentDetails).filter(
