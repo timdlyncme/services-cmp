@@ -85,7 +85,7 @@ def get_azure_credentials(
             )
         
         # Check if user has permission to view credentials for this tenant
-        has_permission = user_has_any_permission(current_user, ["list:azure_credentials"], creds_tenant_id)
+        has_permission = user_has_any_permission(current_user, ["manage:deployments"], creds_tenant_id)
         if not has_permission:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -177,7 +177,7 @@ def set_azure_credentials(
             )
         
         # Check if user has permission to create credentials for this tenant
-        has_permission = user_has_any_permission(current_user, ["create:azure_credentials"], creds_tenant_id)
+        has_permission = user_has_any_permission(current_user, ["manage:deployments"], creds_tenant_id)
         if not has_permission:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -236,7 +236,7 @@ def get_azure_credential(
             )
         
         # Check if user has permission to view credentials for this tenant
-        has_permission = user_has_any_permission(current_user, ["list:azure_credentials"], creds_tenant_id)
+        has_permission = user_has_any_permission(current_user, ["manage:deployments"], creds_tenant_id)
         if not has_permission:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -316,7 +316,7 @@ def delete_azure_credential(
                 detail=f"Tenant with ID {creds_tenant_id} not found"
             )
         # Check if user has permission to delete credentials for this tenant
-        has_permission = user_has_any_permission(current_user, ["delete:azure_credentials"], creds_tenant_id)
+        has_permission = user_has_any_permission(current_user, ["manage:deployments"], creds_tenant_id)
         if not has_permission:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
