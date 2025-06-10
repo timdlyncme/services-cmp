@@ -28,7 +28,6 @@ from app.schemas.deployment import (
 from app.core.tenant_utils import (
     resolve_tenant_context,
     get_user_role_name_in_tenant,
-    user_has_admin_or_msp_role,
     user_has_any_permission
 )
 
@@ -86,13 +85,12 @@ def get_azure_credentials(
             )
         
         # Check if user has permission to view credentials for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can view credentials for other tenants
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to view credentials for other tenants"
-                )
+        has_permission = user_has_any_permission(current_user, ["list:azure_credentials"], creds_tenant_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
         
         # Get all credentials from database
         creds_list = db.query(CloudSettings).filter(
@@ -178,14 +176,13 @@ def set_azure_credentials(
                 detail=f"Tenant with ID {creds_tenant_id} not found"
             )
         
-        # Check if user has permission to create for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can create for other tenants
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to create credentials for other tenants"
-                )
+        # Check if user has permission to create credentials for this tenant
+        has_permission = user_has_any_permission(current_user, ["create:azure_credentials"], creds_tenant_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
         
         # Create new credentials with connection_details as JSON
         new_creds = CloudSettings(
@@ -239,13 +236,12 @@ def get_azure_credential(
             )
         
         # Check if user has permission to view credentials for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can view credentials for other tenants
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to view credentials for other tenants"
-                )
+        has_permission = user_has_any_permission(current_user, ["list:azure_credentials"], creds_tenant_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
         
         # Get credential from database
         creds = db.query(CloudSettings).filter(
@@ -319,15 +315,13 @@ def delete_azure_credential(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Tenant with ID {creds_tenant_id} not found"
             )
-        
         # Check if user has permission to delete credentials for this tenant
-        if creds_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can delete credentials for other tenants
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to delete credentials for other tenants"
-                )
+        has_permission = user_has_any_permission(current_user, ["delete:azure_credentials"], creds_tenant_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
         
         # Get credential from database
         creds = db.query(CloudSettings).filter(
@@ -536,13 +530,12 @@ def list_azure_subscriptions(
             )
         
         # Check if user has permission to access this tenant
-        if account_tenant_id != current_user.tenant.tenant_id:
-            # Only admin or MSP users can access other tenants
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                raise HTTPException(
-                    status_code=403,
-                    detail="Not authorized to access credentials for other tenants"
-                )
+        has_permission = user_has_any_permission(current_user, ["list:cloud_accounts"], account_tenant_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
         
         # Get credential from database
         creds = db.query(CloudSettings).filter(
@@ -663,13 +656,9 @@ def get_deployments(
                 )
         else:
             # No tenant specified, show deployments from the user's tenant
-            if user_has_admin_or_msp_role(current_user, tenant_id):
-                # Admin and MSP users can see all deployments if no tenant is specified
-                pass
-            else:
-                # Regular users can only see deployments from their tenant
-                if user_tenant:
-                    query = query.filter(Tenant.tenant_id == user_tenant.tenant_id)
+            # No tenant specified, show deployments from the user's tenant
+            if user_tenant:
+                query = query.filter(Tenant.tenant_id == user_tenant.tenant_id)
         
         results = query.all()
         
@@ -1107,6 +1096,7 @@ def create_deployment(
 def update_deployment(
     deployment_id: str,
     deployment_update: DeploymentUpdate,
+    tenant_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -1143,14 +1133,13 @@ def update_deployment(
         
         deployment, template, environment, tenant = result
         
-        # Check if user has access to this deployment's tenant
-        if deployment.tenant_id != current_user.tenant_id:
-            # Admin users can update all deployments
-            if not user_has_admin_or_msp_role(current_user, deployment.tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to update this deployment"
-                )
+        # Check if user has permission to update this deployment
+        has_permission = user_has_any_permission(current_user, ["update:deployments"], deployment.tenant_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
         
         # Update deployment
         deployment.name = deployment_update.name
@@ -1196,6 +1185,7 @@ def update_deployment(
 @router.delete("/{deployment_id}", tags=["deployments"])
 def delete_deployment(
     deployment_id: str,
+    tenant_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -1220,14 +1210,6 @@ def delete_deployment(
                 detail="Not enough permissions"
             )
         
-        # Check if user has access to this deployment's tenant
-        if deployment.tenant_id != current_user.tenant_id:
-            # Admin users can delete all deployments
-            if not user_has_admin_or_msp_role(current_user, deployment.tenant_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to delete this deployment"
-                )
         
         # Delete related records in the correct order to maintain referential integrity
         
