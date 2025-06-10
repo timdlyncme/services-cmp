@@ -108,6 +108,11 @@ PERMISSIONS = [
     {"name": "delete:deployments", "description": "Delete deployments", "scope": "tenant"},
     {"name": "manage:deployments", "description": "Manage deployment engine credentials and resources", "scope": "tenant"},
     
+    # Azure Credentials (tenant-scoped)
+    {"name": "list:azure_credentials", "description": "List Azure credentials", "scope": "tenant"},
+    {"name": "create:azure_credentials", "description": "Create Azure credentials", "scope": "tenant"},
+    {"name": "delete:azure_credentials", "description": "Delete Azure credentials", "scope": "tenant"},
+    
     # Settings (tenant-scoped)
     {"name": "view:settings", "description": "View settings page", "scope": "tenant"},
     {"name": "list:settings", "description": "List settings via API", "scope": "tenant"},
@@ -131,7 +136,7 @@ ROLES = [
         "description": "Regular user with limited permissions within assigned tenants",
         "permissions": [
             "view:catalog", "list:catalog", "list:environments", "list:cloud-accounts", "view:deployments", "list:deployments",
-            "create:deployments", "update:deployments", "delete:deployments", "use:ai_assistant"
+            "create:deployments", "update:deployments", "delete:deployments", "list:azure_credentials", "use:ai_assistant"
         ]
     },
     {
@@ -143,7 +148,7 @@ ROLES = [
             "view:environments", "list:environments", "create:environments", "update:environments", "delete:environments",
             "view:catalog", "list:catalog", "view:templates", "list:templates", "create:templates", "update:templates", "delete:templates",
             "view:template-foundry", "list:template-foundry", "create:template-foundry", "update:template-foundry", "delete:template-foundry",
-            "view:deployments", "list:deployments", "create:deployments", "update:deployments", "delete:deployments", "manage:deployments",
+            "view:deployments", "list:deployments", "create:deployments", "update:deployments", "delete:deployments", "manage:deployments", "list:azure_credentials", "create:azure_credentials", "delete:azure_credentials",
             "view:settings", "list:settings", "update:settings", "use:ai_assistant", "use:nexus_ai", "manage:nexus_ai"
         ]
     },
