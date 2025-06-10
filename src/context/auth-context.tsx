@@ -10,6 +10,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   isServerConnected: boolean;
+  isSwitchingTenant: boolean; // Add tenant switching state
+  switchingToTenant: string | null; // Add target tenant name
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   switchTenant: (tenantId: string) => void;
@@ -44,6 +46,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isServerConnected, setIsServerConnected] = useState(false);
+  const [isSwitchingTenant, setIsSwitchingTenant] = useState(false);
+  const [switchingToTenant, setSwitchingToTenant] = useState<string | null>(null);
 
   const checkServerConnection = async (): Promise<boolean> => {
     try {
@@ -226,6 +230,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     
     try {
+      // Find the target tenant name for the loading overlay
+      const targetTenant = tenants.find(t => t.tenant_id === tenantId);
+      const targetTenantName = targetTenant?.name || 'Unknown Tenant';
+      
+      // Start loading state
+      setIsSwitchingTenant(true);
+      setSwitchingToTenant(targetTenantName);
+      
       // Call backend to switch tenant context
       const updatedUser = await authService.switchTenant(tenantId);
       
@@ -238,6 +250,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (tenant) {
           setCurrentTenant(tenant);
           localStorage.setItem("currentTenantId", tenantId);
+          
+          // Small delay to ensure all components have updated
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
           toast.success(`Switched to ${tenant.name}`);
         }
       } else {
@@ -246,6 +262,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error("Tenant switch failed:", error);
       toast.error("Failed to switch tenant");
+    } finally {
+      // End loading state
+      setIsSwitchingTenant(false);
+      setSwitchingToTenant(null);
     }
   };
 
@@ -302,6 +322,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
         isLoading,
         isServerConnected,
+        isSwitchingTenant,
+        switchingToTenant,
         login,
         logout,
         switchTenant,

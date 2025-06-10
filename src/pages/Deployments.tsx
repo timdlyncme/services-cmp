@@ -26,7 +26,7 @@ const API_URL = 'http://localhost:8000/api';
 
 const Deployments = () => {
   const navigate = useNavigate();
-  const { currentTenant, user } = useAuth();
+  const { currentTenant, user, isSwitchingTenant } = useAuth();
   const [deployments, setDeployments] = useState<CloudDeployment[]>([]);
   const [filteredDeployments, setFilteredDeployments] = useState<CloudDeployment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,6 +73,16 @@ const Deployments = () => {
       fetchDeployments();
     }
   }, [currentTenant]);
+
+  // Clear data immediately when tenant switching starts
+  useEffect(() => {
+    if (isSwitchingTenant) {
+      setDeployments([]);
+      setFilteredDeployments([]);
+      setIsLoading(true);
+      setError(null);
+    }
+  }, [isSwitchingTenant]);
 
   useEffect(() => {
     let results = deployments;
