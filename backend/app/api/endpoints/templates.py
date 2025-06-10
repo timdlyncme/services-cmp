@@ -33,8 +33,27 @@ def get_template_categories(
     Get all available template.category with their template counts
     """
     try:
-        # Check if user has permission to view templates or catalog
-        has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], tenant_id)
+        # Determine which tenant to use
+        target_tenant_id = tenant_id
+        if not target_tenant_id:
+            # No tenant specified, use user's primary tenant
+            target_tenant_id = current_user.get_primary_tenant_id()
+        
+        if not target_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No tenant specified and user has no primary tenant"
+            )
+        
+        # Check if user has access to the target tenant
+        if not current_user.has_tenant_access(target_tenant_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this tenant"
+            )
+        
+        # Check if user has permission to view templates or catalog in this tenant
+        has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], target_tenant_id)
         if not has_permission:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -44,31 +63,16 @@ def get_template_categories(
         # Get templates that the user has access to
         query = db.query(Template)
 
-        # Handle tenant filtering
-        if tenant_id:
-            # Check if user has access to the specified tenant
-            tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
-            if not tenant:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Tenant with ID {tenant_id} not found"
-                )
+        # Verify the tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == target_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {target_tenant_id} not found"
+            )
 
-            # Check if user has access to this tenant using the proper multi-tenant method
-            if not user_has_admin_or_msp_role(current_user, tenant_id):
-                if not current_user.has_tenant_access(tenant_id):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Not authorized to view templates for this tenant"
-                    )
-
-            # Only return templates that belong to the specified tenant
-            query = query.filter(Template.tenant_id == tenant.tenant_id)
-        else:
-            # No tenant specified, default to user's primary tenant
-            primary_tenant_id = current_user.get_primary_tenant_id()
-            if primary_tenant_id:
-                query = query.filter(Template.tenant_id == primary_tenant_id)
+        # Only return templates that belong to the specified tenant
+        query = query.filter(Template.tenant_id == tenant.tenant_id)
 
         templates = query.all()
 
@@ -82,6 +86,8 @@ def get_template_categories(
 
         return category_counts
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -104,68 +110,50 @@ def get_templates(
     response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     
-    # Check if user has permission to view templates or catalog
-    has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], tenant_id)
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
     try:
+        # Determine which tenant to use
+        target_tenant_id = tenant_id
+        if not target_tenant_id:
+            # No tenant specified, use user's primary tenant
+            target_tenant_id = current_user.get_primary_tenant_id()
+        
+        if not target_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No tenant specified and user has no primary tenant"
+            )
+        
+        # Check if user has access to the target tenant
+        if not current_user.has_tenant_access(target_tenant_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this tenant"
+            )
+        
+        # Check if user has permission to view templates or catalog in this tenant
+        has_permission = user_has_any_permission(current_user, ["list:templates", "list:catalog"], target_tenant_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
+        
         # Get templates that the user has access to
         query = db.query(Template)
         
-        # Get user's primary tenant for default filtering
+        # Verify the tenant exists and get tenant object
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == target_tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant with ID {target_tenant_id} not found"
+            )
         
-        # Filter by tenant if specified
-        if tenant_id:
-            # Handle different tenant ID formats
-            try:
-                # Remove 'tenant-' prefix if present
-                if tenant_id.startswith('tenant-'):
-                    tenant_id = tenant_id[7:]
-                
-                # Try to parse as UUID
-                try:
-                    uuid_obj = uuid.UUID(tenant_id)
-                    tenant = db.query(Tenant).filter(Tenant.tenant_id == str(uuid_obj)).first()
-                except ValueError:
-                    # Not a valid UUID, try to find by numeric ID
-                    try:
-                        id_value = int(tenant_id)
-                        tenant = db.query(Tenant).filter(Tenant.id == id_value).first()
-                    except (ValueError, TypeError):
-                        tenant = None
-                
-                if not tenant:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Tenant with ID {tenant_id} not found"
-                    )
-                
-                # Check if user has access to this tenant
-                if not user_has_admin_or_msp_role(current_user, tenant_id) and not current_user.has_tenant_access(tenant_id):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Not authorized to view templates for this tenant"
-                    )
-                
-                # Only return templates that belong to the specified tenant
-                query = query.filter(Template.tenant_id == tenant.tenant_id)
-            except Exception as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid tenant ID format: {str(e)}"
-                )
-        else:
-            # No tenant specified, default to user's primary tenant
-            primary_tenant_id = current_user.get_primary_tenant_id()
-            if primary_tenant_id:
-                query = query.filter(Template.tenant_id == primary_tenant_id)
+        # Only return templates that belong to the specified tenant
+        query = query.filter(Template.tenant_id == tenant.tenant_id)
 
         templates = query.all()
-        
+
         # Get deployment counts for each template
         template_ids = [template.id for template in templates]
         deployment_counts = {}
