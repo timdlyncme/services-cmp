@@ -299,7 +299,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Additional delay to ensure loader stays visible for a good duration
           await new Promise(resolve => setTimeout(resolve, 2000));
           
-          toast.success(`Switched to ${tenant.name}`);
+          toast.success(`Switched to ${tenant.name} Tenant`);
         }
       } else {
         console.error('switchTenant: No updated user returned from backend');
