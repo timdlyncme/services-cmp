@@ -265,6 +265,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsSwitchingTenant(true);
       setSwitchingToTenant(targetTenantName);
       
+      // Initial delay to let the loader show and start animating
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Call backend to switch tenant context
       const updatedUser = await authService.switchTenant(tenantId);
       
@@ -293,8 +296,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setCurrentTenant(tenant);
           localStorage.setItem("currentTenantId", tenantId);
           
-          // Small delay to ensure all components have updated
-          await new Promise(resolve => setTimeout(resolve, 300));
+          // Additional delay to ensure loader stays visible for a good duration
+          await new Promise(resolve => setTimeout(resolve, 2000));
           
           toast.success(`Switched to ${tenant.name}`);
         }
