@@ -10,8 +10,11 @@ export function TenantLoadingOverlay({ isVisible, tenantName }: TenantLoadingOve
   const [progress, setProgress] = useState(0);
   const [internalVisible, setInternalVisible] = useState(false);
   const [startTime, setStartTime] = useState<number | null>(null);
+  const [displayTenantName, setDisplayTenantName] = useState<string | null>(null);
+  const [isCompleted, setIsCompleted] = useState(false);
   
   const MIN_DISPLAY_DURATION = 3000; // 3 seconds minimum display time
+  const PROGRESS_DURATION = 2500; // Progress bar completes in 2.5 seconds
 
   useEffect(() => {
     if (isVisible && !internalVisible) {
@@ -19,21 +22,26 @@ export function TenantLoadingOverlay({ isVisible, tenantName }: TenantLoadingOve
       setInternalVisible(true);
       setStartTime(Date.now());
       setProgress(0);
+      setDisplayTenantName(tenantName);
+      setIsCompleted(false);
       
-      // Start progress animation
-      const interval = setInterval(() => {
+      // Start progress animation - complete in 2.5 seconds
+      const progressInterval = setInterval(() => {
         setProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval);
+          const newProgress = prev + (100 / (PROGRESS_DURATION / 100)); // Increment to complete in 2.5s
+          if (newProgress >= 100) {
+            clearInterval(progressInterval);
             return 100;
           }
-          return prev + 8; // Increment progress
+          return newProgress;
         });
-      }, 200);
+      }, 100);
 
-      return () => clearInterval(interval);
+      return () => clearInterval(progressInterval);
     } else if (!isVisible && internalVisible && startTime) {
-      // Parent wants to hide overlay, but check minimum duration
+      // Parent wants to hide overlay, mark as completed and check minimum duration
+      setIsCompleted(true);
+      
       const elapsedTime = Date.now() - startTime;
       
       if (elapsedTime >= MIN_DISPLAY_DURATION) {
@@ -41,6 +49,8 @@ export function TenantLoadingOverlay({ isVisible, tenantName }: TenantLoadingOve
         setInternalVisible(false);
         setStartTime(null);
         setProgress(0);
+        setDisplayTenantName(null);
+        setIsCompleted(false);
       } else {
         // Wait for remaining time before hiding
         const remainingTime = MIN_DISPLAY_DURATION - elapsedTime;
@@ -48,12 +58,14 @@ export function TenantLoadingOverlay({ isVisible, tenantName }: TenantLoadingOve
           setInternalVisible(false);
           setStartTime(null);
           setProgress(0);
+          setDisplayTenantName(null);
+          setIsCompleted(false);
         }, remainingTime);
 
         return () => clearTimeout(timeout);
       }
     }
-  }, [isVisible, internalVisible, startTime]);
+  }, [isVisible, internalVisible, startTime, tenantName]);
 
   // Don't render if not internally visible
   if (!internalVisible) return null;
@@ -70,11 +82,11 @@ export function TenantLoadingOverlay({ isVisible, tenantName }: TenantLoadingOve
           {/* Loading Text */}
           <div className="space-y-2">
             <h3 className="text-lg font-semibold">
-              Loading Tenant
+              {isCompleted ? 'Loading Complete' : 'Loading Tenant'}
             </h3>
-            {tenantName && (
+            {displayTenantName && (
               <p className="text-sm text-muted-foreground">
-                Switching to <span className="font-medium text-foreground">{tenantName}</span>
+                {isCompleted ? 'Successfully switched to' : 'Switching to'} <span className="font-medium text-foreground">{displayTenantName}</span>
               </p>
             )}
           </div>
@@ -82,13 +94,16 @@ export function TenantLoadingOverlay({ isVisible, tenantName }: TenantLoadingOve
           {/* Dynamic Progress Indicator */}
           <div className="w-full bg-muted rounded-full h-2">
             <div
-              className="bg-primary h-2 rounded-full"
-              style={{ width: `${progress}%`, transition: 'width 0.2s ease-in-out' }}
+              className="bg-primary h-2 rounded-full transition-all duration-100 ease-out"
+              style={{ width: `${Math.min(progress, 100)}%` }}
             ></div>
           </div>
           
           <p className="text-xs text-muted-foreground">
-            {progress < 100 ? 'Please wait while we load your tenant data...' : 'Loading complete!'}
+            {isCompleted 
+              ? 'Finalizing tenant switch...' 
+              : 'Please wait while we load your tenant data...'
+            }
           </p>
         </div>
       </div>
