@@ -272,10 +272,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
     
+    // Get role from current tenant assignment (same logic as components)
+    const getCurrentTenantRole = () => {
+      if (!currentTenant || !user.tenant_assignments || !Array.isArray(user.tenant_assignments)) {
+        return user.role || "user";
+      }
+      
+      const currentAssignment = user.tenant_assignments.find(
+        assignment => assignment && assignment.tenant_id === currentTenant.tenant_id
+      );
+      
+      return currentAssignment?.role_name || user.role || "user";
+    };
+
+    const currentUserRole = getCurrentTenantRole();
+    
     // Debug logging to understand what's happening
     console.log('hasPermission check:', {
       permission,
-      userRole: user.role,
+      userRole: currentUserRole, // Use current tenant role instead of user.role
+      primaryTenantRole: user.role, // Show primary tenant role for comparison
+      currentTenant: currentTenant?.name,
       userPermissions: user.permissions,
       isMspUser: user.isMspUser,
       hasPermissionsArray: !!user.permissions,
@@ -283,7 +300,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     
     // MSP users have all permissions
-    if (user.isMspUser && user.role === 'msp') {
+    if (user.isMspUser && currentUserRole === 'msp') {
+      return true;
+    }
+    
+    // Admin users have all permissions
+    if (currentUserRole === 'admin') {
+      console.log('Admin user detected, granting all permissions');
       return true;
     }
     
@@ -302,7 +325,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('Permission check result:', {
       permission,
       hasSpecificPermission,
-      userRole: user.role,
+      userRole: currentUserRole,
       isMspUser: user.isMspUser
     });
     
