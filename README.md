@@ -48,8 +48,6 @@ We've implemented comprehensive fixes to resolve multi-tenant permission and rol
 #### 🧪 **Testing & Validation**
 - **Multi-Scenario Testing**: Validated permission behavior across different primary/current tenant combinations
 - **Role-Based Testing**: Confirmed admin, user, and MSP roles work correctly in multi-tenant scenarios
-- **Browser Refresh Testing**: Verified permissions persist correctly after page reload
-- **Cross-Component Consistency**: Ensured all UI components use the same role detection logic
 
 ### AI-Powered Features
 - **AI Assistant**: Azure OpenAI-powered chat assistant for platform guidance
@@ -220,11 +218,36 @@ npm run dev
 ### Default Users
 The platform comes with pre-configured users for testing:
 
-| Role | Email | Password | Permissions |
-|------|-------|----------|-------------|
-| Admin | admin@example.com | password | Full platform access |
-| User | user@example.com | password | Standard user permissions |
-| MSP | msp@example.com | password | MSP-specific features |
+| Role | Email | Password | Key Permissions |
+|------|-------|----------|-----------------|
+| Admin | admin@example.com | password | Full platform access including user management, cloud accounts, environments, templates, deployments, Azure credentials (list/create/delete), settings, AI assistant |
+| User | user@example.com | password | Standard user permissions: catalog access, environments (list), cloud accounts (list), deployments (full CRUD), Azure credentials (list), AI assistant |
+| MSP | msp@example.com | password | MSP-specific features with global access across all tenants and all available permissions |
+
+#### Detailed Role Permissions
+
+**User Role Permissions:**
+- `view:catalog`, `list:catalog` - Access to service catalog
+- `list:environments` - View available environments  
+- `list:cloud-accounts` - View cloud account information
+- `view:deployments`, `list:deployments`, `create:deployments`, `update:deployments`, `delete:deployments` - Full deployment management
+- `list:azure_credentials` - View Azure credentials (tenant-scoped)
+- `use:ai_assistant` - Access to AI assistant features
+
+**Admin Role Permissions:**
+- All User permissions plus:
+- `view:users`, `list:users`, `create:users`, `update:users`, `delete:users` - User management
+- `view:cloud-accounts`, `create:cloud-accounts`, `update:cloud-accounts`, `delete:cloud-accounts` - Full cloud account management
+- `create:environments`, `update:environments`, `delete:environments` - Environment management
+- `view:templates`, `list:templates`, `create:templates`, `update:templates`, `delete:templates` - Template management
+- `view:template-foundry`, `list:template-foundry`, `create:template-foundry`, `update:template-foundry`, `delete:template-foundry` - Template foundry access
+- `manage:deployments` - Advanced deployment management
+- `create:azure_credentials`, `delete:azure_credentials` - Full Azure credential management
+- `view:settings`, `list:settings`, `update:settings` - Platform settings management
+- `use:nexus_ai`, `manage:nexus_ai` - Advanced AI features
+
+**MSP Role Permissions:**
+- All available permissions across all tenants with global access
 
 ## 🔧 Configuration
 
@@ -316,7 +339,7 @@ The platform uses Docker Compose with the following services:
 services-cmp/
 ├── src/                    # Frontend React application
 │   ├── components/         # Reusable UI components
-│   ├── pages/             # Page components
+���   ├── pages/             # Page components
 │   ├── hooks/             # Custom React hooks
 │   ├── contexts/          # React contexts
 │   ├── types/             # TypeScript type definitions
@@ -444,6 +467,41 @@ npm run test:coverage
 4. **Regular security audits** of dependencies
 5. **Monitor and log** all authentication attempts
 6. **Backup encryption keys** securely
+
+### 🔐 Azure Credentials Multi-Tenant Authorization (Latest Fix)
+
+#### **Problem Resolved**
+Fixed critical multi-tenant authorization issues with Azure credential management where users received permission errors despite having correct roles.
+
+#### **Root Cause**
+- Azure credential endpoints were using generic `manage:deployments` permission instead of specific Azure credential permissions
+- Database initialization lacked proper Azure credential permissions for user and admin roles
+- Test connection endpoint had redundant permission checks causing 403 errors
+
+#### **✅ Complete Solution Implemented**
+
+**1. New Azure Credential Permissions Added:**
+- `list:azure_credentials` - View and list Azure credentials (tenant-scoped)
+- `create:azure_credentials` - Create new Azure credentials (tenant-scoped)
+- `delete:azure_credentials` - Delete Azure credentials (tenant-scoped)
+
+**2. Updated Role Permissions:**
+- **User Role**: Added `list:azure_credentials` permission
+- **Admin Role**: Added `list:azure_credentials`, `create:azure_credentials`, `delete:azure_credentials` permissions
+- **MSP Role**: Inherits all permissions including Azure credential permissions
+
+**3. Endpoint Permission Corrections:**
+- `GET /api/deployments/azure_credentials` - Now uses `list:azure_credentials`
+- `POST /api/deployments/azure_credentials` - Now uses `create:azure_credentials`
+- `DELETE /api/deployments/azure_credentials/{id}` - Now uses `delete:azure_credentials`
+- `GET /api/deployments/azure_credentials/{id}/subscriptions` - Now uses `list:azure_credentials` only
+
+**4. Multi-Tenant Behavior:**
+- ✅ Users can create Azure credentials in any tenant where they have admin role
+- ✅ Users can list Azure credentials in any tenant where they have user or admin role
+- ✅ Test connection works regardless of which tenant is primary
+- ✅ No more confusing error messages during credential creation
+- ✅ Credentials appear immediately without manual refresh
 
 ## 🚀 Deployment
 
