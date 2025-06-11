@@ -420,9 +420,9 @@ DEFAULT_DASHBOARD_WIDGETS = [
         "default_config": {
             "text_type": "actions",
             "actions": [
-                {"label": "New Deployment", "url": "/deployments"},
-                {"label": "Add Cloud Account", "url": "/cloud-accounts"},
-                {"label": "Browse Templates", "url": "/catalog"}
+                {"label": "Browse Templates", "url": "/catalog/"},
+                {"label": "View Approvals", "url": "/approvals/"},
+                {"label": "View Deployments", "url": "/deployments/"},
             ]
         },
         "min_width": 3,
