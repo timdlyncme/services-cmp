@@ -304,12 +304,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     }
     
-    // Admin users have all permissions
-    if (currentUserRole === 'admin') {
-      console.log('Admin user detected, granting all permissions');
-      return true;
-    }
-    
     // For development, if user has no permissions, grant basic permissions
     if (!user.permissions || user.permissions.length === 0) {
       console.warn(`No permissions found for user, granting permission: ${permission}`);
