@@ -8,37 +8,55 @@ interface TenantLoadingOverlayProps {
 
 export function TenantLoadingOverlay({ isVisible, tenantName }: TenantLoadingOverlayProps) {
   const [progress, setProgress] = useState(0);
+  const [internalVisible, setInternalVisible] = useState(false);
+  const [startTime, setStartTime] = useState<number | null>(null);
+  
+  const MIN_DISPLAY_DURATION = 3000; // 3 seconds minimum display time
 
   useEffect(() => {
-    if (isVisible) {
-      setProgress(0); // Reset progress when overlay becomes visible
+    if (isVisible && !internalVisible) {
+      // Starting to show the overlay
+      setInternalVisible(true);
+      setStartTime(Date.now());
+      setProgress(0);
+      
+      // Start progress animation
       const interval = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 100) {
-            clearInterval(interval); // Stop at 100%
+            clearInterval(interval);
             return 100;
           }
           return prev + 8; // Increment progress
         });
-      }, 200); // Adjust interval speed as needed
+      }, 200);
 
-      return () => clearInterval(interval); // Cleanup on unmount or visibility change
-    } else {
-      setProgress(0); // Reset progress when overlay is hidden
+      return () => clearInterval(interval);
+    } else if (!isVisible && internalVisible && startTime) {
+      // Parent wants to hide overlay, but check minimum duration
+      const elapsedTime = Date.now() - startTime;
+      
+      if (elapsedTime >= MIN_DISPLAY_DURATION) {
+        // Minimum time has passed, hide immediately
+        setInternalVisible(false);
+        setStartTime(null);
+        setProgress(0);
+      } else {
+        // Wait for remaining time before hiding
+        const remainingTime = MIN_DISPLAY_DURATION - elapsedTime;
+        const timeout = setTimeout(() => {
+          setInternalVisible(false);
+          setStartTime(null);
+          setProgress(0);
+        }, remainingTime);
+
+        return () => clearTimeout(timeout);
+      }
     }
-  }, [isVisible]);
+  }, [isVisible, internalVisible, startTime]);
 
-  useEffect(() => {
-    if (progress === 100) {
-      const timeout = setTimeout(() => {
-        setProgress(0); // Reset progress after a short delay
-      }, 1000); // Adjust delay as needed (e.g., 1 second)
-
-      return () => clearTimeout(timeout); // Cleanup timeout on unmount or progress change
-    }
-  }, [progress]);
-
-  if (!isVisible) return null;
+  // Don't render if not internally visible
+  if (!internalVisible) return null;
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -77,3 +95,4 @@ export function TenantLoadingOverlay({ isVisible, tenantName }: TenantLoadingOve
     </div>
   );
 }
+
