@@ -241,8 +241,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Call backend to switch tenant context
       const updatedUser = await authService.switchTenant(tenantId);
       
+      console.log('switchTenant: Backend response', {
+        tenantId,
+        targetTenantName,
+        updatedUserPermissions: updatedUser?.permissions?.length || 0,
+        oldUserPermissions: user?.permissions?.length || 0,
+        permissionsChanged: updatedUser?.permissions?.length !== user?.permissions?.length
+      });
+      
       if (updatedUser) {
         // Update user with new tenant context and permissions
+        console.log('switchTenant: Updating user state with new permissions', {
+          oldPermissions: user.permissions?.slice(0, 5) || [],
+          newPermissions: updatedUser.permissions?.slice(0, 5) || [],
+          oldPermissionsCount: user.permissions?.length || 0,
+          newPermissionsCount: updatedUser.permissions?.length || 0
+        });
+        
         setUser(updatedUser);
         
         // Update current tenant
@@ -257,7 +272,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           toast.success(`Switched to ${tenant.name}`);
         }
       } else {
-        toast.error("Failed to switch tenant");
+        console.error('switchTenant: No updated user returned from backend');
+        toast.error("Failed to switch tenant - no user data returned");
       }
     } catch (error) {
       console.error("Tenant switch failed:", error);
