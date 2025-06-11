@@ -403,13 +403,14 @@ DEFAULT_DASHBOARD_WIDGETS = [
         "data_source": "static",
         "default_config": {
             "text_type": "welcome",
-            "title": "Welcome to your Dashboard",
-            "content": "Manage your cloud infrastructure deployments from this centralized dashboard."
+            "title": "Welcome to your Cloud Mananagement Dashboard.",
+            "content": "Get a clear view of your infrastructure, track resources, and manage deployments all in one place. These widgets provide quick access to your most important cloud metrics and tools."
+           
         },
         "min_width": 3,
-        "min_height": 2,
-        "max_width": 6,
-        "max_height": 3
+        "min_height": 3,
+        "max_width": 9,
+        "max_height": 5
     },
     {
         "name": "Quick Actions",
