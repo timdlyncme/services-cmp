@@ -20,20 +20,20 @@ class DefaultDashboardConfig:
     DEFAULT_WIDGETS = [
         {
             "widget_name": "Welcome Message",
-            "position_x": 0,
+            "position_x": 3,
             "position_y": 0,
-            "width": 12,
-            "height": 2,
+            "width": 6,
+            "height": 3,
             "custom_config": {
                 "text_type": "welcome",
-                "title": "Welcome to Your Dashboard",
-                "content": "Welcome to your cloud management platform! This dashboard provides an overview of your infrastructure and deployments. Use the widgets below to monitor your resources and get started with key tasks."
+                "title": "Welcome to your Cloud Mananagement Dashboard.",
+                "content": "Get a clear view of your infrastructure, track resources, and manage deployments all in one place. These widgets provide quick access to your most important cloud metrics and tools."
             }
         },
         {
             "widget_name": "Getting Started",
             "position_x": 9,
-            "position_y": 2,
+            "position_y": 0,
             "width": 3,
             "height": 6,
             "custom_config": {
@@ -43,32 +43,32 @@ class DefaultDashboardConfig:
         },
         {
             "widget_name": "Total Deployments",
-            "position_x": 0,
-            "position_y": 2,
+            "position_x": 3,
+            "position_y": 3,
             "width": 2,
             "height": 2,
             "custom_config": None
         },
         {
             "widget_name": "Running Deployments",
-            "position_x": 2,
-            "position_y": 2,
+            "position_x": 5,
+            "position_y": 3,
             "width": 2,
             "height": 2,
             "custom_config": None
         },
         {
             "widget_name": "Cloud Accounts",
-            "position_x": 4,
-            "position_y": 2,
+            "position_x": 7,
+            "position_y": 3,
             "width": 2,
             "height": 2,
             "custom_config": None
         },
         {
             "widget_name": "Quick Actions",
-            "position_x": 9,
-            "position_y": 8,
+            "position_x": 0,
+            "position_y": 0,
             "width": 3,
             "height": 3,
             "custom_config": {
@@ -82,7 +82,7 @@ class DefaultDashboardConfig:
         },
         {
             "widget_name": "Recent Deployments",
-            "position_x": 6,
+            "position_x": 0,
             "position_y": 3,
             "width": 3,
             "height": 4,
