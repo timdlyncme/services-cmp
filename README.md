@@ -22,6 +22,35 @@ A comprehensive, multi-tenant cloud management platform designed for Managed Ser
 - **Primary Tenant Management**: Users can designate a primary tenant for default access
 - **Cross-Tenant User Management**: MSP users can manage multiple client tenants from a single interface
 
+## 🔧 Recent Multi-Tenant Enhancements (Latest Release)
+
+### Critical Permission System Fixes
+We've implemented comprehensive fixes to resolve multi-tenant permission and role detection issues:
+
+#### ✅ **Fixed Issues**
+- **Permission Persistence**: Resolved issue where tenant permissions reverted to primary tenant permissions after page refresh
+- **Role Detection Consistency**: Unified role detection logic across all UI components (sidebar, header, permission checks)
+- **Tenant Switching**: Fixed permission caching issues when switching between tenants with different roles
+- **UI State Synchronization**: Eliminated inconsistencies where sidebar showed correct role but permissions were from wrong tenant
+
+#### 🔧 **Technical Improvements**
+- **Enhanced `hasPermission()` Function**: Now uses current tenant role instead of primary tenant role for permission checks
+- **Initialization Fix**: App now properly fetches tenant-specific permissions during startup when restoring saved tenant from localStorage
+- **Consistent Role Resolution**: Implemented unified `getCurrentTenantRole()` logic used across all components
+- **Comprehensive Debugging**: Added detailed logging for permission checks and tenant switching operations
+
+#### 🎯 **User Experience Improvements**
+- **Seamless Tenant Switching**: Menu items and permissions update immediately when switching tenants
+- **Persistent Admin Access**: Admin users maintain proper permissions after browser refresh
+- **Consistent UI State**: Sidebar, header, and permission-gated content all reflect the same role and permissions
+- **No More Manual Refresh**: Eliminated need to manually refresh browser after tenant switching
+
+#### 🧪 **Testing & Validation**
+- **Multi-Scenario Testing**: Validated permission behavior across different primary/current tenant combinations
+- **Role-Based Testing**: Confirmed admin, user, and MSP roles work correctly in multi-tenant scenarios
+- **Browser Refresh Testing**: Verified permissions persist correctly after page reload
+- **Cross-Component Consistency**: Ensured all UI components use the same role detection logic
+
 ### AI-Powered Features
 - **AI Assistant**: Azure OpenAI-powered chat assistant for platform guidance
 - **NexusAI**: Advanced AI features for intelligent cloud management recommendations
@@ -457,6 +486,8 @@ docker-compose ps
 
 ### Common Issues
 
+
+**🆕 Recent Permission System Fixes (RESOLVED)**\nThe following issues have been resolved in the latest release:\n\n- **✅ Permission Persistence After Refresh**: Fixed issue where admin users lost menu access after page refresh\n- **✅ Role Detection Inconsistency**: Unified role detection across sidebar, header, and permission checks\n- **✅ Tenant Switching Permissions**: Fixed permission caching when switching between tenants with different roles\n- **✅ UI State Synchronization**: Eliminated inconsistencies between displayed role and actual permissions\n\n**Debugging Multi-Tenant Permissions**\n```bash\n# Check current tenant permissions in browser console\n# Look for these log messages:\n# - "hasPermission check: { userRole: 'admin', primaryTenantRole: 'user' }"\n# - "initAuth: Updated user permissions for saved tenant"\n# - "switchTenant: Backend response { permissionsChanged: true }"\n```
 #### Multi-Tenant System Issues
 
 **Role Resolution Problems**
@@ -610,6 +641,8 @@ curl http://localhost:5000/health
 - **White-label solutions** for resellers
 
 ## ⚠️ Known Issues & Limitations
+
+### 🎉 Recently Resolved Issues\n\n#### Multi-Tenant Permission System (FIXED)\n- **✅ Permission Persistence**: Tenant permissions now persist correctly after browser refresh\n- **✅ Role Detection**: Consistent role detection across all UI components\n- **✅ Tenant Switching**: Seamless permission updates when switching tenants\n- **✅ UI Synchronization**: Sidebar, header, and permissions now always show consistent state\n\nThese critical multi-tenant issues have been resolved and the system now provides:\n- Flawless tenant switching experience\n- Persistent admin access after page refresh\n- Consistent permission enforcement across all components\n- Real-time permission updates without manual refresh
 
 ### Current Limitations
 
