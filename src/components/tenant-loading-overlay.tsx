@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Loader2, Building } from 'lucide-react';
 
 interface TenantLoadingOverlayProps {
@@ -7,6 +7,37 @@ interface TenantLoadingOverlayProps {
 }
 
 export function TenantLoadingOverlay({ isVisible, tenantName }: TenantLoadingOverlayProps) {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (isVisible) {
+      setProgress(0); // Reset progress when overlay becomes visible
+      const interval = setInterval(() => {
+        setProgress((prev) => {
+          if (prev >= 100) {
+            clearInterval(interval); // Stop at 100%
+            return 100;
+          }
+          return prev + 8; // Increment progress
+        });
+      }, 200); // Adjust interval speed as needed
+
+      return () => clearInterval(interval); // Cleanup on unmount or visibility change
+    } else {
+      setProgress(0); // Reset progress when overlay is hidden
+    }
+  }, [isVisible]);
+
+  useEffect(() => {
+    if (progress === 100) {
+      const timeout = setTimeout(() => {
+        setProgress(0); // Reset progress after a short delay
+      }, 1000); // Adjust delay as needed (e.g., 1 second)
+
+      return () => clearTimeout(timeout); // Cleanup timeout on unmount or progress change
+    }
+  }, [progress]);
+
   if (!isVisible) return null;
 
   return (
@@ -16,7 +47,6 @@ export function TenantLoadingOverlay({ isVisible, tenantName }: TenantLoadingOve
           {/* Animated Icon */}
           <div className="relative">
             <Building className="h-12 w-12 text-muted-foreground" />
-            <Loader2 className="h-6 w-6 text-primary animate-spin absolute -top-1 -right-1" />
           </div>
           
           {/* Loading Text */}
@@ -31,17 +61,19 @@ export function TenantLoadingOverlay({ isVisible, tenantName }: TenantLoadingOve
             )}
           </div>
           
-          {/* Progress Indicator */}
+          {/* Dynamic Progress Indicator */}
           <div className="w-full bg-muted rounded-full h-2">
-            <div className="bg-primary h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+            <div
+              className="bg-primary h-2 rounded-full"
+              style={{ width: `${progress}%`, transition: 'width 0.2s ease-in-out' }}
+            ></div>
           </div>
           
           <p className="text-xs text-muted-foreground">
-            Please wait while we load your tenant data...
+            {progress < 100 ? 'Please wait while we load your tenant data...' : 'Loading complete!'}
           </p>
         </div>
       </div>
     </div>
   );
 }
-
