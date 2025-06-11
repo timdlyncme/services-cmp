@@ -74,9 +74,9 @@ class DefaultDashboardConfig:
             "custom_config": {
                 "text_type": "actions",
                 "actions": [
+                    {"label": "Browse Templates", "url": "/catalog/"},
+                    {"label": "View Approvals", "url": "/approvals/"},
                     {"label": "View Deployments", "url": "/deployments/"},
-                    {"label": "Add Cloud Account", "url": "/cloud-accounts/"},
-                    {"label": "Browse Templates", "url": "/templates/"},
                 ]
             }
         },
