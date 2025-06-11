@@ -48,8 +48,20 @@ interface SidebarSectionProps {
 const NavItem = ({ to, icon: Icon, label, collapsed, permission }: NavItemProps) => {
   const { hasPermission } = useAuth();
   
+  // Debug permission checking
+  if (permission) {
+    const hasAccess = hasPermission(permission);
+    console.log(`NavItem ${label}: Permission check`, {
+      permission,
+      hasAccess,
+      label,
+      to
+    });
+  }
+  
   // If permission is required and user doesn't have it, don't render the item
   if (permission && !hasPermission(permission)) {
+    console.log(`NavItem ${label}: Access denied for permission ${permission}`);
     return null;
   }
   
