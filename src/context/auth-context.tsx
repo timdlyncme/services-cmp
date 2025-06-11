@@ -101,7 +101,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const tenant = userTenants.find(t => 
                 savedTenantId ? t.tenant_id === savedTenantId : t.tenant_id === authUser.tenantId
               );
-              setCurrentTenant(tenant || userTenants[0]);
+              const selectedTenant = tenant || userTenants[0];
+              setCurrentTenant(selectedTenant);
+              
+              // CRITICAL FIX: If saved tenant is different from primary tenant, 
+              // we need to fetch permissions for the saved tenant
+              if (savedTenantId && savedTenantId !== authUser.tenantId) {
+                console.log('initAuth: Saved tenant differs from primary, fetching tenant permissions', {
+                  savedTenantId,
+                  primaryTenantId: authUser.tenantId,
+                  savedTenantName: selectedTenant.name
+                });
+                
+                try {
+                  // Get permissions for the saved tenant
+                  const updatedUser = await authService.switchTenant(savedTenantId);
+                  if (updatedUser) {
+                    console.log('initAuth: Updated user permissions for saved tenant', {
+                      oldPermissions: authUser.permissions?.length || 0,
+                      newPermissions: updatedUser.permissions?.length || 0,
+                      tenantName: selectedTenant.name
+                    });
+                    setUser(updatedUser);
+                  }
+                } catch (error) {
+                  console.error('initAuth: Failed to fetch tenant permissions, using primary tenant permissions', error);
+                  // Continue with primary tenant permissions if switch fails
+                }
+              }
             } else {
               console.warn("No tenants found for user, using default tenant");
               // Create a default tenant if none exists
@@ -241,8 +268,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Call backend to switch tenant context
       const updatedUser = await authService.switchTenant(tenantId);
       
+      console.log('switchTenant: Backend response', {
+        tenantId,
+        targetTenantName,
+        updatedUserPermissions: updatedUser?.permissions?.length || 0,
+        oldUserPermissions: user?.permissions?.length || 0,
+        permissionsChanged: updatedUser?.permissions?.length !== user?.permissions?.length
+      });
+      
       if (updatedUser) {
         // Update user with new tenant context and permissions
+        console.log('switchTenant: Updating user state with new permissions', {
+          oldPermissions: user.permissions?.slice(0, 5) || [],
+          newPermissions: updatedUser.permissions?.slice(0, 5) || [],
+          oldPermissionsCount: user.permissions?.length || 0,
+          newPermissionsCount: updatedUser.permissions?.length || 0
+        });
+        
         setUser(updatedUser);
         
         // Update current tenant
@@ -257,7 +299,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           toast.success(`Switched to ${tenant.name}`);
         }
       } else {
-        toast.error("Failed to switch tenant");
+        console.error('switchTenant: No updated user returned from backend');
+        toast.error("Failed to switch tenant - no user data returned");
       }
     } catch (error) {
       console.error("Tenant switch failed:", error);
@@ -272,10 +315,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
     
+    // Get role from current tenant assignment (same logic as components)
+    const getCurrentTenantRole = () => {
+      if (!currentTenant || !user.tenant_assignments || !Array.isArray(user.tenant_assignments)) {
+        return user.role || "user";
+      }
+      
+      const currentAssignment = user.tenant_assignments.find(
+        assignment => assignment && assignment.tenant_id === currentTenant.tenant_id
+      );
+      
+      return currentAssignment?.role_name || user.role || "user";
+    };
+
+    const currentUserRole = getCurrentTenantRole();
+    
     // Debug logging to understand what's happening
     console.log('hasPermission check:', {
       permission,
-      userRole: user.role,
+      userRole: currentUserRole, // Use current tenant role instead of user.role
+      primaryTenantRole: user.role, // Show primary tenant role for comparison
+      currentTenant: currentTenant?.name,
       userPermissions: user.permissions,
       isMspUser: user.isMspUser,
       hasPermissionsArray: !!user.permissions,
@@ -283,7 +343,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     
     // MSP users have all permissions
-    if (user.isMspUser && user.role === 'msp') {
+    if (user.isMspUser && currentUserRole === 'msp') {
       return true;
     }
     
@@ -302,7 +362,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('Permission check result:', {
       permission,
       hasSpecificPermission,
-      userRole: user.role,
+      userRole: currentUserRole,
       isMspUser: user.isMspUser
     });
     

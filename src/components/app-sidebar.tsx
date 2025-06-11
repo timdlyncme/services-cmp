@@ -48,8 +48,20 @@ interface SidebarSectionProps {
 const NavItem = ({ to, icon: Icon, label, collapsed, permission }: NavItemProps) => {
   const { hasPermission } = useAuth();
   
+  // Debug permission checking
+  if (permission) {
+    const hasAccess = hasPermission(permission);
+    console.log(`NavItem ${label}: Permission check`, {
+      permission,
+      hasAccess,
+      label,
+      to
+    });
+  }
+  
   // If permission is required and user doesn't have it, don't render the item
   if (permission && !hasPermission(permission)) {
+    console.log(`NavItem ${label}: Access denied for permission ${permission}`);
     return null;
   }
   
@@ -115,6 +127,14 @@ export function AppSidebar() {
   const getCurrentTenantRole = () => {
     // If no current tenant or no tenant assignments, fall back to user.role or default
     if (!currentTenant || !user?.tenant_assignments || !Array.isArray(user.tenant_assignments)) {
+      console.log('Sidebar: No current tenant or tenant assignments', {
+        currentTenant: currentTenant?.name,
+        currentTenantId: currentTenant?.tenant_id,
+        hasUser: !!user,
+        hasTenantAssignments: !!user?.tenant_assignments,
+        tenantAssignmentsLength: user?.tenant_assignments?.length || 0,
+        fallbackRole: user?.role || "user"
+      });
       return user?.role || "user";
     }
     
@@ -123,11 +143,30 @@ export function AppSidebar() {
       assignment => assignment && assignment.tenant_id === currentTenant.tenant_id
     );
     
+    console.log('Sidebar: Current tenant role lookup', {
+      currentTenantId: currentTenant.tenant_id,
+      currentTenantName: currentTenant.name,
+      foundAssignment: !!currentAssignment,
+      assignmentRole: currentAssignment?.role_name,
+      fallbackRole: user?.role || "user",
+      allAssignments: user.tenant_assignments.map(a => ({
+        tenantId: a.tenant_id,
+        roleName: a.role_name
+      }))
+    });
+    
     // Return the role from the assignment, or fall back to user.role, or default to "user"
     return currentAssignment?.role_name || user?.role || "user";
   };
 
   const userRole = getCurrentTenantRole();
+  console.log('Sidebar: Final role determination', {
+    userRole,
+    isAdmin: userRole === "admin",
+    isMSP: user?.isMspUser && userRole === "msp",
+    isRegularUser: userRole === "user"
+  });
+  
   const isAdmin = userRole === "admin";
   const isMSP = user?.isMspUser && userRole === "msp";
   const isRegularUser = userRole === "user";
