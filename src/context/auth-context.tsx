@@ -101,7 +101,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const tenant = userTenants.find(t => 
                 savedTenantId ? t.tenant_id === savedTenantId : t.tenant_id === authUser.tenantId
               );
-              setCurrentTenant(tenant || userTenants[0]);
+              const selectedTenant = tenant || userTenants[0];
+              setCurrentTenant(selectedTenant);
+              
+              // CRITICAL FIX: If saved tenant is different from primary tenant, 
+              // we need to fetch permissions for the saved tenant
+              if (savedTenantId && savedTenantId !== authUser.tenantId) {
+                console.log('initAuth: Saved tenant differs from primary, fetching tenant permissions', {
+                  savedTenantId,
+                  primaryTenantId: authUser.tenantId,
+                  savedTenantName: selectedTenant.name
+                });
+                
+                try {
+                  // Get permissions for the saved tenant
+                  const updatedUser = await authService.switchTenant(savedTenantId);
+                  if (updatedUser) {
+                    console.log('initAuth: Updated user permissions for saved tenant', {
+                      oldPermissions: authUser.permissions?.length || 0,
+                      newPermissions: updatedUser.permissions?.length || 0,
+                      tenantName: selectedTenant.name
+                    });
+                    setUser(updatedUser);
+                  }
+                } catch (error) {
+                  console.error('initAuth: Failed to fetch tenant permissions, using primary tenant permissions', error);
+                  // Continue with primary tenant permissions if switch fails
+                }
+              }
             } else {
               console.warn("No tenants found for user, using default tenant");
               // Create a default tenant if none exists
