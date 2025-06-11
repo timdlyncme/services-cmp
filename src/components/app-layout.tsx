@@ -1,15 +1,15 @@
-
 import { Outlet } from "react-router-dom";
 import { AppHeader } from "@/components/app-header";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TenantLoadingOverlay } from "@/components/tenant-loading-overlay";
 import { useAuth } from "@/context/auth-context";
 import { Navigate } from "react-router-dom";
 
 export function AppLayout() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isSwitchingTenant, switchingToTenant } = useAuth();
   
   if (isLoading) {
     return (
@@ -38,6 +38,12 @@ export function AppLayout() {
         </div>
         <Toaster />
         <Sonner />
+        
+        {/* Tenant Loading Overlay */}
+        <TenantLoadingOverlay 
+          isVisible={isSwitchingTenant} 
+          tenantName={switchingToTenant} 
+        />
       </div>
     </SidebarProvider>
   );

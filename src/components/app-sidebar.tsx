@@ -99,24 +99,38 @@ const SidebarSection = ({ title, collapsed, children }: SidebarSectionProps) => 
 };
 
 export function AppSidebar() {
+  const { user, currentTenant, hasPermission } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
-  const { user, hasPermission } = useAuth();
-  const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  const location = useLocation();
 
   useEffect(() => {
-    // Update permissions when user changes
-    if (user && user.permissions) {
-      setUserPermissions(user.permissions.map(p => typeof p === 'string' ? p : p.name));
-    } else {
-      setUserPermissions([]);
+    if (!user) {
+      console.log("No user found in AppSidebar");
     }
   }, [user]);
 
   const toggleCollapse = () => setCollapsed(!collapsed);
 
-  const isAdmin = user?.role === "admin";
-  const isMSP = user?.isMspUser && user?.role === "msp";
-  const isRegularUser = user?.role === "user";
+  // Get role from tenant assignments based on current tenant (same logic as app-header)
+  const getCurrentTenantRole = () => {
+    // If no current tenant or no tenant assignments, fall back to user.role or default
+    if (!currentTenant || !user?.tenant_assignments || !Array.isArray(user.tenant_assignments)) {
+      return user?.role || "user";
+    }
+    
+    // Find the assignment for the current tenant
+    const currentAssignment = user.tenant_assignments.find(
+      assignment => assignment && assignment.tenant_id === currentTenant.tenant_id
+    );
+    
+    // Return the role from the assignment, or fall back to user.role, or default to "user"
+    return currentAssignment?.role_name || user?.role || "user";
+  };
+
+  const userRole = getCurrentTenantRole();
+  const isAdmin = userRole === "admin";
+  const isMSP = user?.isMspUser && userRole === "msp";
+  const isRegularUser = userRole === "user";
 
   return (
     <Sidebar

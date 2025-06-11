@@ -26,8 +26,8 @@ interface GroupedTemplates {
 }
 
 const Catalog = () => {
-  const { user, currentTenant } = useAuth();
   const navigate = useNavigate();
+  const { user, currentTenant, isSwitchingTenant } = useAuth();
   const [templates, setTemplates] = useState<CloudTemplate[]>([]);
   const [filteredTemplates, setFilteredTemplates] = useState<CloudTemplate[]>([]);
   const [categories, setCategories] = useState<Record<string, number>>({});
@@ -44,6 +44,35 @@ const Catalog = () => {
   });
 
   const fetchTemplates = async () => {
+    if (!currentTenant) return;
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const [templatesData, categoriesData] = await Promise.all([
+        cmpService.getTemplates(currentTenant.tenant_id),
+        cmpService.getTemplateCategories(currentTenant.tenant_id)
+      ]);
+      
+      setTemplates(templatesData);
+      setFilteredTemplates(templatesData);
+      setCategories(categoriesData);
+      
+      // Auto-expand categories with templates by default
+      const categoriesWithTemplates = Object.keys(categoriesData);
+      setExpandedCategories(new Set(categoriesWithTemplates.slice(0, 3))); // Expand first 3 categories
+      
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+      setError('Failed to load templates. Please try again.');
+      toast.error('Failed to load templates');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchTemplatesAndCategories = async () => {
     if (!currentTenant) return;
     
     setIsLoading(true);
@@ -123,6 +152,17 @@ const Catalog = () => {
       fetchTemplates();
     }
   }, [currentTenant]);
+
+  // Clear data immediately when tenant switching starts
+  useEffect(() => {
+    if (isSwitchingTenant) {
+      setTemplates([]);
+      setFilteredTemplates([]);
+      setCategories({});
+      setIsLoading(true);
+      setError(null);
+    }
+  }, [isSwitchingTenant]);
 
   useEffect(() => {
     let result = templates;
